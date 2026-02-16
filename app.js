@@ -1447,7 +1447,8 @@ document.getElementById('file-upload').addEventListener('change', function(evt) 
         // Keep a reference to the raw geojson layer for style updates
         geojsonLayer = L.geoJSON(geojson, { style: defaultStyle, pointToLayer: defaultPoint, onEachFeature: bindFeaturePopup}).addTo(fg);
         layerGroup = fg; // set active layerGroup reference
-        if (AUTO_FIT_ON_LAYER_ADD) fitToLayerExtent(fg);
+        // Always zoom to newly added layer extent.
+        setTimeout(() => { fitToLayerExtent(fg); }, 0);
 
         const safeName = sanitizeName(file.name);
         overlayData[safeName] = { layerGroup: fg, geojson: geojson };
@@ -1548,7 +1549,8 @@ document.getElementById('add-geojson-url').addEventListener('click', async funct
     const fg = L.featureGroup().addTo(map);
     geojsonLayer = L.geoJSON(geojson, { style: defaultStyle, pointToLayer: defaultPoint, onEachFeature: bindFeaturePopup}).addTo(fg);
     layerGroup = fg;
-    if (AUTO_FIT_ON_LAYER_ADD) fitToLayerExtent(fg);
+    // Always zoom to newly added layer extent.
+    setTimeout(() => { fitToLayerExtent(fg); }, 0);
 
     overlayData[safeName] = { layerGroup: fg, geojson: geojson };
     layersControl.addOverlay(fg, safeName);
