@@ -896,7 +896,7 @@ const map = L.map('map', {
   markerZoomAnimation: false
 }).setView([20, 50], 3);
 
-const BASE_VIEW_BOUNDS = L.latLngBounds([[-45, -30], [38, 66]]);
+const BASE_VIEW_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 map.fitBounds(BASE_VIEW_BOUNDS, { padding: [20, 20] });
 map.setMaxBounds(BASE_VIEW_BOUNDS);
 map.options.maxBoundsViscosity = 1.0;
