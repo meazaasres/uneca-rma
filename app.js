@@ -900,8 +900,8 @@ const map = L.map('map', {
 
 // Deterministic startup/home view centered on Africa with enough width
 // to keep Cape Verde (west) and Mauritius (east) visible on typical layouts.
-const INITIAL_HOME_CENTER = [3, 17];
-const INITIAL_HOME_ZOOM = 2.8;
+const INITIAL_HOME_CENTER = [4, 19];
+const INITIAL_HOME_ZOOM = 3.1;
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
 map.setMaxBounds(MAP_NAV_BOUNDS);
