@@ -913,6 +913,17 @@ function applyHomeView() {
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
 }
 
+function syncLayoutWithHeaderHeight() {
+  const header = document.querySelector('header.fixed-top');
+  if (!header || !document.documentElement) return;
+  const headerHeight = Math.max(0, Math.ceil(header.getBoundingClientRect().height));
+  if (!headerHeight) return;
+  document.documentElement.style.setProperty('--app-header-height', `${headerHeight}px`);
+  if (map && typeof map.invalidateSize === "function") {
+    setTimeout(() => map.invalidateSize({ pan: false }), 0);
+  }
+}
+
 applyHomeView();
 map.setMaxBounds(MAP_NAV_BOUNDS);
 map.options.maxBoundsViscosity = 1.0;
@@ -1136,13 +1147,21 @@ function initDisclaimerDrag() {
 
 // run initially and on relevant events
 window.addEventListener('load', () => {
+  syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
+  setTimeout(syncLayoutWithHeaderHeight, 80);
   setTimeout(positionDisclaimer, 300);
   setTimeout(initDisclaimerDrag, 350);
 });
-window.addEventListener('resize', () => setTimeout(positionDisclaimer, 50));
-map.on && map.on('resize', () => setTimeout(positionDisclaimer, 50));
+window.addEventListener('resize', () => {
+  setTimeout(syncLayoutWithHeaderHeight, 20);
+  setTimeout(positionDisclaimer, 50);
+});
+map.on && map.on('resize', () => {
+  setTimeout(syncLayoutWithHeaderHeight, 20);
+  setTimeout(positionDisclaimer, 50);
+});
 map.on && map.on('moveend', () => setTimeout(positionDisclaimer, 50));
 
 // --- Layers control (moved into sidebar if present) ---
