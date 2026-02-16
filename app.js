@@ -894,11 +894,13 @@ const map = L.map('map', {
 }).setView([20, 50], 3);
 
 map.fitBounds([[-45, -30], [38, 66]], { padding: [20, 20] });
-const INITIAL_BASE_BOUNDS = [[-45, -30], [38, 66]];
-const INITIAL_BASE_PADDING = [20, 20];
+const INITIAL_HOME_VIEW = {
+  center: map.getCenter(),
+  zoom: map.getZoom()
+};
 
 function goHomeView() {
-  map.fitBounds(INITIAL_BASE_BOUNDS, { padding: INITIAL_BASE_PADDING });
+  map.setView(INITIAL_HOME_VIEW.center, INITIAL_HOME_VIEW.zoom, { animate: false });
 }
 
 function fitToLayerExtent(layer) {
