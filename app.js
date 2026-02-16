@@ -903,16 +903,17 @@ const map = L.map('map', {
 const INITIAL_HOME_CENTER = [10, 19];
 const INITIAL_HOME_ZOOM = 3;
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
-map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
+
+function applyHomeView() {
+  map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
+}
+
+applyHomeView();
 map.setMaxBounds(MAP_NAV_BOUNDS);
 map.options.maxBoundsViscosity = 1.0;
 
 function goHomeView() {
-  map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
-}
-
-function applyInitialHomeView() {
-  map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
+  applyHomeView();
 }
 
 function fitToLayerExtent(layer) {
@@ -1131,7 +1132,7 @@ function initDisclaimerDrag() {
 // run initially and on relevant events
 window.addEventListener('load', () => {
   // Re-apply initial home once layout settles to avoid late layout shifts.
-  setTimeout(applyInitialHomeView, 50);
+  setTimeout(applyHomeView, 50);
   setTimeout(positionDisclaimer, 300);
   setTimeout(initDisclaimerDrag, 350);
 });
@@ -3143,6 +3144,5 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fileNameDisplay) fileNameDisplay.textContent = "Error: " + msg;
   }
 });
-
 
 
