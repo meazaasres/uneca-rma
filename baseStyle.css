@@ -322,12 +322,14 @@ header .d-flex {
 
 /* Explicit local image paths for Leaflet + Leaflet.Draw assets */
 .leaflet-draw-toolbar a {
-  background-image: url("vendor/images/spritesheet.png");
-  background-image: linear-gradient(transparent, transparent), url("vendor/images/spritesheet.svg");
+  background-image: url("vendor/images/spritesheet.png") !important;
+  background-repeat: no-repeat;
+  background-size: 300px 30px;
 }
 .leaflet-retina .leaflet-draw-toolbar a {
-  background-image: url("vendor/images/spritesheet-2x.png");
-  background-image: linear-gradient(transparent, transparent), url("vendor/images/spritesheet.svg");
+  background-image: url("vendor/images/spritesheet-2x.png") !important;
+  background-repeat: no-repeat;
+  background-size: 300px 30px;
 }
 .leaflet-control-layers-toggle {
   background-image: url("vendor/images/layers.png");
