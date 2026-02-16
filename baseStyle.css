@@ -12,8 +12,9 @@
     }
         /* Make map full-height */
     #map {
-      height: calc(100vh - 0px);
-      position:relative;
+      height: 100%;
+      width: 100%;
+      position: relative;
     }
     #table-container {
       margin-left: 250px;
@@ -36,13 +37,18 @@
       margin-left: 250px;   /* left sidebar width */
       margin-right: 250px;  /* right sidebar width */
       margin-top: 80px;     /* header height */
-      height: calc(100vh - 30px); /* crop bottom without changing map internals */
+      height: calc(100vh - 80px);
       position: relative;
       overflow: hidden;
+      clip-path: inset(0);
+      isolation: isolate;
     }
     #map-container,
     #map {
       overflow: hidden;
+    }
+    #map {
+      contain: paint;
     }
     #map .leaflet-pane,
     #map .leaflet-map-pane,

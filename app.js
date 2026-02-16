@@ -890,7 +890,10 @@ L.Icon.Default.mergeOptions({
 // --- Initialize Leaflet Map ---
 const map = L.map('map', {
   preferCanvas: true,
-  attributionControl: true
+  attributionControl: true,
+  zoomAnimation: false,
+  fadeAnimation: false,
+  markerZoomAnimation: false
 }).setView([20, 50], 3);
 
 map.fitBounds([[-45, -30], [38, 66]], { padding: [20, 20] });
