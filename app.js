@@ -894,13 +894,11 @@ const map = L.map('map', {
 }).setView([20, 50], 3);
 
 map.fitBounds([[-45, -30], [38, 66]], { padding: [20, 20] });
-const INITIAL_HOME_VIEW = {
-  center: map.getCenter(),
-  zoom: map.getZoom()
-};
+const INITIAL_BASE_CENTER = [20, 50];
+const INITIAL_BASE_ZOOM = 3;
 
 function goHomeView() {
-  map.setView(INITIAL_HOME_VIEW.center, INITIAL_HOME_VIEW.zoom);
+  map.setView(INITIAL_BASE_CENTER, INITIAL_BASE_ZOOM);
 }
 
 function fitToLayerExtent(layer) {
@@ -920,12 +918,32 @@ const HomeControl = L.Control.extend({
     link.title = 'Home view';
     link.setAttribute('aria-label', 'Home view');
     link.textContent = '⌂';
+    // Inline style to avoid stylesheet caching issues.
+    link.style.display = 'block';
+    link.style.width = '30px';
+    link.style.height = '30px';
+    link.style.lineHeight = '30px';
+    link.style.textAlign = 'center';
+    link.style.fontSize = '18px';
+    link.style.fontWeight = '700';
+    link.style.background = '#ffffff';
+    link.style.color = '#1E90FF';
+    link.style.textDecoration = 'none';
     L.DomEvent.on(link, 'click', L.DomEvent.stop)
       .on(link, 'click', () => goHomeView());
     return container;
   }
 });
-map.addControl(new HomeControl());
+const homeControl = new HomeControl();
+map.addControl(homeControl);
+// Force the Home control below zoom buttons.
+setTimeout(() => {
+  const zoomControl = map.zoomControl && map.zoomControl.getContainer ? map.zoomControl.getContainer() : null;
+  const homeContainer = homeControl && homeControl.getContainer ? homeControl.getContainer() : null;
+  if (!zoomControl || !homeContainer || !zoomControl.parentNode) return;
+  homeContainer.style.marginTop = '8px';
+  zoomControl.parentNode.insertBefore(homeContainer, zoomControl.nextSibling);
+}, 0);
 
 // Base layer
 const baseLayer = L.tileLayer(
