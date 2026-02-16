@@ -894,32 +894,13 @@ const map = L.map('map', {
 }).setView([20, 50], 3);
 
 map.fitBounds([[-45, -30], [38, 66]], { padding: [20, 20] });
-let homeViewState = {
-  bounds: map.getBounds()
+const INITIAL_HOME_VIEW = {
+  center: map.getCenter(),
+  zoom: map.getZoom()
 };
 
-function saveHomeViewFromBounds(bounds) {
-  if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return;
-  homeViewState = { bounds };
-}
-
-function saveHomeViewFromMap() {
-  homeViewState = {
-    center: map.getCenter(),
-    zoom: map.getZoom()
-  };
-}
-
 function goHomeView() {
-  if (homeViewState && homeViewState.bounds && typeof homeViewState.bounds.isValid === "function" && homeViewState.bounds.isValid()) {
-    map.fitBounds(homeViewState.bounds, { padding: [20, 20] });
-    return;
-  }
-  if (homeViewState && homeViewState.center && Number.isFinite(homeViewState.zoom)) {
-    map.setView(homeViewState.center, homeViewState.zoom);
-    return;
-  }
-  saveHomeViewFromMap();
+  map.setView(INITIAL_HOME_VIEW.center, INITIAL_HOME_VIEW.zoom);
 }
 
 function fitToLayerExtent(layer) {
@@ -927,7 +908,6 @@ function fitToLayerExtent(layer) {
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
   map.fitBounds(bounds, { padding: [20, 20] });
-  saveHomeViewFromBounds(bounds);
   return true;
 }
 
@@ -939,7 +919,7 @@ const HomeControl = L.Control.extend({
     link.href = '#';
     link.title = 'Home view';
     link.setAttribute('aria-label', 'Home view');
-    link.textContent = 'H';
+    link.textContent = '⌂';
     L.DomEvent.on(link, 'click', L.DomEvent.stop)
       .on(link, 'click', () => goHomeView());
     return container;

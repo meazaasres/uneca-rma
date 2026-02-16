@@ -347,12 +347,16 @@ header .d-flex {
   height: 30px;
   line-height: 30px;
   text-align: center;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
 }
 .leaflet-control-home .leaflet-control-home-btn {
   display: block;
   background: #fff;
-  color: #111;
+  color: #1E90FF;
   border-bottom: 1px solid #ccc;
+  text-decoration: none;
+}
+.leaflet-top.leaflet-left .leaflet-control-home {
+  margin-top: 8px;
 }
