@@ -893,13 +893,15 @@ const map = L.map('map', {
   attributionControl: true,
   zoomAnimation: false,
   fadeAnimation: false,
-  markerZoomAnimation: false
+  markerZoomAnimation: false,
+  zoomSnap: 0.1,
+  zoomDelta: 0.1
 });
 
 // Deterministic startup/home view centered on Africa with enough width
 // to keep Cape Verde (west) and Mauritius (east) visible on typical layouts.
 const INITIAL_HOME_CENTER = [2, 16];
-const INITIAL_HOME_ZOOM = 2.2;
+const INITIAL_HOME_ZOOM = 2.4;
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
 map.setMaxBounds(MAP_NAV_BOUNDS);
