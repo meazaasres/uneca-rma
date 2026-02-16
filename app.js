@@ -902,10 +902,15 @@ const map = L.map('map', {
 // to keep Cape Verde (west) and Mauritius (east) visible on typical layouts.
 const INITIAL_HOME_CENTER = [14, 19];
 const INITIAL_HOME_ZOOM = 3;
+const INITIAL_HOME_VERTICAL_OFFSET_PX = -90; // negative = shift view north (more space south)
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 
 function applyHomeView() {
   map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
+  if (INITIAL_HOME_VERTICAL_OFFSET_PX) {
+    map.panBy([0, INITIAL_HOME_VERTICAL_OFFSET_PX], { animate: false });
+  }
+  map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
 }
 
 applyHomeView();
@@ -3144,4 +3149,3 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fileNameDisplay) fileNameDisplay.textContent = "Error: " + msg;
   }
 });
-
