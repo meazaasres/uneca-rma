@@ -26,7 +26,7 @@ let categoricalUserColors = null;
 let currentAttribute = null;
 let layerOrder = [];
 let disclaimerUserPos = null;
-const AUTO_FIT_ON_LAYER_ADD = true;
+const AUTO_FIT_ON_LAYER_ADD = false;
 let activeContinentField = null;
 let activeCountryField = null;
 let selectedContinentValues = new Set();
@@ -900,7 +900,7 @@ const map = L.map('map', {
 
 // Deterministic startup/home view centered on Africa with enough width
 // to keep Cape Verde (west) and Mauritius (east) visible on typical layouts.
-const INITIAL_HOME_CENTER = [10, 19];
+const INITIAL_HOME_CENTER = [14, 19];
 const INITIAL_HOME_ZOOM = 3;
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 
@@ -3144,5 +3144,4 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fileNameDisplay) fileNameDisplay.textContent = "Error: " + msg;
   }
 });
-
 
