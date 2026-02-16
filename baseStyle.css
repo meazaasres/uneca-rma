@@ -37,7 +37,17 @@
       margin-right: 250px;  /* right sidebar width */
       margin-top: 80px;     /* header height */
       height: calc(100vh - 30px); /* crop bottom without changing map internals */
+      position: relative;
       overflow: hidden;
+    }
+    #map-container,
+    #map {
+      overflow: hidden;
+    }
+    #map .leaflet-pane,
+    #map .leaflet-map-pane,
+    #map .leaflet-tile-pane {
+      will-change: transform;
     }
 
     #legend-title {
