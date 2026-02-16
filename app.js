@@ -932,14 +932,14 @@ function fitToLayerExtent(layer) {
 }
 
 const HomeControl = L.Control.extend({
-  options: { position: 'topright' },
+  options: { position: 'topleft' },
   onAdd: function() {
     const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-home');
-    const link = L.DomUtil.create('a', '', container);
+    const link = L.DomUtil.create('a', 'leaflet-control-home-btn', container);
     link.href = '#';
     link.title = 'Home view';
     link.setAttribute('aria-label', 'Home view');
-    link.textContent = '⌂';
+    link.textContent = 'H';
     L.DomEvent.on(link, 'click', L.DomEvent.stop)
       .on(link, 'click', () => goHomeView());
     return container;

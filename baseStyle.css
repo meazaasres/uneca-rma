@@ -350,3 +350,9 @@ header .d-flex {
   font-size: 16px;
   font-weight: 700;
 }
+.leaflet-control-home .leaflet-control-home-btn {
+  display: block;
+  background: #fff;
+  color: #111;
+  border-bottom: 1px solid #ccc;
+}
