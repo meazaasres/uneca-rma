@@ -1,9 +1,20 @@
 // --- Globals & Utilities ---
-const MAX_SIZE = 100 * 1024 * 1024; // 1000 MB limit used in handlers
+const MAX_SIZE = 350 * 1024 * 1024; // 350 MB limit used in handlers
 const MAX_FEATURES = 50000;// adjust to device expectations
 const MAX_VERTICES = 200000; // total coordinate points across all features
-const MAX_REMOTE_IMPORT_BYTES = 25 * 1024 * 1024; // 25 MB cap for URL imports
-const REMOTE_IMPORT_TIMEOUT_MS = 20000; // 20s timeout for URL imports
+const MAX_REMOTE_IMPORT_BYTES = 150 * 1024 * 1024; // 150 MB cap for URL imports
+const REMOTE_IMPORT_TIMEOUT_MS = 180000; // 180s timeout for URL imports
+const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
+const ALLOWED_IMPORT_HOSTS = new Set([
+  "cdn.jsdelivr.net",
+  "raw.githubusercontent.com",
+  "gist.githubusercontent.com",
+  "data.humdata.org"
+]);
+const WORLD_BOUNDARY_LOCAL_URL = "vendor/world-countries.geo.json";
+const WORLD_COUNTRIES_LOCAL_URL = "vendor/world-countries-meta.json";
+const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
+const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -23,6 +34,16 @@ let selectedCountryValues = new Set();
 let worldBoundaryIndex = null;
 let worldBoundaryIndexPromise = null;
 let worldCountriesByContinent = null;
+
+// Best-effort clickjacking mitigation for static hosting where CSP headers
+// may not be fully controllable at the web server layer.
+try {
+  if (window.top !== window.self) {
+    window.top.location = window.self.location.href;
+  }
+} catch (e) {
+  window.location = window.location.href;
+}
 // --- Helpers ---
 function sanitizeId(str) {
   return String(str).replace(/[^\w\-]/g, "_");
@@ -56,6 +77,84 @@ function sanitizeName(name) {
   return safe || ("Layer " + Date.now());
 }
 
+function countVerticesInCoordinates(coords) {
+  let total = 0;
+  const walk = (node) => {
+    if (!Array.isArray(node)) return;
+    if (typeof node[0] === "number" && typeof node[1] === "number") {
+      total++;
+      return;
+    }
+    node.forEach(walk);
+  };
+  walk(coords);
+  return total;
+}
+
+function countVerticesInFeature(feature) {
+  const geom = feature && feature.geometry;
+  if (!geom || !geom.type) return 0;
+  if (geom.type === "Point") return 1;
+  return countVerticesInCoordinates(geom.coordinates);
+}
+
+function datasetBudgetStats(geojson) {
+  const features = Array.isArray(geojson?.features) ? geojson.features : [];
+  const featureCount = features.length;
+  let vertexCount = 0;
+  for (let i = 0; i < features.length; i++) {
+    vertexCount += countVerticesInFeature(features[i]);
+  }
+  return { featureCount, vertexCount };
+}
+
+function assertDatasetWithinLimits(geojson, sourceLabel = "dataset") {
+  const stats = datasetBudgetStats(geojson);
+  if (stats.featureCount > MAX_FEATURES) {
+    throw new Error(`${sourceLabel} has too many features (${stats.featureCount}).`);
+  }
+  if (stats.vertexCount > MAX_VERTICES) {
+    throw new Error(`${sourceLabel} is too complex (${stats.vertexCount} vertices).`);
+  }
+  return stats;
+}
+
+function isNearDatasetLimits(stats) {
+  if (!stats) return false;
+  const featureRatio = MAX_FEATURES > 0 ? (stats.featureCount / MAX_FEATURES) : 0;
+  const vertexRatio = MAX_VERTICES > 0 ? (stats.vertexCount / MAX_VERTICES) : 0;
+  return featureRatio >= 0.8 || vertexRatio >= 0.8;
+}
+
+async function confirmLargeDatasetLoad(stats, sourceLabel = "Dataset") {
+  if (!isNearDatasetLimits(stats)) return true;
+  const featurePct = Math.round((stats.featureCount / MAX_FEATURES) * 100);
+  const vertexPct = Math.round((stats.vertexCount / MAX_VERTICES) * 100);
+  const message =
+    `${sourceLabel} is large and may slow or freeze your browser.\n\n` +
+    `Features: ${stats.featureCount} (${featurePct}% of limit ${MAX_FEATURES})\n` +
+    `Vertices: ${stats.vertexCount} (${vertexPct}% of limit ${MAX_VERTICES})\n\n` +
+    `Continue loading this layer?`;
+  return window.confirm(message);
+}
+
+async function fetchJsonWithLimits(url, label) {
+  const fetched = await fetchWithLimits(url);
+  try {
+    return JSON.parse(fetched.text || "");
+  } catch (e) {
+    throw new Error(`Invalid JSON from ${label}.`);
+  }
+}
+
+async function fetchJsonWithFallback(localUrl, remoteUrl, label) {
+  try {
+    return await fetchJsonWithLimits(localUrl, `${label} (local)`);
+  } catch (localErr) {
+    return fetchJsonWithLimits(remoteUrl, `${label} (remote)`);
+  }
+}
+
 function validateImportUrl(rawUrl) {
   if (!rawUrl) throw new Error("Enter a valid URL");
   const parsed = new URL(rawUrl);
@@ -68,6 +167,9 @@ function validateImportUrl(rawUrl) {
   if (parsed.port && parsed.port !== "443") {
     throw new Error("Only default HTTPS port is allowed.");
   }
+  if (ENFORCE_IMPORT_HOST_ALLOWLIST && !ALLOWED_IMPORT_HOSTS.has(parsed.hostname)) {
+    throw new Error("URL host is not allowed by security policy.");
+  }
   const ext = parsed.pathname.slice(parsed.pathname.lastIndexOf('.')).toLowerCase();
   if (![".csv", ".geojson", ".json"].includes(ext)) {
     throw new Error("Only .csv, .geojson, or .json URLs are allowed.");
@@ -78,6 +180,7 @@ function validateImportUrl(rawUrl) {
 async function fetchWithLimits(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REMOTE_IMPORT_TIMEOUT_MS);
+  const maxRemoteMb = Math.round(MAX_REMOTE_IMPORT_BYTES / (1024 * 1024));
   try {
     const response = await fetch(url, {
       method: "GET",
@@ -92,13 +195,13 @@ async function fetchWithLimits(url) {
     const contentLenHeader = response.headers.get("Content-Length");
     const contentLen = contentLenHeader ? Number(contentLenHeader) : 0;
     if (contentLen && contentLen > MAX_REMOTE_IMPORT_BYTES) {
-      throw new Error("Remote file too large (max 25 MB).");
+      throw new Error(`Remote file too large (max ${maxRemoteMb} MB).`);
     }
 
     if (!response.body || typeof response.body.getReader !== "function") {
       const textFallback = await response.text();
       if (textFallback.length > MAX_REMOTE_IMPORT_BYTES) {
-        throw new Error("Remote file too large (max 25 MB).");
+        throw new Error(`Remote file too large (max ${maxRemoteMb} MB).`);
       }
       return { text: textFallback, contentType: response.headers.get("Content-Type") || "" };
     }
@@ -113,7 +216,7 @@ async function fetchWithLimits(url) {
       total += value.length;
       if (total > MAX_REMOTE_IMPORT_BYTES) {
         try { reader.cancel(); } catch (e) {}
-        throw new Error("Remote file too large (max 25 MB).");
+        throw new Error(`Remote file too large (max ${maxRemoteMb} MB).`);
       }
       chunks.push(value);
     }
@@ -523,19 +626,17 @@ async function loadWorldBoundaryIndex() {
   if (worldBoundaryIndex) return worldBoundaryIndex;
   if (worldBoundaryIndexPromise) return worldBoundaryIndexPromise;
 
-  const boundariesUrl = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
-  const countriesMetaUrl = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
-
   worldBoundaryIndexPromise = (async () => {
-    const [boundariesRes, metaRes] = await Promise.all([
-      fetch(boundariesUrl),
-      fetch(countriesMetaUrl)
+    const [boundaryGeojson, meta] = await Promise.all([
+      fetchJsonWithFallback(WORLD_BOUNDARY_LOCAL_URL, WORLD_BOUNDARY_REMOTE_URL, "world boundaries"),
+      fetchJsonWithFallback(WORLD_COUNTRIES_LOCAL_URL, WORLD_COUNTRIES_REMOTE_URL, "world country metadata")
     ]);
-    if (!boundariesRes.ok) throw new Error("Failed to load world boundaries");
-    if (!metaRes.ok) throw new Error("Failed to load world country metadata");
-
-    const boundaryGeojson = await boundariesRes.json();
-    const meta = await metaRes.json();
+    if (!Array.isArray(boundaryGeojson?.features)) {
+      throw new Error("World boundaries payload is invalid.");
+    }
+    if (!Array.isArray(meta)) {
+      throw new Error("World country metadata payload is invalid.");
+    }
 
     const continentByCountryNorm = new Map();
     const countriesByContinentMeta = new Map();
@@ -1090,7 +1191,7 @@ map.on('overlayremove', (e) => {
 // --- Default styles (use getLineWidth/getPointRadius) ---
 function getPointRadius() {
   const el = document.getElementById('point-size');
-  return el ? (+el.value || 8) : 8;
+  return el ? (+el.value || 4) : 4;
 }
 function getLineWidth() {
   const el = document.getElementById('line-width');
@@ -1219,7 +1320,7 @@ document.getElementById('file-upload').addEventListener('change', function(evt) 
         return;
       }
 
-    p.then(geojson => {
+    p.then(async geojson => {
       if (!geojson || !geojson.features) {
         console.error("Invalid data structure");
         showPopup("Invalid data structure in file", "error");
@@ -1227,10 +1328,18 @@ document.getElementById('file-upload').addEventListener('change', function(evt) 
         return;
       }
 
-      // Feature-count guard (inserted here)
-      if (geojson.features.length > MAX_FEATURES) {
-        console.warn(`Dataset too large: ${geojson.features.length} features`);
-        showPopup("Dataset too large for client export", "error");
+      let stats;
+      try {
+        stats = assertDatasetWithinLimits(geojson, "Imported file");
+      } catch (limitErr) {
+        console.warn("Dataset blocked by limits:", limitErr.message);
+        showPopup(limitErr.message, "error");
+        hideLoading();
+        return;
+      }
+      const proceed = await confirmLargeDatasetLoad(stats, "Imported file");
+      if (!proceed) {
+        showPopup("Import canceled by user.", "error");
         hideLoading();
         return;
       }
@@ -1323,6 +1432,14 @@ document.getElementById('add-geojson-url').addEventListener('click', async funct
       if (!geojson || geojson.type !== "FeatureCollection") {
         throw new Error("Invalid GeoJSON structure");
       }
+    }
+
+    const stats = assertDatasetWithinLimits(geojson, "Imported URL data");
+    const proceed = await confirmLargeDatasetLoad(stats, "Imported URL data");
+    if (!proceed) {
+      showPopup("Import canceled by user.", "error");
+      hideLoading();
+      return;
     }
 
     // Safe name from URL
@@ -2912,15 +3029,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const safeNames = [];
       for (const file of e.target.files) {
         if (file.size > MAX_SIZE) {
-          showPopup(`File "${file.name}" too large (max 1000 MB).`, "error");
+          const maxMb = Math.round(MAX_SIZE / (1024 * 1024));
+          showPopup(`File "${file.name}" too large (max ${maxMb} MB).`, "error");
           continue;
         }
         safeNames.push(sanitizeName(file.name));
-        const reader = new FileReader();
-        reader.onload = () => {
-          console.log("File content preview:", String(reader.result).slice(0, 100));
-        };
-        reader.readAsText(file);
       }
       if (fileNameDisplay) fileNameDisplay.textContent = safeNames.join(", ");
     });
