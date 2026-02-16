@@ -167,15 +167,6 @@ header .d-flex {
       margin-top: 10px;
       font-size: 12px;
     }
-    #num-classes-col,
-    #continent-filter-col,
-    #country-filter-col,
-    #point-size-col,
-    #line-width-col,
-    #classification-type-col {
-      display: none; /* hidden until a layer is added */
-    }
-
     /* Hide selector controls by default (moved from inline attributes) */
     #layer-select-col,
     #attribute-select-col,

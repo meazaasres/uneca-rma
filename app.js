@@ -26,7 +26,6 @@ let categoricalUserColors = null;
 let currentAttribute = null;
 let layerOrder = [];
 let disclaimerUserPos = null;
-const AUTO_FIT_ON_LAYER_ADD = true;
 let activeContinentField = null;
 let activeCountryField = null;
 let selectedContinentValues = new Set();
