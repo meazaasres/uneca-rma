@@ -901,15 +901,8 @@ const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 map.fitBounds(INITIAL_VIEW_BOUNDS, { padding: [20, 20] });
 map.setMaxBounds(MAP_NAV_BOUNDS);
 map.options.maxBoundsViscosity = 1.0;
-let homeViewState = {
-  bounds: INITIAL_VIEW_BOUNDS
-};
 
 function goHomeView() {
-  if (homeViewState && homeViewState.bounds && homeViewState.bounds.isValid && homeViewState.bounds.isValid()) {
-    map.fitBounds(homeViewState.bounds, { padding: [20, 20] });
-    return;
-  }
   map.fitBounds(INITIAL_VIEW_BOUNDS, { padding: [20, 20] });
 }
 
@@ -918,7 +911,6 @@ function fitToLayerExtent(layer) {
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
   map.fitBounds(bounds, { padding: [20, 20] });
-  homeViewState = { bounds };
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
   return true;
 }
