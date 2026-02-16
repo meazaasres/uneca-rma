@@ -341,3 +341,12 @@ header .d-flex {
 .leaflet-default-icon-path {
   background-image: url("vendor/images/marker-icon.png");
 }
+
+.leaflet-control-home a {
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+}

@@ -26,7 +26,7 @@ let categoricalUserColors = null;
 let currentAttribute = null;
 let layerOrder = [];
 let disclaimerUserPos = null;
-const AUTO_FIT_ON_LAYER_ADD = false;
+const AUTO_FIT_ON_LAYER_ADD = true;
 let activeContinentField = null;
 let activeCountryField = null;
 let selectedContinentValues = new Set();
@@ -894,6 +894,58 @@ const map = L.map('map', {
 }).setView([20, 50], 3);
 
 map.fitBounds([[-45, -30], [38, 66]], { padding: [20, 20] });
+let homeViewState = {
+  bounds: map.getBounds()
+};
+
+function saveHomeViewFromBounds(bounds) {
+  if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return;
+  homeViewState = { bounds };
+}
+
+function saveHomeViewFromMap() {
+  homeViewState = {
+    center: map.getCenter(),
+    zoom: map.getZoom()
+  };
+}
+
+function goHomeView() {
+  if (homeViewState && homeViewState.bounds && typeof homeViewState.bounds.isValid === "function" && homeViewState.bounds.isValid()) {
+    map.fitBounds(homeViewState.bounds, { padding: [20, 20] });
+    return;
+  }
+  if (homeViewState && homeViewState.center && Number.isFinite(homeViewState.zoom)) {
+    map.setView(homeViewState.center, homeViewState.zoom);
+    return;
+  }
+  saveHomeViewFromMap();
+}
+
+function fitToLayerExtent(layer) {
+  if (!layer || typeof layer.getBounds !== "function") return false;
+  const bounds = layer.getBounds();
+  if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
+  map.fitBounds(bounds, { padding: [20, 20] });
+  saveHomeViewFromBounds(bounds);
+  return true;
+}
+
+const HomeControl = L.Control.extend({
+  options: { position: 'topright' },
+  onAdd: function() {
+    const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-home');
+    const link = L.DomUtil.create('a', '', container);
+    link.href = '#';
+    link.title = 'Home view';
+    link.setAttribute('aria-label', 'Home view');
+    link.textContent = '⌂';
+    L.DomEvent.on(link, 'click', L.DomEvent.stop)
+      .on(link, 'click', () => goHomeView());
+    return container;
+  }
+});
+map.addControl(new HomeControl());
 
 // Base layer
 const baseLayer = L.tileLayer(
@@ -1355,7 +1407,7 @@ document.getElementById('file-upload').addEventListener('change', function(evt) 
         // Keep a reference to the raw geojson layer for style updates
         geojsonLayer = L.geoJSON(geojson, { style: defaultStyle, pointToLayer: defaultPoint, onEachFeature: bindFeaturePopup}).addTo(fg);
         layerGroup = fg; // set active layerGroup reference
-        if (AUTO_FIT_ON_LAYER_ADD) map.fitBounds(fg.getBounds());
+        if (AUTO_FIT_ON_LAYER_ADD) fitToLayerExtent(fg);
 
         const safeName = sanitizeName(file.name);
         overlayData[safeName] = { layerGroup: fg, geojson: geojson };
@@ -1456,7 +1508,7 @@ document.getElementById('add-geojson-url').addEventListener('click', async funct
     const fg = L.featureGroup().addTo(map);
     geojsonLayer = L.geoJSON(geojson, { style: defaultStyle, pointToLayer: defaultPoint, onEachFeature: bindFeaturePopup}).addTo(fg);
     layerGroup = fg;
-    if (AUTO_FIT_ON_LAYER_ADD) map.fitBounds(fg.getBounds());
+    if (AUTO_FIT_ON_LAYER_ADD) fitToLayerExtent(fg);
 
     overlayData[safeName] = { layerGroup: fg, geojson: geojson };
     layersControl.addOverlay(fg, safeName);
