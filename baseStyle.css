@@ -294,22 +294,20 @@ header .d-flex {
   right: 0;
 }
 
-/* Leaflet Draw controls: horizontal layout at bottom */
+/* Leaflet Draw controls: vertical layout at bottom-right */
+.leaflet-bottom .leaflet-draw {
+  display: block;
+}
 .leaflet-bottom .leaflet-draw .leaflet-draw-section {
-  float: left;
-  margin-right: 6px;
+  float: none;
+  margin-right: 0;
+  margin-top: 6px;
+}
+.leaflet-bottom .leaflet-draw .leaflet-draw-section:first-child {
   margin-top: 0;
 }
-.leaflet-bottom .leaflet-draw .leaflet-draw-section:last-child {
-  margin-right: 0;
-}
-.leaflet-bottom .leaflet-draw {
-  display: flex;
-  align-items: flex-start;
-}
 .leaflet-bottom .leaflet-draw-toolbar.leaflet-bar {
-  display: flex;
-  flex-direction: row;
+  display: block;
   margin-top: 0;
   margin-bottom: 0;
 }
@@ -324,11 +322,11 @@ header .d-flex {
   line-height: 30px;
   box-sizing: border-box;
   padding: 0;
-  border-bottom: 0;
-  border-right: 1px solid #ccc;
+  border-right: 0;
+  border-bottom: 1px solid #ccc;
 }
 .leaflet-bottom .leaflet-draw-toolbar.leaflet-bar a:last-child {
-  border-right: 0;
+  border-bottom: 0;
 }
 
 /* Lift bottom-right draw controls slightly upward */
