@@ -896,33 +896,30 @@ const map = L.map('map', {
   markerZoomAnimation: false
 }).setView([20, 50], 3);
 
-const BASE_VIEW_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
-map.fitBounds(BASE_VIEW_BOUNDS, { padding: [20, 20] });
-map.setMaxBounds(BASE_VIEW_BOUNDS);
+const INITIAL_VIEW_BOUNDS = L.latLngBounds([[-45, -30], [38, 66]]);
+const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
+map.fitBounds(INITIAL_VIEW_BOUNDS, { padding: [20, 20] });
+map.setMaxBounds(MAP_NAV_BOUNDS);
 map.options.maxBoundsViscosity = 1.0;
-const INITIAL_HOME_VIEW = {
-  center: map.getCenter(),
-  zoom: map.getZoom()
+let homeViewState = {
+  bounds: INITIAL_VIEW_BOUNDS
 };
 
 function goHomeView() {
-  map.setView(INITIAL_HOME_VIEW.center, INITIAL_HOME_VIEW.zoom, { animate: false });
+  if (homeViewState && homeViewState.bounds && homeViewState.bounds.isValid && homeViewState.bounds.isValid()) {
+    map.fitBounds(homeViewState.bounds, { padding: [20, 20] });
+    return;
+  }
+  map.fitBounds(INITIAL_VIEW_BOUNDS, { padding: [20, 20] });
 }
 
 function fitToLayerExtent(layer) {
   if (!layer || typeof layer.getBounds !== "function") return false;
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
-  // Keep auto-fit within base-map coverage to avoid blank areas.
-  const south = Math.max(bounds.getSouth(), BASE_VIEW_BOUNDS.getSouth());
-  const west = Math.max(bounds.getWest(), BASE_VIEW_BOUNDS.getWest());
-  const north = Math.min(bounds.getNorth(), BASE_VIEW_BOUNDS.getNorth());
-  const east = Math.min(bounds.getEast(), BASE_VIEW_BOUNDS.getEast());
-  const target = (south < north && west < east)
-    ? L.latLngBounds([[south, west], [north, east]])
-    : BASE_VIEW_BOUNDS;
-  map.fitBounds(target, { padding: [20, 20] });
-  map.panInsideBounds(BASE_VIEW_BOUNDS, { animate: false });
+  map.fitBounds(bounds, { padding: [20, 20] });
+  homeViewState = { bounds };
+  map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
   return true;
 }
 
