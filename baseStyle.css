@@ -319,3 +319,23 @@ header .d-flex {
 .leaflet-bottom.leaflet-right .leaflet-control {
   margin-bottom: 12px;
 }
+
+/* Explicit local image paths for Leaflet + Leaflet.Draw assets */
+.leaflet-draw-toolbar a {
+  background-image: url("vendor/images/spritesheet.png");
+  background-image: linear-gradient(transparent, transparent), url("vendor/images/spritesheet.svg");
+}
+.leaflet-retina .leaflet-draw-toolbar a {
+  background-image: url("vendor/images/spritesheet-2x.png");
+  background-image: linear-gradient(transparent, transparent), url("vendor/images/spritesheet.svg");
+}
+.leaflet-control-layers-toggle {
+  background-image: url("vendor/images/layers.png");
+}
+.leaflet-retina .leaflet-control-layers-toggle {
+  background-image: url("vendor/images/layers-2x.png");
+  background-size: 26px 26px;
+}
+.leaflet-default-icon-path {
+  background-image: url("vendor/images/marker-icon.png");
+}

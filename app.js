@@ -880,6 +880,13 @@ function bindFeaturePopup(feature, layer) {
   };
 })();
 //Map Initialization and Controls
+// Use explicit local marker icon URLs from vendor/images.
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "vendor/images/marker-icon-2x.png",
+  iconUrl: "vendor/images/marker-icon.png",
+  shadowUrl: "vendor/images/marker-shadow.png"
+});
+
 // --- Initialize Leaflet Map ---
 const map = L.map('map', {
   preferCanvas: true,
