@@ -894,16 +894,18 @@ const map = L.map('map', {
   zoomAnimation: false,
   fadeAnimation: false,
   markerZoomAnimation: false
-}).setView([20, 50], 3);
+});
 
-const INITIAL_VIEW_BOUNDS = L.latLngBounds([[-45, -30], [38, 66]]);
+// Fixed startup/home view centered on Africa while keeping Cape Verde and Mauritius in-frame.
+const INITIAL_VIEW_CENTER = [2, 17];
+const INITIAL_VIEW_ZOOM = 3;
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
-map.fitBounds(INITIAL_VIEW_BOUNDS, { padding: [20, 20] });
+map.setView(INITIAL_VIEW_CENTER, INITIAL_VIEW_ZOOM, { animate: false });
 map.setMaxBounds(MAP_NAV_BOUNDS);
 map.options.maxBoundsViscosity = 1.0;
 
 function goHomeView() {
-  map.fitBounds(INITIAL_VIEW_BOUNDS, { padding: [20, 20] });
+  map.setView(INITIAL_VIEW_CENTER, INITIAL_VIEW_ZOOM, { animate: false });
 }
 
 function fitToLayerExtent(layer) {
