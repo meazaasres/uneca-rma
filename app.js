@@ -11,6 +11,8 @@ const ALLOWED_IMPORT_HOSTS = new Set([
   "gist.githubusercontent.com",
   "data.humdata.org"
 ]);
+// Optional override list for trusted internal hosts when private-network blocking is enabled.
+const ALLOWED_PRIVATE_IMPORT_HOSTS = new Set([]);
 const WORLD_BOUNDARY_LOCAL_URL = "vendor/world-countries.geo.json";
 const WORLD_COUNTRIES_LOCAL_URL = "vendor/world-countries-meta.json";
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
@@ -166,6 +168,9 @@ function validateImportUrl(rawUrl) {
   if (parsed.port && parsed.port !== "443") {
     throw new Error("Only default HTTPS port is allowed.");
   }
+  if (isBlockedPrivateImportHost(parsed.hostname)) {
+    throw new Error("Private/internal hosts are blocked by security policy.");
+  }
   if (ENFORCE_IMPORT_HOST_ALLOWLIST && !ALLOWED_IMPORT_HOSTS.has(parsed.hostname)) {
     throw new Error("URL host is not allowed by security policy.");
   }
@@ -174,6 +179,56 @@ function validateImportUrl(rawUrl) {
     throw new Error("Only .csv, .geojson, or .json URLs are allowed.");
   }
   return { parsed, ext };
+}
+
+function isIpv4Address(hostname) {
+  return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+}
+
+function isPrivateOrLocalIpv4(hostname) {
+  if (!isIpv4Address(hostname)) return false;
+  const parts = hostname.split(".").map(n => Number(n));
+  if (parts.some(n => Number.isNaN(n) || n < 0 || n > 255)) return false;
+  const [a, b] = parts;
+  if (a === 10) return true; // 10.0.0.0/8
+  if (a === 127) return true; // loopback
+  if (a === 169 && b === 254) return true; // link-local
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16
+  if (a === 0) return true; // invalid/self-identification range
+  return false;
+}
+
+function normalizeIpv6Host(hostname) {
+  return String(hostname || "").toLowerCase().trim();
+}
+
+function isLocalOrPrivateIpv6(hostname) {
+  const h = normalizeIpv6Host(hostname);
+  if (!h.includes(":")) return false;
+  if (h === "::1") return true; // loopback
+  if (h.startsWith("fe80:")) return true; // link-local
+  if (h.startsWith("fc") || h.startsWith("fd")) return true; // unique local
+  return false;
+}
+
+function isLikelyInternalHostname(hostname) {
+  const h = String(hostname || "").toLowerCase().trim();
+  if (!h) return true;
+  if (h === "localhost" || h.endsWith(".localhost")) return true;
+  if (h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".corp")) return true;
+  // Single-label hostnames (e.g., "intranet") are usually internal DNS names.
+  if (!h.includes(".") && !h.includes(":")) return true;
+  return false;
+}
+
+function isBlockedPrivateImportHost(hostname) {
+  const h = String(hostname || "").toLowerCase().trim();
+  if (ALLOWED_PRIVATE_IMPORT_HOSTS.has(h)) return false;
+  if (isPrivateOrLocalIpv4(h)) return true;
+  if (isLocalOrPrivateIpv6(h)) return true;
+  if (isLikelyInternalHostname(h)) return true;
+  return false;
 }
 
 async function fetchWithLimits(url) {
