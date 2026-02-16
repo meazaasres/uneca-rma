@@ -6,10 +6,10 @@
     <meta http-equiv="Content-Security-Policy"
       content="
         default-src 'self';
-        script-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com;
-        style-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com;
+        script-src 'self';
+        style-src 'self';
         img-src 'self' data: https:;
-        font-src 'self' https://cdn.jsdelivr.net;
+        font-src 'self';
         connect-src 'self' https:;
         object-src 'none';
         frame-src 'none';
@@ -23,10 +23,10 @@
 <!--<meta http-equiv="Content-Security-Policy"
       content="
         default-src 'self';
-        script-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com;
-        style-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com;
+        script-src 'self';
+        style-src 'self';
         img-src 'self' data: https:;
-        font-src 'self' https://cdn.jsdelivr.net;
+        font-src 'self';
         connect-src 'self' https:;
         object-src 'none';
         frame-src 'none';
@@ -46,65 +46,58 @@
         Cross-Origin-Opener-Policy: same-origin
         Cross-Origin-Embedder-Policy: require-corp
       -->
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+        <link href="vendor/bootstrap.min.css"
       rel="stylesheet"
-      integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM"
-      crossorigin="anonymous">
+      >
 
       <!-- Leaflet CSS -->
       <link rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"
-      crossorigin="anonymous">
+      href="vendor/leaflet.css"
+      >
 
       <!-- Leaflet Draw CSS -->
       <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
-      integrity="sha384-NZLkVuBRMEeB4VeZz27WwTRvlhec30biQ8Xx7zG7JJnkvEKRg5qi6BNbEXo9ydwv"
-      crossorigin="anonymous">
+      href="vendor/leaflet.draw.css"
+      >
         <!-- my local styles -->
       <link rel="stylesheet" href="baseStyle.css?v=20260212-1">
       <link rel="stylesheet" href="beautifiedStyle.css?v=20260212-1">
 
       <!-- Bootstrap JS -->
-      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
-        crossorigin="anonymous" defer></script>
+      <script src="vendor/bootstrap.bundle.min.js"
+        defer></script>
 
       <!-- Leaflet JS -->
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"
-        crossorigin="anonymous" defer></script>
+      <script src="vendor/leaflet.js"
+        defer></script>
 
       <!-- Shapefile parser (pinned version) -->
-      <script src="https://unpkg.com/shpjs@3.4.3/dist/shp.min.js"
-        integrity="sha384-FQbvv1dli1APYtGR1n0kAK4mEGaTwIoBjtXsFseH52AdYybNX7MRnLmng04ozYgZ"
-        crossorigin="anonymous" defer></script>
+      <script src="vendor/shp.min.js"
+        defer></script>
 
       <!-- Geostats -->
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/geostats/1.7.0/geostats.min.js"
-        integrity="sha384-pA+/fDLe0rGsK3WVvpqvNVAP0VxGbHzGHMEemyvnfKH+BzaEDfWvHrf0ONw4CImA"
-        crossorigin="anonymous" defer></script>
+      <script src="vendor/geostats.min.js"
+        defer></script>
 
       <!-- Leaflet Image -->
-      <script src="https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js"
-        integrity="sha384-Cl2KSaehTGkoEiw07k3L/nCCwvF6tB3BcWgb83eHZUp2oPDI3qSKJUypvhoB66Gq"
-        crossorigin="anonymous" defer></script>
+      <script src="vendor/leaflet-image.js"
+        defer></script>
 
       <!-- html2canvas -->
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
-        integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H"
-        crossorigin="anonymous" defer></script>
+      <script src="vendor/html2canvas.min.js"
+        defer></script>
 
       <!-- jsPDF -->
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
-        integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
-        crossorigin="anonymous" defer></script>
+      <script src="vendor/jspdf.umd.min.js"
+        defer></script>
+
+      <!-- PapaParse -->
+      <script src="vendor/papaparse.min.js"
+        defer></script>
 
       <!-- Leaflet Draw -->
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"
-        integrity="sha384-JP5UPxIO2Tm2o79Fb0tGYMa44jkWar53aBoCbd8ah0+LcCDoohTIYr+zIXyfGIJN"
-        crossorigin="anonymous" defer></script>
+      <script src="vendor/leaflet.draw.js"
+        defer></script>
 
   <!-- my app -->
   <script src="app.js?v=20260212-1" defer></script>
