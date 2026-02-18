@@ -1,5 +1,5 @@
     :root {
-      --app-header-height: 110px;
+      --app-header-height: 125px;
     }
 
     /* Sidebar styling */
@@ -107,7 +107,6 @@
     }
 header .d-flex {
   position: relative;
-  background-color: #1e90ff;
   background-image: url("ECA-Banner.png");
   background-repeat: no-repeat;
   background-position: center;
