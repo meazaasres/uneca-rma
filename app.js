@@ -960,10 +960,15 @@ function bindFeaturePopup(feature, layer) {
 // Use explicit local marker icon URLs from vendor/images.
 // Prevent Leaflet from prefixing detected imagePath onto explicit icon URLs.
 delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
+const DEFAULT_MARKER_ICON_URLS = {
   iconRetinaUrl: new URL("vendor/images/marker-icon-2x.png", window.location.href).href,
   iconUrl: new URL("vendor/images/marker-icon.png", window.location.href).href,
   shadowUrl: new URL("vendor/images/marker-shadow.png", window.location.href).href
+};
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: DEFAULT_MARKER_ICON_URLS.iconRetinaUrl,
+  iconUrl: DEFAULT_MARKER_ICON_URLS.iconUrl,
+  shadowUrl: DEFAULT_MARKER_ICON_URLS.shadowUrl
 });
 
 // --- Initialize Leaflet Map ---
@@ -1094,7 +1099,9 @@ const drawControl = new L.Control.Draw({
     polyline: true,
     rectangle: true,
     circle: true,
-    marker: true
+    marker: {
+      icon: new L.Icon.Default(DEFAULT_MARKER_ICON_URLS)
+    }
   }
 });
 map.addControl(drawControl);
