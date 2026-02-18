@@ -1149,8 +1149,11 @@ const ExactScaleControl = L.Control.extend({
     this._map = controlMap;
     const container = L.DomUtil.create("div", "leaflet-control leaflet-control-exact-scale");
     const label = L.DomUtil.create("div", "exact-scale-label", container);
-    this._label = label;
-    this._label.textContent = "Scale: --";
+    const prefix = L.DomUtil.create("span", "exact-scale-prefix", label);
+    const value = L.DomUtil.create("span", "exact-scale-value", label);
+    prefix.textContent = "Scale: ";
+    value.textContent = "--";
+    this._value = value;
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
     this._map.on("zoom move resize", this._update, this);
@@ -1161,7 +1164,7 @@ const ExactScaleControl = L.Control.extend({
     controlMap.off("zoom move resize", this._update, this);
   },
   _update: function() {
-    if (!this._map || !this._label) return;
+    if (!this._map || !this._value) return;
     const size = this._map.getSize();
     const y = Math.max(0, size.y - 24);
     const x = Math.max(0, Math.round((size.x - this.options.widthPx) / 2));
@@ -1170,7 +1173,7 @@ const ExactScaleControl = L.Control.extend({
     const ll1 = this._map.containerPointToLatLng(p1);
     const ll2 = this._map.containerPointToLatLng(p2);
     const meters = this._map.distance(ll1, ll2);
-    this._label.textContent = `Scale: ${formatScaleDistance(meters)}`;
+    this._value.textContent = formatScaleDistance(meters);
   }
 });
 const scaleControl = new ExactScaleControl({ widthPx: 160 });
@@ -1197,7 +1200,7 @@ map.addControl(northArrowControl);
 makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 0, 20));
 makeControlDraggable(northArrowControl, (el, mapEl) => {
   const pos = getTopRightPosition(el, mapEl, 12);
-  return { left: pos.left, top: pos.top + 20 };
+  return { left: pos.left, top: pos.top + 32 };
 });
 
 // Base layer

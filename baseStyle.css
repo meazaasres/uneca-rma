@@ -433,3 +433,8 @@ header .d-flex {
   color: #102a43;
   font-weight: 400;
 }
+
+.leaflet-control-exact-scale .exact-scale-prefix,
+.leaflet-control-exact-scale .exact-scale-value {
+  font-weight: 400;
+}
