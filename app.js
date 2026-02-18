@@ -2712,7 +2712,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 50);
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
 
@@ -2741,7 +2741,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const relLeftCss = mapRect ? (discRect.left - mapRect.left) : 10;
         const relTopCss = mapRect ? (discRect.top - mapRect.top) : 10;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 50);
         const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
