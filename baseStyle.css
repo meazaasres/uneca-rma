@@ -32,7 +32,7 @@
       right: 0;
       width: max-content;
       min-width: 180px;
-      max-width: 34vw;
+      max-width: 250px;
       height: calc(100vh + var(--app-header-height));
       padding-top: calc(var(--app-header-height) + 5px);   /* space for header */
       overflow-y: auto;
