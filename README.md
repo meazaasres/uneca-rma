@@ -27,7 +27,7 @@ No build step is required.
 - URL credentials and non-default HTTPS ports are blocked
 - Private/internal hosts are blocked for URL imports
 - CSP and safe DOM rendering patterns are enabled in the app
-- Deploy CSP as an HTTP response header (recommended) with `frame-ancestors 'none'`
+- Deploy CSP as an HTTP response header (recommended) and set `frame-ancestors 'none'` there (`frame-ancestors` is ignored in `<meta>` CSP)
 
 ## Repository Notes
 - `vendor/` contains local third-party dependencies used by the app

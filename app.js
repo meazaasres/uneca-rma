@@ -13,9 +13,9 @@ const ALLOWED_IMPORT_HOSTS = new Set([
 ]);
 // Optional override list for trusted internal hosts when private-network blocking is enabled.
 const ALLOWED_PRIVATE_IMPORT_HOSTS = new Set([]);
-const WORLD_BOUNDARY_LOCAL_URL = "vendor/world-countries.geo.json";
-const WORLD_COUNTRIES_LOCAL_URL = "vendor/world-countries-meta.json";
-const WORLD_BOUNDARY_REMOTE_URL = null; // no mutable remote fallback
+const WORLD_BOUNDARY_LOCAL_URL = null; // set a local file path if vendored
+const WORLD_COUNTRIES_LOCAL_URL = null; // set a local file path if vendored
+const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
@@ -153,6 +153,9 @@ async function fetchJsonWithLimits(url, label) {
 }
 
 async function fetchJsonWithFallback(localUrl, remoteUrl, label) {
+  if (!localUrl && remoteUrl) {
+    return fetchJsonWithLimits(remoteUrl, `${label} (remote)`);
+  }
   try {
     return await fetchJsonWithLimits(localUrl, `${label} (local)`);
   } catch (localErr) {
@@ -955,10 +958,12 @@ function bindFeaturePopup(feature, layer) {
 })();
 //Map Initialization and Controls
 // Use explicit local marker icon URLs from vendor/images.
+// Prevent Leaflet from prefixing detected imagePath onto explicit icon URLs.
+delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "vendor/images/marker-icon-2x.png",
-  iconUrl: "vendor/images/marker-icon.png",
-  shadowUrl: "vendor/images/marker-shadow.png"
+  iconRetinaUrl: new URL("vendor/images/marker-icon-2x.png", window.location.href).href,
+  iconUrl: new URL("vendor/images/marker-icon.png", window.location.href).href,
+  shadowUrl: new URL("vendor/images/marker-shadow.png", window.location.href).href
 });
 
 // --- Initialize Leaflet Map ---
