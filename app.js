@@ -1061,8 +1061,76 @@ setTimeout(() => {
   zoomControl.parentNode.insertBefore(homeContainer, zoomControl.nextSibling);
 }, 0);
 
+function makeControlDraggable(control, initial) {
+  if (!control || typeof control.getContainer !== "function") return;
+  const el = control.getContainer();
+  const mapEl = map.getContainer();
+  if (!el || !mapEl) return;
+
+  // Move to map root so the control can be freely positioned.
+  mapEl.appendChild(el);
+  el.classList.add("draggable-map-control");
+  el.style.left = `${initial.left}px`;
+  el.style.top = `${initial.top}px`;
+  el.style.right = "auto";
+  el.style.bottom = "auto";
+
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let baseLeft = 0;
+  let baseTop = 0;
+
+  const onPointerMove = (evt) => {
+    if (!dragging) return;
+    const rect = mapEl.getBoundingClientRect();
+    const dx = evt.clientX - startX;
+    const dy = evt.clientY - startY;
+    const maxLeft = Math.max(0, rect.width - el.offsetWidth);
+    const maxTop = Math.max(0, rect.height - el.offsetHeight);
+    const nextLeft = Math.max(0, Math.min(maxLeft, baseLeft + dx));
+    const nextTop = Math.max(0, Math.min(maxTop, baseTop + dy));
+    el.style.left = `${nextLeft}px`;
+    el.style.top = `${nextTop}px`;
+  };
+
+  const stopDrag = () => {
+    dragging = false;
+    map.dragging.enable();
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", stopDrag);
+  };
+
+  el.addEventListener("pointerdown", (evt) => {
+    if (evt.button !== 0) return;
+    evt.preventDefault();
+    dragging = true;
+    startX = evt.clientX;
+    startY = evt.clientY;
+    baseLeft = parseFloat(el.style.left) || 0;
+    baseTop = parseFloat(el.style.top) || 0;
+    map.dragging.disable();
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", stopDrag);
+  });
+}
+
+function placeControlBottomCenter(control, bottomPx = 14) {
+  if (!control || typeof control.getContainer !== "function") return;
+  const el = control.getContainer();
+  const mapEl = map.getContainer();
+  if (!el || !mapEl) return;
+  mapEl.appendChild(el);
+  el.classList.add("centered-scale-control");
+  el.style.left = "50%";
+  el.style.right = "auto";
+  el.style.top = "auto";
+  el.style.bottom = `${bottomPx}px`;
+  el.style.transform = "translateX(-50%)";
+}
+
 // Scale bar (metric only)
-L.control.scale({
+const scaleControl = L.control.scale({
   position: 'bottomleft',
   metric: true,
   imperial: false,
@@ -1083,7 +1151,12 @@ const NorthArrowControl = L.Control.extend({
     return container;
   }
 });
-map.addControl(new NorthArrowControl());
+const northArrowControl = new NorthArrowControl();
+map.addControl(northArrowControl);
+
+// Make both controls draggable.
+placeControlBottomCenter(scaleControl, 14);
+makeControlDraggable(northArrowControl, { left: 12, top: 12 });
 
 // Base layer
 const baseLayer = L.tileLayer(

@@ -382,6 +382,18 @@ header .d-flex {
   justify-content: center;
 }
 
+.draggable-map-control {
+  position: absolute !important;
+  z-index: 1200;
+  margin: 0 !important;
+  cursor: grab;
+  user-select: none;
+}
+
+.draggable-map-control:active {
+  cursor: grabbing;
+}
+
 .leaflet-control-north-arrow .north-arrow-symbol {
   position: relative;
   font-size: 12px;
@@ -403,12 +415,18 @@ header .d-flex {
 }
 
 .leaflet-control-scale {
-  margin-left: 12px;
-  margin-bottom: 12px;
+  margin: 0 !important;
 }
 
 .leaflet-control-scale-line {
   border-color: #243b53;
   color: #102a43;
   background: rgba(255, 255, 255, 0.92);
+}
+
+.centered-scale-control {
+  position: absolute !important;
+  z-index: 1200;
+  margin: 0 !important;
+  pointer-events: none;
 }
