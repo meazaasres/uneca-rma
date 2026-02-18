@@ -1132,15 +1132,15 @@ function getTopRightPosition(el, mapEl, marginPx = 12) {
 }
 
 function formatScaleDistance(meters) {
-  if (!isFinite(meters) || meters <= 0) return "Scale: --";
+  if (!isFinite(meters) || meters <= 0) return "--";
   if (meters >= 1000) {
     const km = meters / 1000;
-    if (km >= 1000) return `Scale: ${Math.round(km)} kilometer`;
-    if (km >= 100) return `Scale: ${km.toFixed(1)} kilometer`;
-    if (km >= 10) return `Scale: ${km.toFixed(2)} kilometer`;
-    return `Scale: ${km.toFixed(3)} kilometer`;
+    if (km >= 1000) return `${Math.round(km)} kilometer`;
+    if (km >= 100) return `${km.toFixed(1)} kilometer`;
+    if (km >= 10) return `${km.toFixed(2)} kilometer`;
+    return `${km.toFixed(3)} kilometer`;
   }
-  return `Scale: ${Math.round(meters)} meter`;
+  return `${Math.round(meters)} meter`;
 }
 
 const ExactScaleControl = L.Control.extend({
@@ -1170,7 +1170,7 @@ const ExactScaleControl = L.Control.extend({
     const ll1 = this._map.containerPointToLatLng(p1);
     const ll2 = this._map.containerPointToLatLng(p2);
     const meters = this._map.distance(ll1, ll2);
-    this._label.textContent = formatScaleDistance(meters);
+    this._label.textContent = `Scale: ${formatScaleDistance(meters)}`;
   }
 });
 const scaleControl = new ExactScaleControl({ widthPx: 160 });
@@ -1195,7 +1195,10 @@ map.addControl(northArrowControl);
 
 // Make both controls draggable.
 makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 0, 20));
-makeControlDraggable(northArrowControl, (el, mapEl) => getTopRightPosition(el, mapEl, 12));
+makeControlDraggable(northArrowControl, (el, mapEl) => {
+  const pos = getTopRightPosition(el, mapEl, 12);
+  return { left: pos.left, top: pos.top + 20 };
+});
 
 // Base layer
 const baseLayer = L.tileLayer(
