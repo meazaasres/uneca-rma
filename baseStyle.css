@@ -75,14 +75,14 @@
       /* anchored to bottom-left of the map container */
       top: auto;
       left: 10px;
-      bottom: 75px;
+      bottom: 85px;
       transform: none;
       max-width: 24%;
       background: rgba(255,255,255,0.90);
       padding: 5px 7px;
       font-size: 0.72em;
       text-align: left;
-      max-height: 17vh; /* cap height so it doesn't cover map */
+      max-height: 15vh; /* cap height so it doesn't cover map */
       overflow: hidden;
       z-index: 1060;
       pointer-events: auto;
