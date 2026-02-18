@@ -2712,7 +2712,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 50);
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
 
@@ -3220,7 +3220,7 @@ function exportSVG() {
 
         const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
         const discY = discRect && mapRect
-          ? titleHeightPx + Math.max(0, Math.round((discRect.top - mapRect.top) * rawScaleY) - cropY)
+          ? titleHeightPx + Math.max(0, Math.round((discRect.top - mapRect.top) * rawScaleY) - cropY - 50)
           : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
 
         const discBg = document.createElementNS(svgNS, "rect");
