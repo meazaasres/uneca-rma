@@ -107,6 +107,11 @@
     }
 header .d-flex {
   position: relative;
+  background-color: #1e90ff;
+  background-image: url("ECA-Banner.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
 }
 
     #map-title {
