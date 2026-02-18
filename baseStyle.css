@@ -1,5 +1,5 @@
     :root {
-      --app-header-height: 125px;
+      --app-header-height: 140px;
     }
 
     /* Sidebar styling */
@@ -8,7 +8,7 @@
       top: 0; left: 0;
       width: 250px;
       height: calc(100vh + var(--app-header-height));
-      padding-top: var(--app-header-height);        /* space for header */
+      padding-top: calc(var(--app-header-height) + 5px);        /* space for header */
       overflow-y: auto;
       background: #f8f9fa;
       border-right: 1px solid #ddd;
@@ -30,7 +30,7 @@
       right: 0;
       width: 250px;
       height: calc(100vh + var(--app-header-height));
-      padding-top: var(--app-header-height);   /* space for header */
+      padding-top: calc(var(--app-header-height) + 5px);   /* space for header */
       overflow-y: auto;
       background: #f8f9fa;
       border-left: 1px solid #ddd;
@@ -40,8 +40,8 @@
     #map-container {
       margin-left: 250px;   /* left sidebar width */
       margin-right: 250px;  /* right sidebar width */
-      margin-top: calc(var(--app-header-height) - 10px);     /* move map upward by 10px */
-      height: calc(100vh - var(--app-header-height) + 10px);
+      margin-top: calc(var(--app-header-height) - 5px);     /* push map down by 5px */
+      height: calc(100vh - var(--app-header-height) + 5px);
       position: relative;
       overflow: hidden;
       clip-path: inset(0);
