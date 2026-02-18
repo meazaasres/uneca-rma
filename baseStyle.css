@@ -1,5 +1,5 @@
     :root {
-      --app-header-height: 140px;
+      --app-header-height: 150px;
     }
 
     /* Sidebar styling */
@@ -419,6 +419,10 @@ header .d-flex {
 }
 
 .leaflet-control-scale {
+  position: absolute;
+  right: 10px;
+  bottom: 70px; /* keep above the UN disclaimer note */
+  left: auto !important;
   margin: 0 !important;
 }
 
