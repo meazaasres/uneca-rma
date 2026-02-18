@@ -15,7 +15,7 @@ const ALLOWED_IMPORT_HOSTS = new Set([
 const ALLOWED_PRIVATE_IMPORT_HOSTS = new Set([]);
 const WORLD_BOUNDARY_LOCAL_URL = "vendor/world-countries.geo.json";
 const WORLD_COUNTRIES_LOCAL_URL = "vendor/world-countries-meta.json";
-const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
+const WORLD_BOUNDARY_REMOTE_URL = null; // no mutable remote fallback
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
@@ -38,12 +38,16 @@ let worldCountriesByContinent = null;
 
 // Best-effort clickjacking mitigation for static hosting where CSP headers
 // may not be fully controllable at the web server layer.
-try {
-  if (window.top !== window.self) {
-    window.top.location = window.self.location.href;
-  }
-} catch (e) {
-  window.location = window.location.href;
+const IS_FRAMED_CONTEXT = (() => {
+  try { return window.top !== window.self; } catch (e) { return true; }
+})();
+if (IS_FRAMED_CONTEXT) {
+  try { window.top.location = window.self.location.href; } catch (e) {}
+  try {
+    document.documentElement.innerHTML = "";
+    document.documentElement.style.display = "none";
+  } catch (e) {}
+  throw new Error("Framed execution is blocked.");
 }
 // --- Helpers ---
 function sanitizeId(str) {
@@ -152,6 +156,9 @@ async function fetchJsonWithFallback(localUrl, remoteUrl, label) {
   try {
     return await fetchJsonWithLimits(localUrl, `${label} (local)`);
   } catch (localErr) {
+    if (!remoteUrl) {
+      throw localErr;
+    }
     return fetchJsonWithLimits(remoteUrl, `${label} (remote)`);
   }
 }
@@ -159,6 +166,7 @@ async function fetchJsonWithFallback(localUrl, remoteUrl, label) {
 function validateImportUrl(rawUrl) {
   if (!rawUrl) throw new Error("Enter a valid URL");
   const parsed = new URL(rawUrl);
+  const host = normalizeHostname(parsed.hostname);
   if (parsed.protocol !== "https:") {
     throw new Error("Only HTTPS URLs are allowed.");
   }
@@ -168,10 +176,10 @@ function validateImportUrl(rawUrl) {
   if (parsed.port && parsed.port !== "443") {
     throw new Error("Only default HTTPS port is allowed.");
   }
-  if (isBlockedPrivateImportHost(parsed.hostname)) {
+  if (isBlockedPrivateImportHost(host)) {
     throw new Error("Private/internal hosts are blocked by security policy.");
   }
-  if (ENFORCE_IMPORT_HOST_ALLOWLIST && !ALLOWED_IMPORT_HOSTS.has(parsed.hostname)) {
+  if (ENFORCE_IMPORT_HOST_ALLOWLIST && !ALLOWED_IMPORT_HOSTS.has(host)) {
     throw new Error("URL host is not allowed by security policy.");
   }
   const ext = parsed.pathname.slice(parsed.pathname.lastIndexOf('.')).toLowerCase();
@@ -183,6 +191,12 @@ function validateImportUrl(rawUrl) {
 
 function isIpv4Address(hostname) {
   return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+}
+
+function normalizeHostname(hostname) {
+  let h = String(hostname || "").toLowerCase().trim();
+  if (h.endsWith(".")) h = h.slice(0, -1);
+  return h;
 }
 
 function isPrivateOrLocalIpv4(hostname) {
@@ -213,7 +227,7 @@ function isLocalOrPrivateIpv6(hostname) {
 }
 
 function isLikelyInternalHostname(hostname) {
-  const h = String(hostname || "").toLowerCase().trim();
+  const h = normalizeHostname(hostname);
   if (!h) return true;
   if (h === "localhost" || h.endsWith(".localhost")) return true;
   if (h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".corp")) return true;
@@ -222,12 +236,18 @@ function isLikelyInternalHostname(hostname) {
   return false;
 }
 
+function isPotentialRebindingDomain(hostname) {
+  const h = normalizeHostname(hostname);
+  return h.endsWith(".nip.io") || h.endsWith(".xip.io") || h.endsWith(".sslip.io");
+}
+
 function isBlockedPrivateImportHost(hostname) {
-  const h = String(hostname || "").toLowerCase().trim();
+  const h = normalizeHostname(hostname);
   if (ALLOWED_PRIVATE_IMPORT_HOSTS.has(h)) return false;
   if (isPrivateOrLocalIpv4(h)) return true;
   if (isLocalOrPrivateIpv6(h)) return true;
   if (isLikelyInternalHostname(h)) return true;
+  if (isPotentialRebindingDomain(h)) return true;
   return false;
 }
 
