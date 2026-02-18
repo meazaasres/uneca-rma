@@ -1135,12 +1135,12 @@ function formatScaleDistance(meters) {
   if (!isFinite(meters) || meters <= 0) return "";
   if (meters >= 1000) {
     const km = meters / 1000;
-    if (km >= 1000) return `⟷ ${Math.round(km)} kilometer`;
-    if (km >= 100) return `⟷ ${km.toFixed(1)} kilometer`;
-    if (km >= 10) return `⟷ ${km.toFixed(2)} kilometer`;
-    return `⟷ ${km.toFixed(3)} kilometer`;
+    if (km >= 1000) return `Scale: ${Math.round(km)} kilometer`;
+    if (km >= 100) return `Scale: ${km.toFixed(1)} kilometer`;
+    if (km >= 10) return `Scale: ${km.toFixed(2)} kilometer`;
+    return `Scale: ${km.toFixed(3)} kilometer`;
   }
-  return `⟷ ${Math.round(meters)} meter`;
+  return `Scale: ${Math.round(meters)} meter`;
 }
 
 const ExactScaleControl = L.Control.extend({
@@ -1196,7 +1196,7 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 14, 20));
+makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 9, 20));
 makeControlDraggable(northArrowControl, (el, mapEl) => getTopRightPosition(el, mapEl, 12));
 
 // Base layer
