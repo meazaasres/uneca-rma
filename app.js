@@ -2699,6 +2699,37 @@ window.addEventListener('DOMContentLoaded', () => {
       img.alt = "Exported map image";             // accessibility
       mapWrapper.appendChild(img);
 
+      function cloneMapOverlayToExport(selector, className) {
+        const source = document.querySelector(selector);
+        if (!source || !mapEl) return;
+        const mapRect = mapEl.getBoundingClientRect();
+        const srcRect = source.getBoundingClientRect();
+        if (!srcRect || srcRect.width <= 0 || srcRect.height <= 0) return;
+
+        const clone = source.cloneNode(true);
+        if (className) clone.classList.add(className);
+
+        const relLeftCss = srcRect.left - mapRect.left;
+        const relTopCss = srcRect.top - mapRect.top;
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
+        const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
+
+        clone.style.position = 'absolute';
+        clone.style.left = exportLeft + 'px';
+        clone.style.top = exportTop + 'px';
+        clone.style.right = 'auto';
+        clone.style.bottom = 'auto';
+        clone.style.width = exportWidth + 'px';
+        clone.style.height = exportHeight + 'px';
+        clone.style.margin = '0';
+        clone.style.transform = 'none';
+        clone.style.cursor = 'default';
+        clone.style.pointerEvents = 'none';
+        mapWrapper.appendChild(clone);
+      }
+
       // Disclaimer inside map (cloned safely)
       const disclaimer = document.querySelector('#disclaimer');
       if (disclaimer) {
@@ -2726,6 +2757,10 @@ window.addEventListener('DOMContentLoaded', () => {
         clone.style.padding = '6px';
         mapWrapper.appendChild(clone);
       }
+
+      // Export map overlays: north arrow + scale label
+      cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
+      cloneMapOverlayToExport('.leaflet-control-exact-scale', 'export-scale-clone');
 
       // Legend stacked below (cloned safely)
       const legend = document.querySelector('#legend-items');
@@ -2908,6 +2943,8 @@ function exportSVG() {
   const titleEl = document.getElementById('map-title');
   const legendEl = document.getElementById('legend-items');
   const disclaimerEl = document.getElementById('disclaimer');
+  const northArrowEl = document.querySelector('.leaflet-control-north-arrow');
+  const scaleBarEl = document.querySelector('.leaflet-control-exact-scale');
   const mapEl = document.getElementById('map');
   if (!mapEl) {
     console.error("Map element not found");
@@ -3212,6 +3249,82 @@ function exportSVG() {
         });
 
         svg.appendChild(discText);
+      }
+
+      // north arrow (render from live control position)
+      if (northArrowEl && mapEl) {
+        const naRect = northArrowEl.getBoundingClientRect();
+        const mapRect = mapEl.getBoundingClientRect();
+        const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
+        const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
+        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX);
+        const naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
+
+        const naBg = document.createElementNS(svgNS, "rect");
+        naBg.setAttribute("x", String(naX));
+        naBg.setAttribute("y", String(naY));
+        naBg.setAttribute("width", String(naW));
+        naBg.setAttribute("height", String(naH));
+        naBg.setAttribute("rx", String(Math.max(2, Math.round(3 * scale))));
+        naBg.setAttribute("fill", "#ffffff");
+        naBg.setAttribute("stroke", "#cfd6e4");
+        svg.appendChild(naBg);
+
+        const naText = document.createElementNS(svgNS, "text");
+        naText.setAttribute("x", String(naX + Math.round(naW / 2)));
+        naText.setAttribute("y", String(naY + Math.max(10, Math.round(12 * scale))));
+        naText.setAttribute("text-anchor", "middle");
+        naText.setAttribute("font-size", String(Math.max(9, Math.round(12 * scale))));
+        naText.setAttribute("font-family", "Segoe UI, sans-serif");
+        naText.setAttribute("font-weight", "700");
+        naText.setAttribute("fill", "#1e3a8a");
+        naText.textContent = "N";
+        svg.appendChild(naText);
+
+        const triW = Math.max(8, Math.round(12 * scale));
+        const triH = Math.max(8, Math.round(12 * scale));
+        const triCX = naX + Math.round(naW / 2);
+        const triTop = naY + Math.max(14, Math.round(18 * scale));
+        const tri = document.createElementNS(svgNS, "path");
+        tri.setAttribute(
+          "d",
+          `M ${triCX} ${triTop} L ${triCX - Math.round(triW / 2)} ${triTop + triH} L ${triCX + Math.round(triW / 2)} ${triTop + triH} Z`
+        );
+        tri.setAttribute("fill", "#1e3a8a");
+        svg.appendChild(tri);
+      }
+
+      // scale bar label (render from live control position/text)
+      if (scaleBarEl && mapEl) {
+        const sbRect = scaleBarEl.getBoundingClientRect();
+        const mapRect = mapEl.getBoundingClientRect();
+        const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
+        const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
+        const sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX);
+        const sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
+        const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
+        const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
+
+        const sbBg = document.createElementNS(svgNS, "rect");
+        sbBg.setAttribute("x", String(sbX));
+        sbBg.setAttribute("y", String(sbY));
+        sbBg.setAttribute("width", String(sbW));
+        sbBg.setAttribute("height", String(sbH));
+        sbBg.setAttribute("rx", String(Math.max(2, Math.round(3 * scale))));
+        sbBg.setAttribute("fill", "#ffffff");
+        sbBg.setAttribute("stroke", "#cfd6e4");
+        svg.appendChild(sbBg);
+
+        const sbTextEl = document.createElementNS(svgNS, "text");
+        sbTextEl.setAttribute("x", String(sbX + Math.round(sbW / 2)));
+        sbTextEl.setAttribute("y", String(sbY + Math.round(sbH / 2) + Math.round(3 * scale)));
+        sbTextEl.setAttribute("text-anchor", "middle");
+        sbTextEl.setAttribute("font-size", String(Math.max(8, Math.round(8 * scale))));
+        sbTextEl.setAttribute("font-family", "Segoe UI, sans-serif");
+        sbTextEl.setAttribute("font-weight", "400");
+        sbTextEl.setAttribute("fill", "#102a43");
+        sbTextEl.textContent = sbText;
+        svg.appendChild(sbTextEl);
       }
 
             // legend below map (render from current legend DOM so all layers/symbol types are included)
