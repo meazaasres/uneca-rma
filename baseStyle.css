@@ -174,11 +174,17 @@ footer {
 
 #table-container thead th:first-child,
 #table-container tbody td:first-child {
-  width: 260px;
-  max-width: 260px;
+  width: 80%;
+  max-width: 80%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+#table-container thead th:nth-child(2),
+#table-container tbody td:nth-child(2) {
+  width: 20%;
+  max-width: 20%;
 }
     /* Hide selector controls by default (moved from inline attributes) */
     #layer-select-col,
