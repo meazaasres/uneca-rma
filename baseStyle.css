@@ -134,22 +134,6 @@ header.fixed-top {
     .custom-blue {
       background-color: transparent;
     }
-    .logo-placeholder {
-      flex: 0 0 auto;
-      margin-left: 80px;     /* don't shrink, keep its space */
-      width: 10vw;          /* 10% of viewport width */
-      max-width: 100px;     /* cap size on large screens */
-      min-width: 50px;      /* ensure it's not too tiny */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .logo-placeholder img {
-      width: 100%;
-      height: auto;         /* keep aspect ratio */
-      object-fit: contain;  /* prevent distortion */
-    }
     .top-right {
       position: absolute;
       top: 10px;

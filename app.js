@@ -4,7 +4,7 @@ const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
-const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
+const ENFORCE_IMPORT_HOST_ALLOWLIST = true;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
   "raw.githubusercontent.com",
