@@ -432,7 +432,7 @@ header.fixed-top {
 #map .leaflet-control-scale {
   position: absolute;
   right: 12px;
-  bottom: 70px; /* keep above the UN disclaimer note */
+  bottom: 75px; /* keep above the UN disclaimer note */
   left: auto !important;
   margin: 0 !important;
 }
