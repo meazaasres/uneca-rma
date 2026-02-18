@@ -1116,11 +1116,18 @@ function makeControlDraggable(control, initial) {
   });
 }
 
-function getBottomCenterPosition(el, mapEl, bottomPx = 14) {
+function getBottomCenterPosition(el, mapEl, bottomPx = 14, offsetXPx = 0) {
   const mapW = mapEl.clientWidth || 0;
   const mapH = mapEl.clientHeight || 0;
-  const left = Math.max(0, Math.round((mapW - el.offsetWidth) / 2));
+  const left = Math.max(0, Math.round((mapW - el.offsetWidth) / 2) + offsetXPx);
   const top = Math.max(0, Math.round(mapH - bottomPx - el.offsetHeight));
+  return { left, top };
+}
+
+function getTopRightPosition(el, mapEl, marginPx = 12) {
+  const mapW = mapEl.clientWidth || 0;
+  const left = Math.max(0, Math.round(mapW - el.offsetWidth - marginPx));
+  const top = Math.max(0, marginPx);
   return { left, top };
 }
 
@@ -1128,12 +1135,12 @@ function formatScaleDistance(meters) {
   if (!isFinite(meters) || meters <= 0) return "";
   if (meters >= 1000) {
     const km = meters / 1000;
-    if (km >= 1000) return `${Math.round(km)} km`;
-    if (km >= 100) return `${km.toFixed(1)} km`;
-    if (km >= 10) return `${km.toFixed(2)} km`;
-    return `${km.toFixed(3)} km`;
+    if (km >= 1000) return `⟷ ${Math.round(km)} kilometer`;
+    if (km >= 100) return `⟷ ${km.toFixed(1)} kilometer`;
+    if (km >= 10) return `⟷ ${km.toFixed(2)} kilometer`;
+    return `⟷ ${km.toFixed(3)} kilometer`;
   }
-  return `${Math.round(meters)} m`;
+  return `⟷ ${Math.round(meters)} meter`;
 }
 
 const ExactScaleControl = L.Control.extend({
@@ -1189,8 +1196,8 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 14));
-makeControlDraggable(northArrowControl, { left: 12, top: 12 });
+makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 14, 20));
+makeControlDraggable(northArrowControl, (el, mapEl) => getTopRightPosition(el, mapEl, 12));
 
 // Base layer
 const baseLayer = L.tileLayer(
