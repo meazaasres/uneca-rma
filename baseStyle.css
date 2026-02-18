@@ -40,8 +40,8 @@
     #map-container {
       margin-left: 250px;   /* left sidebar width */
       margin-right: 250px;  /* right sidebar width */
-      margin-top: var(--app-header-height);     /* header height */
-      height: calc(100vh - var(--app-header-height));
+      margin-top: calc(var(--app-header-height) - 10px);     /* move map upward by 10px */
+      height: calc(100vh - var(--app-header-height) + 10px);
       position: relative;
       overflow: hidden;
       clip-path: inset(0);
@@ -428,8 +428,8 @@ header .d-flex {
 .leaflet-control-exact-scale .exact-scale-label {
   margin-top: 0;
   text-align: center;
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1.2;
   color: #102a43;
-  font-weight: 600;
+  font-weight: 400;
 }
