@@ -132,7 +132,7 @@ header.fixed-top {
       z-index: 600;
     }
     .custom-blue {
-      background-color: #1E90FF; /* or any hex code */
+      background-color: transparent;
     }
     .logo-placeholder {
       flex: 0 0 auto;
