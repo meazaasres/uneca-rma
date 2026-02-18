@@ -20,7 +20,7 @@ No build step is required.
 - Remote URL import size: `150 MB`
 - Remote import timeout: `180 seconds`
 - Maximum features per dataset: `200,000`
-- Maximum vertices per dataset: `200,000`
+- Maximum vertices per dataset: `3,000,000`
 
 ## Security Notes
 - URL imports are `HTTPS` only

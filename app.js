@@ -1,7 +1,7 @@
 // --- Globals & Utilities ---
 const MAX_SIZE = 350 * 1024 * 1024; // 350 MB limit used in handlers
 const MAX_FEATURES = 200000;// adjust to device expectations
-const MAX_VERTICES = 200000; // total coordinate points across all features
+const MAX_VERTICES = 3000000; // total coordinate points across all features
 const MAX_REMOTE_IMPORT_BYTES = 150 * 1024 * 1024; // 150 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 180000; // 180s timeout for URL imports
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
