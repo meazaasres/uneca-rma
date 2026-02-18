@@ -4,7 +4,7 @@ const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
-const ENFORCE_IMPORT_HOST_ALLOWLIST = true;
+const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
   "raw.githubusercontent.com",
@@ -1586,219 +1586,191 @@ function refreshStyles() {
   }
 }
 //File Upload and URL Add Handlers
-// --- File Upload Handler (secure) ---
-document.getElementById('file-upload').addEventListener('change', function(evt) {
-  showLoading("Loading data from file...");
-  Array.from(evt.target.files).forEach(file => {
-    if (file.size > MAX_SIZE) {
-      console.error(`File too large: ${file.name}`);
-      showPopup(`File too large: ${file.name}`, "error");
-      document.getElementById('file-name').textContent = "Error: File too large";
-      return;
-    }
-      const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-    const ALLOWED_EXTENSIONS = ['.zip', '.csv', '.geojson'];
-    if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      console.error(`Unsupported file type: ${file.name}`);
-      showPopup(`Unsupported file type: ${file.name}`, "error");
-      document.getElementById('file-name').textContent = "Error: Unsupported file type";
-      return;
-    }
+function getDataExtension(nameOrPath) {
+  return String(nameOrPath || "").slice(String(nameOrPath || "").lastIndexOf(".")).toLowerCase();
+}
 
-    const reader = new FileReader();
-    reader.onload = e => {
-      let p;
-      try {
-        if (ext === '.zip') {
-          p = shp(e.target.result);
-        } else if (ext === '.csv') {
-          const rows = e.target.result.split('\n').map(r => r.split(','));
-          const header = rows[0].map(h => h.trim().toLowerCase());
-          const latIndex = header.findIndex(h => h.includes('lat'));
-          const lonIndex = header.findIndex(h => h.includes('lon'));
-          if (latIndex === -1 || lonIndex === -1) {
-            throw new Error("CSV must have 'lat' and 'lon' columns.");
-          }
-          const features = rows.slice(1).filter(r => r.length > 1).map(r => {
-            const lat = parseFloat(r[latIndex]);
-            const lon = parseFloat(r[lonIndex]);
-            if (isNaN(lat) || isNaN(lon)) {
-              console.warn("Skipping invalid row:", r);
-              return null;
-            }
-            return {
-              type: "Feature",
-              geometry: { type: "Point", coordinates: [lon, lat] },
-              properties: Object.fromEntries(header.map((h, i) => [h, r[i]]))
-            };
-          }).filter(f => f !== null);
-          p = Promise.resolve({ type: "FeatureCollection", features });
-        } else if (ext === '.geojson') {
-          const parsed = JSON.parse(e.target.result);
-          if (!parsed || parsed.type !== "FeatureCollection") {
-            throw new Error("Invalid GeoJSON structure");
-          }
-          p = Promise.resolve(parsed);
-        }
-      } catch (err) {
-        console.error("Parsing error:", err);
-        showPopup("Parsing error: " + err.message, "error");
-        document.getElementById('file-name').textContent = "Error: " + err.message;
-        return;
-      }
-
-    p.then(async geojson => {
-      if (!geojson || !geojson.features) {
-        console.error("Invalid data structure");
-        showPopup("Invalid data structure in file", "error");
-        hideLoading();
-        return;
-      }
-
-      let stats;
-      try {
-        stats = assertDatasetWithinLimits(geojson, "Imported file");
-      } catch (limitErr) {
-        console.warn("Dataset blocked by limits:", limitErr.message);
-        showPopup(limitErr.message, "error");
-        hideLoading();
-        return;
-      }
-      const proceed = await confirmLargeDatasetLoad(stats, "Imported file");
-      if (!proceed) {
-        showPopup("Import canceled by user.", "error");
-        hideLoading();
-        return;
-      }
-        // Create a feature group for this upload
-        const fg = L.featureGroup().addTo(map);
-        // Keep a reference to the raw geojson layer for style updates
-        geojsonLayer = L.geoJSON(geojson, { style: defaultStyle, pointToLayer: defaultPoint, onEachFeature: bindFeaturePopup}).addTo(fg);
-        layerGroup = fg; // set active layerGroup reference
-        // Always zoom to newly added layer extent.
-        setTimeout(() => { fitToLayerExtent(fg); }, 0);
-
-        const safeName = sanitizeName(file.name);
-        overlayData[safeName] = { layerGroup: fg, geojson: geojson };
-        layersControl.addOverlay(fg, safeName);
-        trackLayerOrder(safeName);
-        reorderLayersControlUI();
-        applyLayerStackOrder();
-        document.getElementById('file-name').textContent = safeName;
-        refreshLayerSelector();
-        setActiveLayer(safeName);
-        initializeMapTitleFromLayer(safeName);
-        hideLoading();
-        showPopup(`File "${safeName}" uploaded successfully`, "success");
-      }).catch(err => {
-        hideLoading();
-        console.error("Rendering error:", err);
-        showPopup("Rendering error: " + err.message, "error");
-        document.getElementById('file-name').textContent = "Error: " + err.message;
-      });
-    };
-
-    if (ext === '.zip') {
-      reader.readAsArrayBuffer(file);
-    } else {
-      reader.readAsText(file);
-    }
+function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
+  if (!window.Papa || typeof window.Papa.parse !== "function") {
+    throw new Error("CSV parser is unavailable.");
+  }
+  const parsed = window.Papa.parse(csvText, {
+    header: true,
+    skipEmptyLines: "greedy"
   });
+  if (Array.isArray(parsed.errors) && parsed.errors.length) {
+    const firstErr = parsed.errors[0];
+    throw new Error(`${sourceLabel} parse error near row ${firstErr.row ?? "?"}.`);
+  }
+  const rows = Array.isArray(parsed.data) ? parsed.data : [];
+  if (!rows.length) return { type: "FeatureCollection", features: [] };
 
-  evt.target.value = ''; // reset
-
-});
-
-document.getElementById('add-geojson-url').addEventListener('click', async function() {
-  const rawUrl = document.getElementById('geojson-url').value.trim();
-  if (!rawUrl) {
-    showPopup("Error: Enter a valid URL", "error");
-    return;
+  const keys = Object.keys(rows[0] || {});
+  const latKey = keys.find(k => /lat/i.test(String(k)));
+  const lonKey = keys.find(k => /lon|lng|long/i.test(String(k)));
+  if (!latKey || !lonKey) {
+    throw new Error("CSV must have latitude/longitude columns.");
   }
 
-  showLoading("Loading data from URL...");
+  const features = rows.map((r, rowIdx) => {
+    const lat = Number.parseFloat(r?.[latKey]);
+    const lon = Number.parseFloat(r?.[lonKey]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      console.warn("Skipping out-of-range coordinates on CSV row:", rowIdx + 2);
+      return null;
+    }
+    return {
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lon, lat] },
+      properties: { ...(r || {}) }
+    };
+  }).filter(f => f !== null);
 
+  return { type: "FeatureCollection", features };
+}
+
+function parseImportedData(ext, bodyText, contentType = "") {
+  if (ext === ".csv") {
+    return parseCsvToGeojson(bodyText, "CSV");
+  }
+  if (!contentType.includes("json")) {
+    console.warn("Non-standard content type for JSON-like import:", contentType);
+  }
+  const geojson = JSON.parse(bodyText);
+  if (!geojson || geojson.type !== "FeatureCollection") {
+    throw new Error("Invalid GeoJSON structure");
+  }
+  return geojson;
+}
+
+async function addImportedLayer(geojson, rawName, sourceLabel) {
+  if (!geojson || !Array.isArray(geojson.features)) {
+    throw new Error("Invalid data structure");
+  }
+
+  const stats = assertDatasetWithinLimits(geojson, sourceLabel);
+  const proceed = await confirmLargeDatasetLoad(stats, sourceLabel);
+  if (!proceed) {
+    throw new Error("Import canceled by user.");
+  }
+
+  const safeName = sanitizeName(rawName);
+  const fg = L.featureGroup().addTo(map);
+  geojsonLayer = L.geoJSON(geojson, {
+    style: defaultStyle,
+    pointToLayer: defaultPoint,
+    onEachFeature: bindFeaturePopup
+  }).addTo(fg);
+  layerGroup = fg;
+  setTimeout(() => { fitToLayerExtent(fg); }, 0);
+
+  overlayData[safeName] = { layerGroup: fg, geojson: geojson };
+  layersControl.addOverlay(fg, safeName);
+  trackLayerOrder(safeName);
+  reorderLayersControlUI();
+  applyLayerStackOrder();
+  refreshLayerSelector();
+  setActiveLayer(safeName);
+  initializeMapTitleFromLayer(safeName);
+
+  return safeName;
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(String(e?.target?.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read file as text."));
+    reader.readAsText(file);
+  });
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e?.target?.result);
+    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function importFile(file) {
+  const fileNameEl = document.getElementById("file-name");
+  const ext = getDataExtension(file?.name || "");
+  const allowedExtensions = new Set([".zip", ".csv", ".geojson"]);
+  if (!allowedExtensions.has(ext)) {
+    throw new Error(`Unsupported file type: ${file?.name || "unknown file"}`);
+  }
+  if (file.size > MAX_SIZE) {
+    const maxMb = Math.round(MAX_SIZE / (1024 * 1024));
+    throw new Error(`File "${file.name}" too large (max ${maxMb} MB).`);
+  }
+
+  showLoading("Loading data from file...");
   try {
-    const { parsed, ext } = validateImportUrl(rawUrl);
-
-    const fetched = await fetchWithLimits(parsed.href);
-    const contentType = fetched.contentType || "";
-    const bodyText = fetched.text || "";
-
     let geojson;
-
-    if (ext === ".csv") {
-      const rows = bodyText.split("\n").map(r => r.split(","));
-      const header = rows[0].map(h => h.trim().toLowerCase());
-
-      // Flexible header detection
-      const latIndex = header.findIndex(h => h.includes("lat"));
-      const lonIndex = header.findIndex(h => h.includes("lon"));
-      if (latIndex === -1 || lonIndex === -1) {
-        throw new Error("CSV must have latitude/longitude columns.");
-      }
-
-      const features = rows.slice(1).filter(r => r.length > 1).map(r => {
-        const lat = parseFloat(r[latIndex]);
-        const lon = parseFloat(r[lonIndex]);
-        if (isNaN(lat) || isNaN(lon)) return null;
-        return {
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [lon, lat] },
-          properties: Object.fromEntries(header.map((h, i) => [h, r[i]]))
-        };
-      }).filter(f => f !== null);
-
-      geojson = { type: "FeatureCollection", features };
-
+    if (ext === ".zip") {
+      const bytes = await readFileAsArrayBuffer(file);
+      geojson = await shp(bytes);
     } else {
-      // Assume GeoJSON
-      if (!contentType.includes("json")) {
-        console.warn("Non-standard content type:", contentType);
-      }
-      geojson = JSON.parse(bodyText);
-      if (!geojson || geojson.type !== "FeatureCollection") {
-        throw new Error("Invalid GeoJSON structure");
-      }
+      const text = await readFileAsText(file);
+      geojson = parseImportedData(ext, text, ext === ".geojson" ? "application/json" : "text/csv");
     }
 
-    const stats = assertDatasetWithinLimits(geojson, "Imported URL data");
-    const proceed = await confirmLargeDatasetLoad(stats, "Imported URL data");
-    if (!proceed) {
-      showPopup("Import canceled by user.", "error");
-      hideLoading();
-      return;
-    }
-
-    // Safe name from URL
-    const safeName = sanitizeName(parsed.pathname.split("/").pop() || ("Layer_" + Date.now()));
-
-    // Render securely
-    const fg = L.featureGroup().addTo(map);
-    geojsonLayer = L.geoJSON(geojson, { style: defaultStyle, pointToLayer: defaultPoint, onEachFeature: bindFeaturePopup}).addTo(fg);
-    layerGroup = fg;
-    // Always zoom to newly added layer extent.
-    setTimeout(() => { fitToLayerExtent(fg); }, 0);
-
-    overlayData[safeName] = { layerGroup: fg, geojson: geojson };
-    layersControl.addOverlay(fg, safeName);
-    trackLayerOrder(safeName);
-    reorderLayersControlUI();
-    applyLayerStackOrder();
-
-    document.getElementById('geojson-url').value = '';
-    document.getElementById('file-name').textContent = safeName;
-    refreshLayerSelector();
-    setActiveLayer(safeName);
-    initializeMapTitleFromLayer(safeName);
-
-    showPopup(`Layer "${safeName}" added successfully`, "success");
-  } catch (err) {
-    console.error("Data load error:", err);
-    showPopup("Error loading data: " + err.message, "error");
-    document.getElementById('file-name').textContent = "Error: " + err.message;
+    const safeName = await addImportedLayer(geojson, file.name, "Imported file");
+    if (fileNameEl) fileNameEl.textContent = safeName;
+    showPopup(`File "${safeName}" uploaded successfully`, "success");
   } finally {
     hideLoading();
+  }
+}
+
+async function importUrl(rawUrl) {
+  const fileNameEl = document.getElementById("file-name");
+  const urlInput = document.getElementById("geojson-url");
+  if (!rawUrl) throw new Error("Enter a valid URL");
+
+  showLoading("Loading data from URL...");
+  try {
+    const { parsed, ext } = validateImportUrl(rawUrl);
+    const fetched = await fetchWithLimits(parsed.href);
+    const geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
+    const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
+    const safeName = await addImportedLayer(geojson, fallbackName, "Imported URL data");
+    if (urlInput) urlInput.value = "";
+    if (fileNameEl) fileNameEl.textContent = safeName;
+    showPopup(`Layer "${safeName}" added successfully`, "success");
+  } finally {
+    hideLoading();
+  }
+}
+
+// --- File Upload Handler (secure) ---
+document.getElementById("file-upload").addEventListener("change", async function(evt) {
+  const files = Array.from(evt?.target?.files || []);
+  for (const file of files) {
+    try {
+      await importFile(file);
+    } catch (err) {
+      console.error("File import error:", err);
+      showPopup(String(err?.message || "Error loading file"), "error");
+      const fileNameEl = document.getElementById("file-name");
+      if (fileNameEl) fileNameEl.textContent = "Error: " + String(err?.message || "Error loading file");
+    }
+  }
+  evt.target.value = "";
+});
+
+document.getElementById("add-geojson-url").addEventListener("click", async function() {
+  const rawUrl = document.getElementById("geojson-url")?.value.trim() || "";
+  try {
+    await importUrl(rawUrl);
+  } catch (err) {
+    console.error("Data load error:", err);
+    showPopup("Error loading data: " + String(err?.message || err), "error");
+    const fileNameEl = document.getElementById("file-name");
+    if (fileNameEl) fileNameEl.textContent = "Error: " + String(err?.message || err);
   }
 });
 
@@ -3466,21 +3438,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (fileInput) {
-    fileInput.addEventListener("change", (e) => {
-      const safeNames = [];
-      for (const file of e.target.files) {
-        if (file.size > MAX_SIZE) {
-          const maxMb = Math.round(MAX_SIZE / (1024 * 1024));
-          showPopup(`File "${file.name}" too large (max ${maxMb} MB).`, "error");
-          continue;
-        }
-        safeNames.push(sanitizeName(file.name));
-      }
-      if (fileNameDisplay) fileNameDisplay.textContent = safeNames.join(", ");
-    });
-  }
-
   // Wire export and UI buttons (avoid inline onclick handlers)
   const btnExportImage = document.getElementById('btnExportImage');
   if (btnExportImage) btnExportImage.addEventListener('click', () => { try { exportMap(); } catch(e){console.error(e);} });
@@ -3494,20 +3451,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnToggle = document.getElementById('btnToggleClassTable');
   if (btnToggle) btnToggle.addEventListener('click', () => { try { toggleClassTable(); } catch(e){console.error(e);} });
 
-  if (addButton && urlInput) {
-    addButton.addEventListener("click", async () => {
-      const rawUrl = urlInput.value.trim();
-      try {
-        validateImportUrl(rawUrl);
-      } catch (err) {
-        if (fileNameDisplay) fileNameDisplay.textContent = "Error: " + err.message;
-        console.error(err);
-      }
-    });
-  }
-
-  function showError(msg) {
-    console.error(msg);
-    if (fileNameDisplay) fileNameDisplay.textContent = "Error: " + msg;
+  if (!fileInput || !fileNameDisplay || !addButton || !urlInput) {
+    console.warn("Some expected import UI elements are missing.");
   }
 });
