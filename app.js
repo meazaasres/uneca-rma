@@ -1200,7 +1200,7 @@ map.addControl(northArrowControl);
 makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 0, 20));
 makeControlDraggable(northArrowControl, (el, mapEl) => {
   const pos = getTopRightPosition(el, mapEl, 12);
-  return { left: pos.left, top: pos.top + 32 };
+  return { left: pos.left, top: pos.top + 30 };
 });
 
 // Base layer
