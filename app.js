@@ -1148,9 +1148,7 @@ const ExactScaleControl = L.Control.extend({
   onAdd: function(controlMap) {
     this._map = controlMap;
     const container = L.DomUtil.create("div", "leaflet-control leaflet-control-exact-scale");
-    const line = L.DomUtil.create("div", "exact-scale-line", container);
     const label = L.DomUtil.create("div", "exact-scale-label", container);
-    this._line = line;
     this._label = label;
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
@@ -1162,7 +1160,7 @@ const ExactScaleControl = L.Control.extend({
     controlMap.off("zoom move resize", this._update, this);
   },
   _update: function() {
-    if (!this._map || !this._line || !this._label) return;
+    if (!this._map || !this._label) return;
     const size = this._map.getSize();
     const y = Math.max(0, size.y - 24);
     const x = Math.max(0, Math.round((size.x - this.options.widthPx) / 2));
@@ -1171,7 +1169,6 @@ const ExactScaleControl = L.Control.extend({
     const ll1 = this._map.containerPointToLatLng(p1);
     const ll2 = this._map.containerPointToLatLng(p2);
     const meters = this._map.distance(ll1, ll2);
-    this._line.style.width = `${this.options.widthPx}px`;
     this._label.textContent = formatScaleDistance(meters);
   }
 });
@@ -1196,7 +1193,7 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 9, 20));
+makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 0, 20));
 makeControlDraggable(northArrowControl, (el, mapEl) => getTopRightPosition(el, mapEl, 12));
 
 // Base layer
