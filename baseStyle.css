@@ -24,7 +24,7 @@
     }
     #table-container {
       margin-left: var(--left-sidebar-width);
-      margin-right: auto;
+      margin-right: var(--right-sidebar-width);
     }
     #right-sidebar {
       position: absolute;
