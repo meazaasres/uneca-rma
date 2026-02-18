@@ -110,7 +110,7 @@ header .d-flex {
   background-image: url("ECA-Banner.png");
   background-repeat: no-repeat;
   background-position: center;
-  background-size: contain;
+  background-size: cover;
 }
 
     #map-title {
