@@ -2585,6 +2585,21 @@ function toggleClassTable() {
   btnClassTable.classList.toggle('active', hidden);
 }
 
+// Keep initial viewport consistent on full reloads.
+if ('scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual';
+}
+
+function resetInitialScrollPositions() {
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  ['sidebar', 'right-sidebar', 'classification-wrapper'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollTop = 0;
+  });
+}
+
 // On page load show panels
 window.addEventListener('DOMContentLoaded', () => {
   const tbl  = document.getElementById('table-container');
@@ -2594,7 +2609,11 @@ window.addEventListener('DOMContentLoaded', () => {
     wrap.style.display = 'block';
     btnClassTable.classList.add('active');
   }
+
+  resetInitialScrollPositions();
 });
+
+window.addEventListener('load', resetInitialScrollPositions);
 
         // --- Secure Export Helper ---
     function compositeExportElement(cb) {
