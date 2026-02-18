@@ -431,7 +431,7 @@ header.fixed-top {
   bottom: 0 !important;
 }
 #map .leaflet-bottom.leaflet-left .leaflet-control {
-  margin: 0 2px 5px 0 !important; /* move right by 10px, up by 5px */
+  margin: 0 -8px 5px 0 !important; /* move right by 20px, up by 5px */
 }
 #map .leaflet-control-scale {
   position: relative !important;
