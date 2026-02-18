@@ -1070,8 +1070,9 @@ function makeControlDraggable(control, initial) {
   // Move to map root so the control can be freely positioned.
   mapEl.appendChild(el);
   el.classList.add("draggable-map-control");
-  el.style.left = `${initial.left}px`;
-  el.style.top = `${initial.top}px`;
+  const initialPos = typeof initial === "function" ? initial(el, mapEl) : initial;
+  el.style.left = `${Math.max(0, Math.round(initialPos.left || 0))}px`;
+  el.style.top = `${Math.max(0, Math.round(initialPos.top || 0))}px`;
   el.style.right = "auto";
   el.style.bottom = "auto";
 
@@ -1115,27 +1116,60 @@ function makeControlDraggable(control, initial) {
   });
 }
 
-function placeControlBottomCenter(control, bottomPx = 14) {
-  if (!control || typeof control.getContainer !== "function") return;
-  const el = control.getContainer();
-  const mapEl = map.getContainer();
-  if (!el || !mapEl) return;
-  mapEl.appendChild(el);
-  el.classList.add("centered-scale-control");
-  el.style.left = "50%";
-  el.style.right = "auto";
-  el.style.top = "auto";
-  el.style.bottom = `${bottomPx}px`;
-  el.style.transform = "translateX(-50%)";
+function getBottomCenterPosition(el, mapEl, bottomPx = 14) {
+  const mapW = mapEl.clientWidth || 0;
+  const mapH = mapEl.clientHeight || 0;
+  const left = Math.max(0, Math.round((mapW - el.offsetWidth) / 2));
+  const top = Math.max(0, Math.round(mapH - bottomPx - el.offsetHeight));
+  return { left, top };
 }
 
-// Scale bar (metric only)
-const scaleControl = L.control.scale({
-  position: 'bottomleft',
-  metric: true,
-  imperial: false,
-  maxWidth: 140
-}).addTo(map);
+function formatScaleDistance(meters) {
+  if (!isFinite(meters) || meters <= 0) return "";
+  if (meters >= 1000) {
+    const km = meters / 1000;
+    if (km >= 1000) return `${Math.round(km)} km`;
+    if (km >= 100) return `${km.toFixed(1)} km`;
+    if (km >= 10) return `${km.toFixed(2)} km`;
+    return `${km.toFixed(3)} km`;
+  }
+  return `${Math.round(meters)} m`;
+}
+
+const ExactScaleControl = L.Control.extend({
+  options: { position: "bottomleft", widthPx: 160 },
+  onAdd: function(controlMap) {
+    this._map = controlMap;
+    const container = L.DomUtil.create("div", "leaflet-control leaflet-control-exact-scale");
+    const line = L.DomUtil.create("div", "exact-scale-line", container);
+    const label = L.DomUtil.create("div", "exact-scale-label", container);
+    this._line = line;
+    this._label = label;
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+    this._map.on("zoom move resize", this._update, this);
+    this._update();
+    return container;
+  },
+  onRemove: function(controlMap) {
+    controlMap.off("zoom move resize", this._update, this);
+  },
+  _update: function() {
+    if (!this._map || !this._line || !this._label) return;
+    const size = this._map.getSize();
+    const y = Math.max(0, size.y - 24);
+    const x = Math.max(0, Math.round((size.x - this.options.widthPx) / 2));
+    const p1 = L.point(x, y);
+    const p2 = L.point(x + this.options.widthPx, y);
+    const ll1 = this._map.containerPointToLatLng(p1);
+    const ll2 = this._map.containerPointToLatLng(p2);
+    const meters = this._map.distance(ll1, ll2);
+    this._line.style.width = `${this.options.widthPx}px`;
+    this._label.textContent = formatScaleDistance(meters);
+  }
+});
+const scaleControl = new ExactScaleControl({ widthPx: 160 });
+map.addControl(scaleControl);
 
 // North arrow
 const NorthArrowControl = L.Control.extend({
@@ -1155,7 +1189,7 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-placeControlBottomCenter(scaleControl, 14);
+makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 14));
 makeControlDraggable(northArrowControl, { left: 12, top: 12 });
 
 // Base layer

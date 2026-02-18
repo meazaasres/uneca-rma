@@ -418,15 +418,26 @@ header .d-flex {
   margin: 0 !important;
 }
 
-.leaflet-control-scale-line {
-  border-color: #243b53;
-  color: #102a43;
+.leaflet-control-exact-scale {
   background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #cfd6e4;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  padding: 4px 6px 6px;
 }
 
-.centered-scale-control {
-  position: absolute !important;
-  z-index: 1200;
-  margin: 0 !important;
-  pointer-events: none;
+.leaflet-control-exact-scale .exact-scale-line {
+  height: 0;
+  border-top: 2px solid #243b53;
+  border-left: 2px solid #243b53;
+  border-right: 2px solid #243b53;
+}
+
+.leaflet-control-exact-scale .exact-scale-label {
+  margin-top: 3px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.2;
+  color: #102a43;
+  font-weight: 600;
 }
