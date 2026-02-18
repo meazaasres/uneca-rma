@@ -1092,7 +1092,7 @@ function positionDisclaimer() {
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
     const left = 12;
-    const bottom = 75;
+    const bottom = 50;
     const preferredFixedWidth = 240;
     const margin = 12;
     const maxAvailableWidth = mapRect
