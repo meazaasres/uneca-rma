@@ -1132,7 +1132,7 @@ function getTopRightPosition(el, mapEl, marginPx = 12) {
 }
 
 function formatScaleDistance(meters) {
-  if (!isFinite(meters) || meters <= 0) return "";
+  if (!isFinite(meters) || meters <= 0) return "Scale: --";
   if (meters >= 1000) {
     const km = meters / 1000;
     if (km >= 1000) return `Scale: ${Math.round(km)} kilometer`;
@@ -1150,6 +1150,7 @@ const ExactScaleControl = L.Control.extend({
     const container = L.DomUtil.create("div", "leaflet-control leaflet-control-exact-scale");
     const label = L.DomUtil.create("div", "exact-scale-label", container);
     this._label = label;
+    this._label.textContent = "Scale: --";
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
     this._map.on("zoom move resize", this._update, this);
