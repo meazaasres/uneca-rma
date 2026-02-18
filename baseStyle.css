@@ -369,3 +369,46 @@ header .d-flex {
 .leaflet-top.leaflet-left .leaflet-control-home {
   margin-top: 8px;
 }
+
+.leaflet-control-north-arrow {
+  width: 34px;
+  height: 44px;
+  background: #ffffff;
+  border: 1px solid #cfd6e4;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leaflet-control-north-arrow .north-arrow-symbol {
+  position: relative;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a8a;
+  line-height: 1;
+  padding-top: 3px;
+}
+
+.leaflet-control-north-arrow .north-arrow-symbol::after {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  margin: 3px auto 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 12px solid #1e3a8a;
+}
+
+.leaflet-control-scale {
+  margin-left: 12px;
+  margin-bottom: 12px;
+}
+
+.leaflet-control-scale-line {
+  border-color: #243b53;
+  color: #102a43;
+  background: rgba(255, 255, 255, 0.92);
+}

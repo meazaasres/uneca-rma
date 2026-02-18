@@ -1061,6 +1061,30 @@ setTimeout(() => {
   zoomControl.parentNode.insertBefore(homeContainer, zoomControl.nextSibling);
 }, 0);
 
+// Scale bar (metric only)
+L.control.scale({
+  position: 'bottomleft',
+  metric: true,
+  imperial: false,
+  maxWidth: 140
+}).addTo(map);
+
+// North arrow
+const NorthArrowControl = L.Control.extend({
+  options: { position: 'topright' },
+  onAdd: function() {
+    const container = L.DomUtil.create('div', 'leaflet-control leaflet-control-north-arrow');
+    const label = L.DomUtil.create('div', 'north-arrow-symbol', container);
+    label.textContent = 'N';
+    label.setAttribute('aria-label', 'North arrow');
+    label.setAttribute('title', 'North');
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+    return container;
+  }
+});
+map.addControl(new NorthArrowControl());
+
 // Base layer
 const baseLayer = L.tileLayer(
   'https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}',
