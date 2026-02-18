@@ -154,14 +154,28 @@ header.fixed-top {
     }
 
     /* Footer */
-    footer {
-      background: #333;
-      color: #fff;
-      text-align: center;
-      padding: 5px 10px;
-      margin-top: 10px;
-      font-size: 12px;
-    }
+footer {
+  background: #333;
+  color: #fff;
+  text-align: center;
+  padding: 5px 10px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+/* Classification table sizing: keep Category column compact */
+#table-container table {
+  table-layout: fixed;
+}
+
+#table-container thead th:first-child,
+#table-container tbody td:first-child {
+  width: 260px;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
     /* Hide selector controls by default (moved from inline attributes) */
     #layer-select-col,
     #attribute-select-col,
