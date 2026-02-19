@@ -1527,7 +1527,7 @@ function getPointRadius() {
 }
 function getLineWidth() {
   const el = document.getElementById('line-width');
-  return el ? (+el.value || 2) : 2;
+  return el ? (+el.value || 3) : 3;
 }
 
 function defaultStyle(feature) {
