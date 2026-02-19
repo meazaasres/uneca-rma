@@ -1031,11 +1031,6 @@ function syncLayoutWithHeaderHeight() {
   const headerHeight = Math.max(0, Math.ceil(header.getBoundingClientRect().height));
   if (!headerHeight) return;
   document.documentElement.style.setProperty('--app-header-height', `${headerHeight}px`);
-  const rightSidebar = document.getElementById('right-sidebar');
-  if (rightSidebar) {
-    const rightWidth = Math.max(0, Math.ceil(rightSidebar.getBoundingClientRect().width));
-    document.documentElement.style.setProperty('--right-sidebar-width', `${rightWidth}px`);
-  }
   if (map && typeof map.invalidateSize === "function") {
     setTimeout(() => map.invalidateSize({ pan: false }), 0);
   }

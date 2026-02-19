@@ -1,14 +1,12 @@
     :root {
       --app-header-height: 80px;
-      --left-sidebar-width: 250px;
-      --right-sidebar-width: 250px;
     }
 
     /* Sidebar styling */
     #sidebar {
       position: absolute;
       top: 0; left: 0;
-      width: var(--left-sidebar-width);
+      width: 250px;
       height: calc(100vh + var(--app-header-height));
       padding-top: calc(var(--app-header-height) + 5px);        /* space for header */
       overflow-y: auto;
@@ -23,28 +21,25 @@
       position: relative;
     }
     #table-container {
-      margin-left: var(--left-sidebar-width);
-      margin-right: var(--right-sidebar-width);
+      margin-left: 250px;
+      margin-right: 250px;
     }
     #right-sidebar {
       position: absolute;
       top: 0;
       right: 0;
-      width: max-content;
-      min-width: 180px;
-      max-width: 250px;
+      width: 250px;
       height: calc(100vh + var(--app-header-height));
       padding-top: calc(var(--app-header-height) + 5px);   /* space for header */
       overflow-y: auto;
-      overflow-x: hidden;
       background: #f8f9fa;
       border-left: 1px solid #ddd;
       z-index: 1000;
     }
          /* Map container now has margins for both sidebars */
     #map-container {
-      margin-left: var(--left-sidebar-width);   /* left sidebar width */
-      margin-right: var(--right-sidebar-width);  /* right sidebar width */
+      margin-left: 250px;   /* left sidebar width */
+      margin-right: 250px;  /* right sidebar width */
       margin-top: calc(var(--app-header-height) - 5px);     /* push map down by 5px */
       height: calc(100vh - var(--app-header-height) + 5px);
       position: relative;
@@ -477,3 +472,4 @@ footer {
 .leaflet-control-exact-scale .exact-scale-value {
   font-weight: 400;
 }
+
