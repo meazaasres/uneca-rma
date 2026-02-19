@@ -1006,7 +1006,7 @@ const map = L.map('map', {
 // tightening vertical fit a bit so the map starts slightly more zoomed in.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -26], [38.5, 60]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-34, -22], [36.5, 56]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 
 function applyHomeView() {
@@ -1017,7 +1017,7 @@ function applyHomeView() {
       // padding to achieve a slightly closer initial view.
       paddingTopLeft: [20, 10],
       paddingBottomRight: [20, 10],
-      maxZoom: 3.6
+      maxZoom: 3.8
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
