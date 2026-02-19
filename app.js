@@ -62,6 +62,25 @@ function sanitizePlainText(value, fallback = "") {
   return clean || fallback;
 }
 
+function insertTextAtCaret(targetEl, text) {
+  if (!targetEl) return;
+  const safeText = sanitizePlainText(text);
+  targetEl.focus();
+  const sel = window.getSelection ? window.getSelection() : null;
+  if (!sel || sel.rangeCount === 0) {
+    targetEl.textContent = sanitizePlainText((targetEl.textContent || "") + " " + safeText);
+    return;
+  }
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const textNode = document.createTextNode(safeText);
+  range.insertNode(textNode);
+  range.setStartAfter(textNode);
+  range.setEndAfter(textNode);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 function stripKnownDataExtension(name) {
   return String(name || "").replace(/\.(geojson|zip|csv)$/i, "");
 }
@@ -1453,7 +1472,7 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
   header.addEventListener('paste', (e) => {
     e.preventDefault();
     const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-    document.execCommand('insertText', false, sanitizePlainText(text));
+    insertTextAtCaret(header, text);
   });
   header.addEventListener('blur', () => {
     const next = sanitizePlainText(header.textContent, defaultLegendTitle);
@@ -1757,32 +1776,38 @@ async function importUrl(rawUrl) {
 }
 
 // --- File Upload Handler (secure) ---
-document.getElementById("file-upload").addEventListener("change", async function(evt) {
-  const files = Array.from(evt?.target?.files || []);
-  for (const file of files) {
-    try {
-      await importFile(file);
-    } catch (err) {
-      console.error("File import error:", err);
-      showPopup(String(err?.message || "Error loading file"), "error");
-      const fileNameEl = document.getElementById("file-name");
-      if (fileNameEl) fileNameEl.textContent = "Error: " + String(err?.message || "Error loading file");
+const fileUploadEl = document.getElementById("file-upload");
+if (fileUploadEl) {
+  fileUploadEl.addEventListener("change", async function(evt) {
+    const files = Array.from(evt?.target?.files || []);
+    for (const file of files) {
+      try {
+        await importFile(file);
+      } catch (err) {
+        console.error("File import error:", err);
+        showPopup(String(err?.message || "Error loading file"), "error");
+        const fileNameEl = document.getElementById("file-name");
+        if (fileNameEl) fileNameEl.textContent = "Error: " + String(err?.message || "Error loading file");
+      }
     }
-  }
-  evt.target.value = "";
-});
+    evt.target.value = "";
+  });
+}
 
-document.getElementById("add-geojson-url").addEventListener("click", async function() {
-  const rawUrl = document.getElementById("geojson-url")?.value.trim() || "";
-  try {
-    await importUrl(rawUrl);
-  } catch (err) {
-    console.error("Data load error:", err);
-    showPopup("Error loading data: " + String(err?.message || err), "error");
-    const fileNameEl = document.getElementById("file-name");
-    if (fileNameEl) fileNameEl.textContent = "Error: " + String(err?.message || err);
-  }
-});
+const addGeojsonUrlEl = document.getElementById("add-geojson-url");
+if (addGeojsonUrlEl) {
+  addGeojsonUrlEl.addEventListener("click", async function() {
+    const rawUrl = document.getElementById("geojson-url")?.value.trim() || "";
+    try {
+      await importUrl(rawUrl);
+    } catch (err) {
+      console.error("Data load error:", err);
+      showPopup("Error loading data: " + String(err?.message || err), "error");
+      const fileNameEl = document.getElementById("file-name");
+      if (fileNameEl) fileNameEl.textContent = "Error: " + String(err?.message || err);
+    }
+  });
+}
 
 //Layer Selector, Activation, and Refresh
 // --- Refresh the Layer dropdown securely ---
@@ -3460,7 +3485,7 @@ document.addEventListener("DOMContentLoaded", () => {
     mapTitle.addEventListener("paste", (e) => {
       e.preventDefault();
       const text = (e.clipboardData || window.clipboardData)?.getData("text") || "";
-      document.execCommand("insertText", false, sanitizePlainText(text));
+      insertTextAtCaret(mapTitle, text);
     });
     mapTitle.addEventListener("blur", () => {
       mapTitle.textContent = sanitizePlainText(mapTitle.textContent, "Custom Map Title");
