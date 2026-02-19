@@ -1008,6 +1008,10 @@ const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
 const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -26], [38.5, 60]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
+const AFRICA_EDGE_ANCHORS = [
+  L.latLng(16.0, -24.0),   // Cape Verde area (west)
+  L.latLng(-20.2, 57.6)    // Mauritius area (east)
+];
 
 function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
@@ -1054,6 +1058,25 @@ function fitToLayerExtent(layer) {
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
   map.fitBounds(bounds, { padding: [20, 20] });
+  map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
+  return true;
+}
+
+function fitAfricaFilteredView() {
+  if (!geojsonData) return false;
+  const filtered = getFilteredGeojson(geojsonData);
+  const tempLayer = L.geoJSON(filtered || { type: "FeatureCollection", features: [] });
+  const bounds = tempLayer.getBounds();
+  if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) {
+    return false;
+  }
+  AFRICA_EDGE_ANCHORS.forEach(pt => bounds.extend(pt));
+  map.fitBounds(bounds, {
+    animate: false,
+    paddingTopLeft: [20, 8],
+    paddingBottomRight: [20, 8],
+    maxZoom: 4.2
+  });
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
   return true;
 }
@@ -2592,6 +2615,7 @@ function updateCustomBreaks() {
       checkActiveLayerInControl();
       if (currentAttribute) applyClassification();
       else renderDefaultFilteredLayer();
+      if (!fitAfricaFilteredView()) applyHomeView();
     });
   }
 })();
