@@ -2766,7 +2766,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const relLeftCss = mapRect ? (discRect.left - mapRect.left) : 10;
         const relTopCss = mapRect ? (discRect.top - mapRect.top) : 10;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 50);
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 10);
         const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
@@ -3245,7 +3245,7 @@ function exportSVG() {
 
         const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
         const discY = discRect && mapRect
-          ? titleHeightPx + Math.max(0, Math.round((discRect.top - mapRect.top) * rawScaleY) - cropY - 50)
+          ? titleHeightPx + Math.max(0, Math.round((discRect.top - mapRect.top) * rawScaleY) - cropY - 10)
           : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
 
         const discBg = document.createElementNS(svgNS, "rect");
