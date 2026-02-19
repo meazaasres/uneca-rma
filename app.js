@@ -2713,7 +2713,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1}
-        .export-map-wrapper .export-disclaimer-clone{font-size:12px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;width:fit-content !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;width:fit-content !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-img{width:100%;height:auto;display:block}
       `;
       wrapper.appendChild(styleEl);
@@ -2778,7 +2778,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.overflow = 'visible';
         clone.style.whiteSpace = 'normal';
         clone.style.lineHeight = '1.25';
-        clone.style.fontSize = '12px';
+        clone.style.fontSize = '10px';
         clone.style.padding = '6px';
         mapWrapper.appendChild(clone);
       }
@@ -3206,7 +3206,7 @@ function exportSVG() {
           Math.round(120 * scale),
           Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discX - marginPx))
         );
-        const fontSizeDisc = Math.max(9, Math.round(11 * scale));
+        const fontSizeDisc = Math.max(8, Math.round(10 * scale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
         const padding = Math.max(4, Math.round(5 * scale));
         const maxLines = 6;
