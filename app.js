@@ -845,7 +845,10 @@ async function loadCountryReferenceRows() {
         "UN country reference metadata"
       );
       fromUN = normalizeReferenceRows(unLocalRaw);
-      if (fromUN.length >= MIN_REFERENCE_COUNTRY_COUNT) return fromUN;
+      if (fromUN.length >= MIN_REFERENCE_COUNTRY_COUNT) {
+        console.info(`Using local UN reference table: ${fromUN.length} countries.`);
+        return fromUN;
+      }
       if (fromUN.length > 0) {
         console.warn(`UN local reference has only ${fromUN.length} entries; expected >= ${MIN_REFERENCE_COUNTRY_COUNT}. Trying UN M49 URL.`);
       }
@@ -862,7 +865,10 @@ async function loadCountryReferenceRows() {
         "UN M49 overview"
       );
       fromUN = parseM49OverviewHtmlRows(unOverviewHtml);
-      if (fromUN.length >= MIN_REFERENCE_COUNTRY_COUNT) return fromUN;
+      if (fromUN.length >= MIN_REFERENCE_COUNTRY_COUNT) {
+        console.info(`Using UN M49 overview table: ${fromUN.length} countries.`);
+        return fromUN;
+      }
       if (fromUN.length > 0) {
         console.warn(`UN M49 overview parse yielded ${fromUN.length} entries; expected >= ${MIN_REFERENCE_COUNTRY_COUNT}. Falling back.`);
       }
@@ -878,6 +884,7 @@ async function loadCountryReferenceRows() {
   );
   const fallback = normalizeWorldCountriesRows(fallbackRaw);
   if (!fallback.length) throw new Error("World country metadata payload is invalid.");
+  console.warn(`Falling back to default country metadata: ${fallback.length} countries.`);
   return fallback;
 }
 
