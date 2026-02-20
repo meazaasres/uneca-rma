@@ -32,3 +32,23 @@ No build step is required.
 ## Repository Notes
 - `vendor/` contains local third-party dependencies used by the app
 - `.vscode/` is ignored and not tracked
+
+## UN Reference Table (Optional)
+- To enforce UN-style country/continent naming for filters, add records to `UN_reference_countries_UNSD.json`.
+- The app prefers this file first and falls back to default metadata if it is missing or incomplete.
+- Expected format is a JSON array, for example:
+
+```json
+[
+  {
+    "country": "Algeria",
+    "official_name": "People's Democratic Republic of Algeria",
+    "region_name": "Africa",
+    "subregion_name": "Northern Africa",
+    "iso_alpha2": "DZ",
+    "iso_alpha3": "DZA",
+    "m49": "012",
+    "aliases": ["Algeria"]
+  }
+]
+```

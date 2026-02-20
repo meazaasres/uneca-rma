@@ -15,8 +15,11 @@ const ALLOWED_IMPORT_HOSTS = new Set([
 const ALLOWED_PRIVATE_IMPORT_HOSTS = new Set([]);
 const WORLD_BOUNDARY_LOCAL_URL = null; // set a local file path if vendored
 const WORLD_COUNTRIES_LOCAL_URL = null; // set a local file path if vendored
+const UN_COUNTRIES_LOCAL_URL = "./UN_reference_countries_UNSD.json"; // local UN/M49-style reference table
+const UN_COUNTRIES_REMOTE_URL = null; // optional remote UN reference JSON URL
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
+const MIN_REFERENCE_COUNTRY_COUNT = 150;
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -654,6 +657,123 @@ function normalizeContinentFromMeta(region, subregion) {
   return r;
 }
 
+function firstNonEmptyValue(obj, keys) {
+  if (!obj || typeof obj !== "object" || !Array.isArray(keys)) return "";
+  for (let i = 0; i < keys.length; i++) {
+    const v = obj[keys[i]];
+    const clean = sanitizePlainText(v == null ? "" : v);
+    if (clean) return clean;
+  }
+  return "";
+}
+
+function asArrayValue(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    return v.split(/[;,|]/).map(x => sanitizePlainText(x)).filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeReferenceRows(raw) {
+  const rows = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+  return rows.map(row => {
+    const country = firstNonEmptyValue(row, [
+      "country",
+      "country_name",
+      "country_or_area",
+      "Country or Area",
+      "name",
+      "name_common",
+      "common_name"
+    ]);
+    const official = firstNonEmptyValue(row, [
+      "official_name",
+      "country_official_name",
+      "UNTERM English Formal",
+      "UNTERM English Short"
+    ]);
+    const region = firstNonEmptyValue(row, [
+      "continent",
+      "region",
+      "region_name",
+      "Region Name"
+    ]);
+    const subregion = firstNonEmptyValue(row, [
+      "subregion",
+      "sub_region",
+      "subregion_name",
+      "Sub-region Name"
+    ]);
+    const iso2 = firstNonEmptyValue(row, ["iso2", "iso_alpha2", "ISO-alpha2 Code"]);
+    const iso3 = firstNonEmptyValue(row, ["iso3", "iso_alpha3", "ISO-alpha3 Code"]);
+    const m49 = firstNonEmptyValue(row, ["m49", "M49 Code", "Country code"]);
+    const continent = region ? normalizeContinentFromMeta(region, subregion) : "";
+    const aliases = asArrayValue(row.alt_spellings || row.altSpellings || row.aliases || row.synonyms);
+    if (country) aliases.push(country);
+    if (official) aliases.push(official);
+
+    return {
+      country: sanitizePlainText(country),
+      officialName: sanitizePlainText(official),
+      continent: sanitizePlainText(continent),
+      iso2: sanitizePlainText(iso2),
+      iso3: sanitizePlainText(iso3),
+      m49: sanitizePlainText(m49),
+      aliases: Array.from(new Set(aliases.filter(Boolean)))
+    };
+  }).filter(x => x.country && x.continent);
+}
+
+function normalizeWorldCountriesRows(raw) {
+  const rows = Array.isArray(raw) ? raw : [];
+  return rows.map(c => {
+    const continent = normalizeContinentFromMeta(c?.region, c?.subregion);
+    const country = sanitizePlainText(c?.name?.common || "");
+    const officialName = sanitizePlainText(c?.name?.official || "");
+    const aliases = [];
+    if (country) aliases.push(country);
+    if (officialName) aliases.push(officialName);
+    (Array.isArray(c?.altSpellings) ? c.altSpellings : []).forEach(a => aliases.push(sanitizePlainText(a)));
+    return {
+      country,
+      officialName,
+      continent,
+      iso2: sanitizePlainText(c?.cca2 || ""),
+      iso3: sanitizePlainText(c?.cca3 || ""),
+      m49: sanitizePlainText(c?.ccn3 || ""),
+      aliases: Array.from(new Set(aliases.filter(Boolean)))
+    };
+  }).filter(x => x.country && x.continent);
+}
+
+async function loadCountryReferenceRows() {
+  let fromUN = [];
+  try {
+    const unRaw = await fetchJsonWithFallback(
+      UN_COUNTRIES_LOCAL_URL,
+      UN_COUNTRIES_REMOTE_URL,
+      "UN country reference metadata"
+    );
+    fromUN = normalizeReferenceRows(unRaw);
+    if (fromUN.length >= MIN_REFERENCE_COUNTRY_COUNT) return fromUN;
+    if (fromUN.length > 0) {
+      console.warn(`UN country reference has only ${fromUN.length} entries; expected >= ${MIN_REFERENCE_COUNTRY_COUNT}. Falling back.`);
+    }
+  } catch (e) {
+    console.warn("UN country reference unavailable; falling back to default metadata.", e);
+  }
+
+  const fallbackRaw = await fetchJsonWithFallback(
+    WORLD_COUNTRIES_LOCAL_URL,
+    WORLD_COUNTRIES_REMOTE_URL,
+    "world country metadata"
+  );
+  const fallback = normalizeWorldCountriesRows(fallbackRaw);
+  if (!fallback.length) throw new Error("World country metadata payload is invalid.");
+  return fallback;
+}
+
 function bboxFromCoordinates(coords) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   const walk = (c) => {
@@ -723,25 +843,26 @@ async function loadWorldBoundaryIndex() {
   if (worldBoundaryIndexPromise) return worldBoundaryIndexPromise;
 
   worldBoundaryIndexPromise = (async () => {
-    const [boundaryGeojson, meta] = await Promise.all([
+    const [boundaryGeojson, metaRows] = await Promise.all([
       fetchJsonWithFallback(WORLD_BOUNDARY_LOCAL_URL, WORLD_BOUNDARY_REMOTE_URL, "world boundaries"),
-      fetchJsonWithFallback(WORLD_COUNTRIES_LOCAL_URL, WORLD_COUNTRIES_REMOTE_URL, "world country metadata")
+      loadCountryReferenceRows()
     ]);
     if (!Array.isArray(boundaryGeojson?.features)) {
       throw new Error("World boundaries payload is invalid.");
     }
-    if (!Array.isArray(meta)) {
-      throw new Error("World country metadata payload is invalid.");
-    }
 
     const continentByCountryNorm = new Map();
+    const canonicalByCountryNorm = new Map();
     const countriesByContinentMeta = new Map();
-    (Array.isArray(meta) ? meta : []).forEach(c => {
-      const region = normalizeContinentFromMeta(c?.region, c?.subregion);
+    (Array.isArray(metaRows) ? metaRows : []).forEach(c => {
+      const region = sanitizePlainText(c?.continent || "");
       if (!region) return;
-      const add = (nm) => {
+      const preferred = sanitizePlainText(c?.officialName || c?.country || "");
+      const add = (nm, canonical = preferred) => {
         const k = normalizeCountryName(nm);
-        if (k) continentByCountryNorm.set(k, region);
+        if (!k) return;
+        continentByCountryNorm.set(k, region);
+        if (canonical) canonicalByCountryNorm.set(k, canonical);
       };
       const addToContinent = (nm) => {
         const clean = sanitizePlainText(nm || "");
@@ -749,24 +870,25 @@ async function loadWorldBoundaryIndex() {
         if (!countriesByContinentMeta.has(region)) countriesByContinentMeta.set(region, new Set());
         countriesByContinentMeta.get(region).add(clean);
       };
-      add(c?.name?.common);
-      add(c?.name?.official);
-      (Array.isArray(c?.altSpellings) ? c.altSpellings : []).forEach(add);
-      addToContinent(c?.name?.common);
+      add(c?.country);
+      add(c?.officialName || c?.country);
+      (Array.isArray(c?.aliases) ? c.aliases : []).forEach(alias => add(alias, preferred));
+      addToContinent(preferred || c?.country);
     });
 
     const feats = Array.isArray(boundaryGeojson?.features) ? boundaryGeojson.features : [];
     worldBoundaryIndex = feats.map(f => {
       const country = sanitizePlainText(f?.properties?.name || "");
       const key = normalizeCountryName(country);
+      const canonicalCountry = sanitizePlainText(canonicalByCountryNorm.get(key) || country);
       const continent = continentByCountryNorm.get(key) || guessContinentFromCountryName(country);
       return {
-        country,
+        country: canonicalCountry,
         continent,
         bbox: bboxFromCoordinates(f?.geometry?.coordinates),
         geometry: f?.geometry || null
       };
-    }).filter(x => x.country && x.bbox && x.geometry);
+    }).filter(x => x.country && x.bbox && x.geometry && x.continent);
 
     worldCountriesByContinent = new Map();
     // Start from metadata to ensure complete country lists per continent.
