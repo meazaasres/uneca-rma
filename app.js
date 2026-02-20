@@ -1939,7 +1939,7 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
     onEachFeature: bindFeaturePopup
   }).addTo(fg);
   layerGroup = fg;
-  setTimeout(() => { fitToLayerExtentIfOutsideView(fg); }, 0);
+  setTimeout(() => { fitToLayerExtent(fg); }, 0);
 
   overlayData[safeName] = { layerGroup: fg, geojson: geojson };
   layersControl.addOverlay(fg, safeName);
@@ -2308,6 +2308,7 @@ async function setActiveLayer(name) {
 
   const sel = document.getElementById('layer-select');
   if (sel) sel.value = name;
+  fitToLayerExtent(obj.layerGroup);
 }
 //Attribute Population, Controls, and Classification Options
 // --- Populate attribute dropdown ---
