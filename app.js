@@ -1268,7 +1268,7 @@ function syncLayoutWithHeaderHeight() {
   if (!headerHeight) return;
   document.documentElement.style.setProperty('--app-header-height', `${headerHeight}px`);
   if (map && typeof map.invalidateSize === "function") {
-    setTimeout(() => map.invalidateSize({ pan: false }), 0);
+    setTimeout(() => map.invalidateSize({ pan: true, animate: false }), 0);
   }
 }
 
