@@ -1286,8 +1286,8 @@ function fitToLayerExtent(layer) {
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
   map.fitBounds(bounds, {
-    paddingTopLeft: [20, 10],
-    paddingBottomRight: [20, 60]
+    paddingTopLeft: [20, 16],
+    paddingBottomRight: [20, 40]
   });
   map.panBy([0, 10], { animate: false });
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
