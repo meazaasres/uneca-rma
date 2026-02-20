@@ -34,8 +34,10 @@ No build step is required.
 - `.vscode/` is ignored and not tracked
 
 ## UN Reference Table (Optional)
-- To enforce UN-style country/continent naming for filters, add records to `UN_reference_countries_UNSD.json`.
-- The app prefers this file first and falls back to default metadata if it is missing or incomplete.
+- The app first tries `UN_reference_countries_UNSD.json` (if populated), then parses the UN M49 overview page:
+  `https://unstats.un.org/unsd/methodology/m49/overview`
+- For UN M49 parsing, country names are taken from the `Country or Area` column.
+- The app falls back to default metadata if UN sources are missing/incomplete.
 - Expected format is a JSON array, for example:
 
 ```json

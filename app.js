@@ -16,7 +16,7 @@ const ALLOWED_PRIVATE_IMPORT_HOSTS = new Set([]);
 const WORLD_BOUNDARY_LOCAL_URL = null; // set a local file path if vendored
 const WORLD_COUNTRIES_LOCAL_URL = null; // set a local file path if vendored
 const UN_COUNTRIES_LOCAL_URL = "./UN_reference_countries_UNSD.json"; // local UN/M49-style reference table
-const UN_COUNTRIES_REMOTE_URL = null; // optional remote UN reference JSON URL
+const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/overview"; // UN M49 overview
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
@@ -657,6 +657,23 @@ function normalizeContinentFromMeta(region, subregion) {
   return r;
 }
 
+async function fetchTextWithFallback(localUrl, remoteUrl, label) {
+  if (!localUrl && remoteUrl) {
+    const fetched = await fetchWithLimits(remoteUrl);
+    return String(fetched?.text || "");
+  }
+  try {
+    const fetched = await fetchWithLimits(localUrl);
+    return String(fetched?.text || "");
+  } catch (localErr) {
+    if (!remoteUrl) {
+      throw localErr;
+    }
+    const fetched = await fetchWithLimits(remoteUrl);
+    return String(fetched?.text || "");
+  }
+}
+
 function firstNonEmptyValue(obj, keys) {
   if (!obj || typeof obj !== "object" || !Array.isArray(keys)) return "";
   for (let i = 0; i < keys.length; i++) {
@@ -747,21 +764,88 @@ function normalizeWorldCountriesRows(raw) {
   }).filter(x => x.country && x.continent);
 }
 
+function parseM49OverviewHtmlRows(htmlText) {
+  if (!htmlText || typeof htmlText !== "string") return [];
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlText, "text/html");
+  const tables = Array.from(doc.querySelectorAll("table"));
+  for (let t = 0; t < tables.length; t++) {
+    const rows = Array.from(tables[t].querySelectorAll("tr"));
+    if (!rows.length) continue;
+
+    const headerCells = Array.from(rows[0].querySelectorAll("th,td")).map(c =>
+      sanitizePlainText((c.textContent || "").toLowerCase())
+    );
+    const idxCountry = headerCells.findIndex(h => h === "country or area");
+    const idxRegion = headerCells.findIndex(h => h === "region name");
+    const idxSubregion = headerCells.findIndex(h => h === "sub-region name");
+    const idxM49 = headerCells.findIndex(h => h === "m49 code");
+    const idxIso2 = headerCells.findIndex(h => h === "iso-alpha2 code");
+    const idxIso3 = headerCells.findIndex(h => h === "iso-alpha3 code");
+    if (idxCountry < 0 || idxRegion < 0) continue;
+
+    const parsed = [];
+    for (let i = 1; i < rows.length; i++) {
+      const cells = Array.from(rows[i].querySelectorAll("td")).map(c => sanitizePlainText(c.textContent || ""));
+      if (!cells.length) continue;
+      const country = sanitizePlainText(cells[idxCountry] || "");
+      const region = sanitizePlainText(cells[idxRegion] || "");
+      const subregion = idxSubregion >= 0 ? sanitizePlainText(cells[idxSubregion] || "") : "";
+      const iso2 = idxIso2 >= 0 ? sanitizePlainText(cells[idxIso2] || "") : "";
+      const iso3 = idxIso3 >= 0 ? sanitizePlainText(cells[idxIso3] || "") : "";
+      const m49 = idxM49 >= 0 ? sanitizePlainText(cells[idxM49] || "") : "";
+      if (!country || !region) continue;
+      parsed.push({
+        country,
+        officialName: "",
+        continent: normalizeContinentFromMeta(region, subregion),
+        iso2,
+        iso3,
+        m49,
+        aliases: [country]
+      });
+    }
+    if (parsed.length >= MIN_REFERENCE_COUNTRY_COUNT) {
+      return parsed;
+    }
+  }
+  return [];
+}
+
 async function loadCountryReferenceRows() {
   let fromUN = [];
   try {
-    const unRaw = await fetchJsonWithFallback(
-      UN_COUNTRIES_LOCAL_URL,
-      UN_COUNTRIES_REMOTE_URL,
-      "UN country reference metadata"
-    );
-    fromUN = normalizeReferenceRows(unRaw);
-    if (fromUN.length >= MIN_REFERENCE_COUNTRY_COUNT) return fromUN;
-    if (fromUN.length > 0) {
-      console.warn(`UN country reference has only ${fromUN.length} entries; expected >= ${MIN_REFERENCE_COUNTRY_COUNT}. Falling back.`);
+    if (UN_COUNTRIES_LOCAL_URL) {
+      const unLocalRaw = await fetchJsonWithFallback(
+        UN_COUNTRIES_LOCAL_URL,
+        null,
+        "UN country reference metadata"
+      );
+      fromUN = normalizeReferenceRows(unLocalRaw);
+      if (fromUN.length >= MIN_REFERENCE_COUNTRY_COUNT) return fromUN;
+      if (fromUN.length > 0) {
+        console.warn(`UN local reference has only ${fromUN.length} entries; expected >= ${MIN_REFERENCE_COUNTRY_COUNT}. Trying UN M49 URL.`);
+      }
     }
   } catch (e) {
-    console.warn("UN country reference unavailable; falling back to default metadata.", e);
+    console.warn("UN local reference unavailable; trying UN M49 URL.", e);
+  }
+
+  try {
+    if (UN_COUNTRIES_REMOTE_URL) {
+      const unOverviewHtml = await fetchTextWithFallback(
+        null,
+        UN_COUNTRIES_REMOTE_URL,
+        "UN M49 overview"
+      );
+      fromUN = parseM49OverviewHtmlRows(unOverviewHtml);
+      if (fromUN.length >= MIN_REFERENCE_COUNTRY_COUNT) return fromUN;
+      if (fromUN.length > 0) {
+        console.warn(`UN M49 overview parse yielded ${fromUN.length} entries; expected >= ${MIN_REFERENCE_COUNTRY_COUNT}. Falling back.`);
+      }
+    }
+  } catch (e) {
+    console.warn("UN M49 overview unavailable; falling back to default metadata.", e);
   }
 
   const fallbackRaw = await fetchJsonWithFallback(
