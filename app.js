@@ -1258,6 +1258,7 @@ function applyHomeView() {
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
   }
+  map.panBy([0, 10], { animate: false });
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
 }
 
@@ -1268,7 +1269,7 @@ function syncLayoutWithHeaderHeight() {
   if (!headerHeight) return;
   document.documentElement.style.setProperty('--app-header-height', `${headerHeight}px`);
   if (map && typeof map.invalidateSize === "function") {
-    setTimeout(() => map.invalidateSize({ pan: true, animate: false }), 0);
+    setTimeout(() => map.invalidateSize({ pan: false }), 0);
   }
 }
 
@@ -1285,19 +1286,9 @@ function fitToLayerExtent(layer) {
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
   map.fitBounds(bounds, { padding: [20, 20] });
+  map.panBy([0, 10], { animate: false });
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
   return true;
-}
-
-function fitToLayerExtentIfOutsideView(layer) {
-  if (!layer || typeof layer.getBounds !== "function") return false;
-  const bounds = layer.getBounds();
-  if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
-  const visibleBounds = (map && typeof map.getBounds === "function") ? map.getBounds() : null;
-  if (visibleBounds && typeof visibleBounds.contains === "function" && visibleBounds.contains(bounds)) {
-    return false;
-  }
-  return fitToLayerExtent(layer);
 }
 
 const HomeControl = L.Control.extend({
@@ -2307,7 +2298,6 @@ async function setActiveLayer(name) {
 
   const sel = document.getElementById('layer-select');
   if (sel) sel.value = name;
-  fitToLayerExtent(obj.layerGroup);
 }
 //Attribute Population, Controls, and Classification Options
 // --- Populate attribute dropdown ---
