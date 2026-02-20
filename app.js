@@ -772,20 +772,35 @@ function parseM49OverviewHtmlRows(htmlText) {
   for (let t = 0; t < tables.length; t++) {
     const rows = Array.from(tables[t].querySelectorAll("tr"));
     if (!rows.length) continue;
+    let headerRowIndex = -1;
+    let idxCountry = -1;
+    let idxRegion = -1;
+    let idxSubregion = -1;
+    let idxM49 = -1;
+    let idxIso2 = -1;
+    let idxIso3 = -1;
 
-    const headerCells = Array.from(rows[0].querySelectorAll("th,td")).map(c =>
-      sanitizePlainText((c.textContent || "").toLowerCase())
-    );
-    const idxCountry = headerCells.findIndex(h => h === "country or area");
-    const idxRegion = headerCells.findIndex(h => h === "region name");
-    const idxSubregion = headerCells.findIndex(h => h === "sub-region name");
-    const idxM49 = headerCells.findIndex(h => h === "m49 code");
-    const idxIso2 = headerCells.findIndex(h => h === "iso-alpha2 code");
-    const idxIso3 = headerCells.findIndex(h => h === "iso-alpha3 code");
-    if (idxCountry < 0 || idxRegion < 0) continue;
+    for (let i = 0; i < rows.length; i++) {
+      const headerCells = Array.from(rows[i].querySelectorAll("th,td")).map(c =>
+        sanitizePlainText((c.textContent || "").toLowerCase())
+      );
+      const cCountry = headerCells.findIndex(h => h === "country or area");
+      const cRegion = headerCells.findIndex(h => h === "region name");
+      if (cCountry >= 0 && cRegion >= 0) {
+        headerRowIndex = i;
+        idxCountry = cCountry;
+        idxRegion = cRegion;
+        idxSubregion = headerCells.findIndex(h => h === "sub-region name");
+        idxM49 = headerCells.findIndex(h => h === "m49 code");
+        idxIso2 = headerCells.findIndex(h => h === "iso-alpha2 code");
+        idxIso3 = headerCells.findIndex(h => h === "iso-alpha3 code");
+        break;
+      }
+    }
+    if (headerRowIndex < 0) continue;
 
     const parsed = [];
-    for (let i = 1; i < rows.length; i++) {
+    for (let i = headerRowIndex + 1; i < rows.length; i++) {
       const cells = Array.from(rows[i].querySelectorAll("td")).map(c => sanitizePlainText(c.textContent || ""));
       if (!cells.length) continue;
       const country = sanitizePlainText(cells[idxCountry] || "");
@@ -794,7 +809,9 @@ function parseM49OverviewHtmlRows(htmlText) {
       const iso2 = idxIso2 >= 0 ? sanitizePlainText(cells[idxIso2] || "") : "";
       const iso3 = idxIso3 >= 0 ? sanitizePlainText(cells[idxIso3] || "") : "";
       const m49 = idxM49 >= 0 ? sanitizePlainText(cells[idxM49] || "") : "";
-      if (!country || !region) continue;
+      // Keep only country/area rows (region and world rows usually have blank ISO codes).
+      if (!country || !region || !iso3) continue;
+      if (norm(country) === "country or area") continue;
       parsed.push({
         country,
         officialName: "",
@@ -806,7 +823,13 @@ function parseM49OverviewHtmlRows(htmlText) {
       });
     }
     if (parsed.length >= MIN_REFERENCE_COUNTRY_COUNT) {
-      return parsed;
+      const deduped = new Map();
+      parsed.forEach(r => {
+        const key = sanitizePlainText(r.iso3 || r.m49 || r.country).toUpperCase();
+        if (!key) return;
+        if (!deduped.has(key)) deduped.set(key, r);
+      });
+      return Array.from(deduped.values());
     }
   }
   return [];
