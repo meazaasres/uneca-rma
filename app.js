@@ -1995,12 +1995,9 @@ async function populateFilterControls(data) {
       row.append(cb, txt);
       contSel.appendChild(row);
     });
-    if (vals.length) {
-      selectedContinentValues = new Set(vals);
-      Array.from(contSel.querySelectorAll('input[type="checkbox"]')).forEach(o => {
-        o.checked = true;
-      });
-    }
+    // Start with no continent selected so country options appear only
+    // after an explicit continent selection.
+    selectedContinentValues = new Set();
     updateContinentFilterButtonLabel();
     showRow(contCol);
     if (africaBtn) africaBtn.style.display = '';
