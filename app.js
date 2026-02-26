@@ -3090,6 +3090,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         t.style.fontSize = '20px';
         t.style.fontWeight = '600';
         t.style.margin = '0 0 8px 0';
+        t.style.textAlign = 'center';
+        t.style.width = '100%';
+        t.style.display = 'block';
         wrapper.appendChild(t);
       }
 
@@ -3106,8 +3109,12 @@ window.addEventListener('load', resetInitialScrollPositions);
       const styleEl = document.createElement('style');
       styleEl.type = 'text/css';
       styleEl.textContent = `
-        .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:7.5em !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;width:100% !important;display:block !important}
+        .export-map-wrapper .export-disclaimer-clone{word-break:break-word !important;display:inline-block !important;width:auto !important;white-space:normal !important}
+        .export-legend-clone{display:block !important;margin-top:10px !important;overflow:visible !important}
+        .export-legend-clone .legend-block{overflow:visible !important}
+        .export-legend-clone .legend-row{align-items:center !important;overflow:visible !important}
+        .export-legend-clone .legend-sym{display:inline-block !important;box-sizing:border-box !important;overflow:visible !important;min-width:15px !important;min-height:15px !important;flex:0 0 15px !important}
         .export-img{width:100%;height:auto;display:block}
       `;
       wrapper.appendChild(styleEl);
@@ -3153,7 +3160,9 @@ window.addEventListener('load', resetInitialScrollPositions);
       const disclaimer = document.querySelector('#disclaimer');
       if (disclaimer) {
         const clone = disclaimer.cloneNode(true);
-        clone.className = 'export-disclaimer-clone';
+        clone.removeAttribute('id');
+        clone.classList.add('export-disclaimer-clone');
+        const discStyles = window.getComputedStyle(disclaimer);
         // Preserve user-dragged disclaimer position in exports.
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const discRect = disclaimer.getBoundingClientRect();
@@ -3170,12 +3179,20 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.display = 'inline-block';
         clone.style.width = 'auto';
         clone.style.maxWidth = exportWidth + 'px';
-        clone.style.maxHeight = 'none';
-        clone.style.overflow = 'visible';
-        clone.style.whiteSpace = 'normal';
-        clone.style.lineHeight = '1.25';
-        clone.style.fontSize = '10px';
-        clone.style.padding = '6px';
+        clone.style.background = discStyles.background;
+        clone.style.border = discStyles.border;
+        clone.style.borderRadius = discStyles.borderRadius;
+        clone.style.boxShadow = discStyles.boxShadow;
+        clone.style.color = discStyles.color;
+        clone.style.fontSize = discStyles.fontSize;
+        clone.style.fontStyle = discStyles.fontStyle;
+        clone.style.fontWeight = discStyles.fontWeight;
+        clone.style.lineHeight = discStyles.lineHeight;
+        clone.style.padding = discStyles.padding;
+        clone.style.textAlign = discStyles.textAlign;
+        clone.style.whiteSpace = discStyles.whiteSpace;
+        clone.style.maxHeight = discStyles.maxHeight;
+        clone.style.overflow = discStyles.overflow;
         mapWrapper.appendChild(clone);
       }
 
@@ -3187,7 +3204,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       const legend = document.querySelector('#legend-items');
       if (legend) {
         const clone = legend.cloneNode(true);
-        clone.className = 'export-legend-clone';
+        clone.removeAttribute('id');
+        clone.classList.add('export-legend-clone');
         wrapper.appendChild(clone);
       }
 
