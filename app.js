@@ -3217,8 +3217,15 @@ window.addEventListener('load', resetInitialScrollPositions);
           row.style.overflow = 'visible';
         });
         const syms = Array.from(clone.querySelectorAll('.legend-sym'));
-        syms.forEach((sym) => {
-          const cs = window.getComputedStyle(sym);
+        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
+        syms.forEach((sym, idx) => {
+          const sourceSym = sourceSyms[idx] || null;
+          const sourceCs = sourceSym ? window.getComputedStyle(sourceSym) : null;
+          const sourceInlineBg = sourceSym && sourceSym.style ? sourceSym.style.backgroundColor : "";
+          const fillColor = sourceInlineBg || (sourceCs ? sourceCs.backgroundColor : "") || "#ccc";
+          const borderValue = (sourceCs && sourceCs.border && sourceCs.border !== "0px none rgb(0, 0, 0)")
+            ? sourceCs.border
+            : "1px solid #333";
           sym.style.display = 'inline-block';
           sym.style.boxSizing = 'border-box';
           sym.style.flex = '0 0 16px';
@@ -3231,10 +3238,10 @@ window.addEventListener('load', resetInitialScrollPositions);
           sym.style.margin = '0';
           sym.style.padding = '0';
           sym.style.overflow = 'visible';
-          sym.style.backgroundColor = cs.backgroundColor;
-          sym.style.border = cs.border;
+          sym.style.backgroundColor = fillColor;
+          sym.style.border = borderValue;
           if (sym.classList.contains('legend-sym-line')) {
-            const lineColor = cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)' ? cs.backgroundColor : '#333';
+            const lineColor = fillColor && fillColor !== 'rgba(0, 0, 0, 0)' ? fillColor : '#333';
             sym.style.height = '0';
             sym.style.minHeight = '0';
             sym.style.maxHeight = '0';
