@@ -3155,22 +3155,52 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
       }
 
+      function getElementMapOffset(sourceEl, mapContainerEl) {
+        let x = 0;
+        let y = 0;
+        let node = sourceEl;
+        while (node && node !== mapContainerEl) {
+          x += node.offsetLeft || 0;
+          y += node.offsetTop || 0;
+          node = node.offsetParent;
+        }
+        if (node === mapContainerEl) {
+          return { left: x, top: y };
+        }
+        const mapRect = mapContainerEl.getBoundingClientRect();
+        const srcRect = sourceEl.getBoundingClientRect();
+        return {
+          left: srcRect.left - mapRect.left,
+          top: srcRect.top - mapRect.top
+        };
+      }
+
+      function getControlAnchorPosition(sourceEl, mapContainerEl) {
+        // Draggable controls store canonical map-local position in inline left/top.
+        if (sourceEl && sourceEl.classList && sourceEl.classList.contains('draggable-map-control')) {
+          const leftInline = parseFloat(sourceEl.style.left || "");
+          const topInline = parseFloat(sourceEl.style.top || "");
+          if (Number.isFinite(leftInline) && Number.isFinite(topInline)) {
+            return { left: leftInline, top: topInline };
+          }
+        }
+        return getElementMapOffset(sourceEl, mapContainerEl);
+      }
+
       function cloneMapOverlayToExport(selector, className) {
         const source = document.querySelector(selector);
         if (!source || !mapEl) return;
-        const mapRect = mapEl.getBoundingClientRect();
         const srcRect = source.getBoundingClientRect();
         if (!srcRect || srcRect.width <= 0 || srcRect.height <= 0) return;
+        const srcPos = getControlAnchorPosition(source, mapEl);
 
         const clone = source.cloneNode(true);
         if (className) clone.classList.add(className);
         copyVisualStylesRecursive(source, clone);
 
-        const relLeftCss = srcRect.left - mapRect.left;
-        const relTopCss = srcRect.top - mapRect.top;
         // Keep sub-pixel precision so Firefox export matches on-screen control position.
-        const exportLeft = Math.max(0, relLeftCss * rawScaleX);
-        const exportTop = Math.max(0, relTopCss * rawScaleY);
+        const exportLeft = Math.max(0, srcPos.left * rawScaleX);
+        const exportTop = Math.max(0, srcPos.top * rawScaleY);
         const exportWidth = Math.max(1, srcRect.width * rawScaleX);
         const exportHeight = Math.max(1, srcRect.height * rawScaleY);
 
@@ -3196,13 +3226,11 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.classList.add('export-disclaimer-clone');
         const discStyles = window.getComputedStyle(disclaimer);
         // Preserve user-dragged disclaimer position in exports.
-        const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const discRect = disclaimer.getBoundingClientRect();
-        const relLeftCss = mapRect ? (discRect.left - mapRect.left) : 10;
-        const relTopCss = mapRect ? (discRect.top - mapRect.top) : 10;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 10);
-        const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
+        const discPos = getElementMapOffset(disclaimer, mapEl);
+        const exportLeft = Math.max(0, discPos.left * rawScaleX);
+        const exportTop = Math.max(0, discPos.top * rawScaleY);
+        const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX));
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
         clone.style.right = 'auto';
