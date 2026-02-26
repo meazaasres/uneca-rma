@@ -3206,6 +3206,45 @@ window.addEventListener('load', resetInitialScrollPositions);
         const clone = legend.cloneNode(true);
         clone.removeAttribute('id');
         clone.classList.add('export-legend-clone');
+        // Firefox/html2canvas: normalize legend symbol geometry to avoid clipping.
+        const rows = Array.from(clone.querySelectorAll('.legend-row'));
+        rows.forEach((row) => {
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.gap = '6px';
+          row.style.minHeight = '18px';
+          row.style.padding = '1px 0';
+          row.style.overflow = 'visible';
+        });
+        const syms = Array.from(clone.querySelectorAll('.legend-sym'));
+        syms.forEach((sym) => {
+          const cs = window.getComputedStyle(sym);
+          sym.style.display = 'inline-block';
+          sym.style.boxSizing = 'border-box';
+          sym.style.flex = '0 0 16px';
+          sym.style.width = '16px';
+          sym.style.minWidth = '16px';
+          sym.style.maxWidth = '16px';
+          sym.style.height = '16px';
+          sym.style.minHeight = '16px';
+          sym.style.maxHeight = '16px';
+          sym.style.margin = '0';
+          sym.style.padding = '0';
+          sym.style.overflow = 'visible';
+          sym.style.backgroundColor = cs.backgroundColor;
+          sym.style.border = cs.border;
+          if (sym.classList.contains('legend-sym-line')) {
+            const lineColor = cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)' ? cs.backgroundColor : '#333';
+            sym.style.height = '0';
+            sym.style.minHeight = '0';
+            sym.style.maxHeight = '0';
+            sym.style.border = '0';
+            sym.style.borderTop = `3px solid ${lineColor}`;
+            sym.style.background = 'transparent';
+          } else if (sym.classList.contains('legend-sym-point')) {
+            sym.style.borderRadius = '50%';
+          }
+        });
         wrapper.appendChild(clone);
       }
 
