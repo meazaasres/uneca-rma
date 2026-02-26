@@ -3125,6 +3125,35 @@ window.addEventListener('load', resetInitialScrollPositions);
       img.alt = "Exported map image";             // accessibility
       mapWrapper.appendChild(img);
 
+      function copyVisualStyles(sourceNode, targetNode) {
+        if (!sourceNode || !targetNode) return;
+        const cs = window.getComputedStyle(sourceNode);
+        const props = [
+          'display', 'visibility', 'opacity',
+          'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
+          'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
+          'boxShadow', 'outline',
+          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform',
+          'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+          'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
+          'overflow', 'overflowX', 'overflowY',
+          'alignItems', 'justifyContent', 'gap', 'flexDirection'
+        ];
+        props.forEach((prop) => {
+          try { targetNode.style[prop] = cs[prop]; } catch (e) {}
+        });
+      }
+
+      function copyVisualStylesRecursive(sourceNode, targetNode) {
+        copyVisualStyles(sourceNode, targetNode);
+        const sourceChildren = Array.from(sourceNode.children || []);
+        const targetChildren = Array.from(targetNode.children || []);
+        const len = Math.min(sourceChildren.length, targetChildren.length);
+        for (let i = 0; i < len; i++) {
+          copyVisualStylesRecursive(sourceChildren[i], targetChildren[i]);
+        }
+      }
+
       function cloneMapOverlayToExport(selector, className) {
         const source = document.querySelector(selector);
         if (!source || !mapEl) return;
@@ -3134,6 +3163,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const clone = source.cloneNode(true);
         if (className) clone.classList.add(className);
+        copyVisualStylesRecursive(source, clone);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
