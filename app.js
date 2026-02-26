@@ -3137,7 +3137,8 @@ window.addEventListener('load', resetInitialScrollPositions);
           'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
           'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
           'overflow', 'overflowX', 'overflowY',
-          'alignItems', 'justifyContent', 'gap', 'flexDirection'
+          'alignItems', 'justifyContent', 'gap', 'flexDirection',
+          'filter', 'backdropFilter'
         ];
         props.forEach((prop) => {
           try { targetNode.style[prop] = cs[prop]; } catch (e) {}
@@ -3167,10 +3168,11 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
-        const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
-        const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
+        // Keep sub-pixel precision so Firefox export matches on-screen control position.
+        const exportLeft = Math.max(0, relLeftCss * rawScaleX);
+        const exportTop = Math.max(0, relTopCss * rawScaleY);
+        const exportWidth = Math.max(1, srcRect.width * rawScaleX);
+        const exportHeight = Math.max(1, srcRect.height * rawScaleY);
 
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
@@ -3236,6 +3238,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const clone = legend.cloneNode(true);
         clone.removeAttribute('id');
         clone.classList.add('export-legend-clone');
+        clone.style.marginLeft = '5px';
         // Firefox/html2canvas: normalize legend symbol geometry to avoid clipping.
         const rows = Array.from(clone.querySelectorAll('.legend-row'));
         rows.forEach((row) => {
