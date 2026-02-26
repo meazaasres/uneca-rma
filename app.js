@@ -4,6 +4,9 @@ const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
+const MAX_ZIP_ENTRIES = 50;
+const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
+const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -324,7 +327,11 @@ async function fetchWithLimits(url) {
     let offset = 0;
     chunks.forEach(c => { merged.set(c, offset); offset += c.length; });
     const text = new TextDecoder("utf-8").decode(merged);
-    return { text, contentType: response.headers.get("Content-Type") || "" };
+    return {
+      text,
+      contentType: response.headers.get("Content-Type") || "",
+      finalUrl: response.url || url
+    };
   } catch (err) {
     if (err && err.name === "AbortError") {
       throw new Error("Remote request timed out.");
@@ -655,6 +662,142 @@ function normalizeContinentFromMeta(region, subregion) {
   if (/^oceania$/i.test(r)) return "Oceania";
   if (/^antarctic/i.test(r)) return "Antarctica";
   return r;
+}
+
+function assertFinalImportUrlAllowed(finalUrl) {
+  let parsed;
+  try {
+    parsed = new URL(finalUrl);
+  } catch (e) {
+    throw new Error("Remote import resolved to an invalid URL.");
+  }
+  const host = normalizeHostname(parsed.hostname);
+  if (parsed.protocol !== "https:") {
+    throw new Error("Remote redirect resolved to a non-HTTPS URL.");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("Remote redirect URL credentials are not allowed.");
+  }
+  if (parsed.port && parsed.port !== "443") {
+    throw new Error("Remote redirect resolved to a blocked port.");
+  }
+  if (isBlockedPrivateImportHost(host)) {
+    throw new Error("Remote redirect resolved to a private/internal host.");
+  }
+  if (ENFORCE_IMPORT_HOST_ALLOWLIST && !ALLOWED_IMPORT_HOSTS.has(host)) {
+    throw new Error("Remote redirect host is not allowed by security policy.");
+  }
+  return parsed;
+}
+
+function detectContentType(contentType) {
+  const ct = String(contentType || "").toLowerCase().split(";")[0].trim();
+  return ct;
+}
+
+function isAllowedRemoteContentType(ext, contentType) {
+  const ct = detectContentType(contentType);
+  const JSON_TYPES = new Set([
+    "application/json",
+    "application/geo+json",
+    "application/vnd.geo+json",
+    "text/json",
+    "text/plain" // common misconfigured static hosting for JSON
+  ]);
+  const CSV_TYPES = new Set([
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+    "text/plain" // common misconfigured static hosting for CSV
+  ]);
+  if (!ct) return false;
+  if (ext === ".csv") return CSV_TYPES.has(ct);
+  return JSON_TYPES.has(ct);
+}
+
+function getUint16LE(view, offset) {
+  if (offset + 2 > view.byteLength) return null;
+  return view.getUint16(offset, true);
+}
+
+function getUint32LE(view, offset) {
+  if (offset + 4 > view.byteLength) return null;
+  return view.getUint32(offset, true);
+}
+
+function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
+  const view = new DataView(arrayBuffer);
+  const EOCD_SIGNATURE = 0x06054b50;
+  const CD_SIGNATURE = 0x02014b50;
+  const maxCommentLen = 0xffff;
+  const minEocd = 22;
+  if (view.byteLength < minEocd) {
+    throw new Error("ZIP file is too small or invalid.");
+  }
+
+  let eocdOffset = -1;
+  const start = Math.max(0, view.byteLength - minEocd - maxCommentLen);
+  for (let i = view.byteLength - minEocd; i >= start; i--) {
+    if (getUint32LE(view, i) === EOCD_SIGNATURE) {
+      eocdOffset = i;
+      break;
+    }
+  }
+  if (eocdOffset < 0) {
+    throw new Error("ZIP central directory not found.");
+  }
+
+  const totalEntries = getUint16LE(view, eocdOffset + 10);
+  const cdSize = getUint32LE(view, eocdOffset + 12);
+  const cdOffset = getUint32LE(view, eocdOffset + 16);
+  if (totalEntries === null || cdSize === null || cdOffset === null) {
+    throw new Error("ZIP metadata is incomplete.");
+  }
+  if (totalEntries === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) {
+    throw new Error("ZIP64 archives are not supported for security reasons.");
+  }
+  if (totalEntries > MAX_ZIP_ENTRIES) {
+    throw new Error(`ZIP has too many entries (${totalEntries}; max ${MAX_ZIP_ENTRIES}).`);
+  }
+  if (cdOffset + cdSize > view.byteLength) {
+    throw new Error("ZIP central directory exceeds file bounds.");
+  }
+
+  let cursor = cdOffset;
+  let parsedEntries = 0;
+  let totalUncompressed = 0;
+  while (parsedEntries < totalEntries) {
+    if (cursor + 46 > view.byteLength) {
+      throw new Error("ZIP central directory entry is truncated.");
+    }
+    const sig = getUint32LE(view, cursor);
+    if (sig !== CD_SIGNATURE) {
+      throw new Error("Invalid ZIP central directory entry signature.");
+    }
+    const uncompressedSize = getUint32LE(view, cursor + 24);
+    const fileNameLen = getUint16LE(view, cursor + 28);
+    const extraLen = getUint16LE(view, cursor + 30);
+    const commentLen = getUint16LE(view, cursor + 32);
+    if (uncompressedSize === null || fileNameLen === null || extraLen === null || commentLen === null) {
+      throw new Error("ZIP entry metadata is incomplete.");
+    }
+    if (uncompressedSize === 0xffffffff) {
+      throw new Error("ZIP64 entry sizes are not supported for security reasons.");
+    }
+    totalUncompressed += uncompressedSize;
+    if (totalUncompressed > MAX_ZIP_UNCOMPRESSED_BYTES) {
+      const maxMb = Math.round(MAX_ZIP_UNCOMPRESSED_BYTES / (1024 * 1024));
+      throw new Error(`ZIP expands too large (max ${maxMb} MB).`);
+    }
+    cursor += 46 + fileNameLen + extraLen + commentLen;
+    parsedEntries++;
+  }
+
+  const compressed = Math.max(1, Number(compressedSizeBytes) || 1);
+  const expansionRatio = totalUncompressed / compressed;
+  if (expansionRatio > MAX_ZIP_EXPANSION_RATIO) {
+    throw new Error(`ZIP expansion ratio is too high (${expansionRatio.toFixed(1)}x).`);
+  }
 }
 
 async function fetchTextWithFallback(localUrl, remoteUrl, label) {
@@ -1981,6 +2124,7 @@ async function importFile(file) {
     let geojson;
     if (ext === ".zip") {
       const bytes = await readFileAsArrayBuffer(file);
+      inspectZipSafety(bytes, file.size);
       geojson = await shp(bytes);
     } else {
       const text = await readFileAsText(file);
@@ -2004,6 +2148,10 @@ async function importUrl(rawUrl) {
   try {
     const { parsed, ext } = validateImportUrl(rawUrl);
     const fetched = await fetchWithLimits(parsed.href);
+    assertFinalImportUrlAllowed(fetched.finalUrl);
+    if (!isAllowedRemoteContentType(ext, fetched.contentType)) {
+      throw new Error(`Remote content type is not allowed for ${ext} import.`);
+    }
     const geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
     const safeName = await addImportedLayer(geojson, fallbackName, "Imported URL data");
