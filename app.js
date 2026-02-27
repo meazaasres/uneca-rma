@@ -1523,6 +1523,7 @@ setTimeout(() => {
 }, 0);
 
 const draggableMapControls = new Set();
+const draggableControlInitialResolvers = new WeakMap();
 
 function clampDraggableControl(el, mapEl) {
   const rect = mapEl.getBoundingClientRect();
@@ -1574,6 +1575,28 @@ function repositionDraggableControls() {
   });
 }
 
+function applyDraggableControlInitialPosition(el, mapEl, refreshInit = true) {
+  const resolver = draggableControlInitialResolvers.get(el);
+  if (!resolver) return false;
+  const pos = resolver(el, mapEl) || {};
+  const initLeft = Math.max(0, Math.round(Number(pos.left) || 0));
+  const initTop = Math.max(0, Math.round(Number(pos.top) || 0));
+  el.dataset.leftPx = String(initLeft);
+  el.dataset.topPx = String(initTop);
+  setDynamicStyle(el, {
+    left: `${initLeft}px`,
+    top: `${initTop}px`,
+    right: "auto",
+    bottom: "auto"
+  });
+  if (refreshInit) {
+    el.dataset.initLeft = String(initLeft);
+    el.dataset.initTop = String(initTop);
+  }
+  updateDraggableControlNorm(el, mapEl);
+  return true;
+}
+
 function makeControlDraggable(control, initial) {
   if (!control || typeof control.getContainer !== "function") return;
   const el = control.getContainer();
@@ -1583,20 +1606,11 @@ function makeControlDraggable(control, initial) {
   // Move to map root so the control can be freely positioned.
   mapEl.appendChild(el);
   el.classList.add("draggable-map-control");
-  const initialPos = typeof initial === "function" ? initial(el, mapEl) : initial;
-  const initLeft = Math.max(0, Math.round(initialPos.left || 0));
-  const initTop = Math.max(0, Math.round(initialPos.top || 0));
-  el.dataset.leftPx = String(initLeft);
-  el.dataset.topPx = String(initTop);
-  setDynamicStyle(el, {
-    left: `${initLeft}px`,
-    top: `${initTop}px`,
-    right: "auto",
-    bottom: "auto"
-  });
-  el.dataset.initLeft = String(initLeft);
-  el.dataset.initTop = String(initTop);
-  updateDraggableControlNorm(el, mapEl);
+  const initialResolver = typeof initial === "function"
+    ? initial
+    : () => (initial || { left: 0, top: 0 });
+  draggableControlInitialResolvers.set(el, initialResolver);
+  applyDraggableControlInitialPosition(el, mapEl, true);
   draggableMapControls.add(el);
 
   let dragging = false;
@@ -1621,6 +1635,7 @@ function makeControlDraggable(control, initial) {
 
   const stopDrag = () => {
     dragging = false;
+    el.dataset.userMoved = "1";
     clampDraggableControl(el, mapEl);
     updateDraggableControlNorm(el, mapEl);
     map.dragging.enable();
@@ -1843,15 +1858,22 @@ function resetDraggableControlsToInitial() {
   if (!mapEl) return;
   draggableMapControls.forEach((el) => {
     if (!el || !el.isConnected) return;
-    const initLeft = Number(el.dataset.initLeft);
-    const initTop = Number(el.dataset.initTop);
-    if (isFinite(initLeft) && isFinite(initTop)) {
-      el.dataset.leftPx = String(initLeft);
-      el.dataset.topPx = String(initTop);
-      setDynamicStyle(el, { left: `${initLeft}px`, top: `${initTop}px` });
+    const applied = applyDraggableControlInitialPosition(el, mapEl, true);
+    if (!applied) {
+      const initLeft = Number(el.dataset.initLeft);
+      const initTop = Number(el.dataset.initTop);
+      if (isFinite(initLeft) && isFinite(initTop)) {
+        el.dataset.leftPx = String(initLeft);
+        el.dataset.topPx = String(initTop);
+        setDynamicStyle(el, { left: `${initLeft}px`, top: `${initTop}px` });
+      } else {
+        clampDraggableControl(el, mapEl);
+      }
+      updateDraggableControlNorm(el, mapEl);
     } else {
       clampDraggableControl(el, mapEl);
     }
+    el.dataset.userMoved = "";
     el.dataset.normX = "";
     el.dataset.normY = "";
     updateDraggableControlNorm(el, mapEl);
