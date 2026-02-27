@@ -1422,6 +1422,7 @@ map.options.maxBoundsViscosity = 1.0;
 
 function goHomeView() {
   applyHomeView();
+  resetDisclaimerPosition();
 }
 
 function fitToLayerExtent(layer) {
@@ -1767,6 +1768,11 @@ function positionDisclaimer() {
   } catch (e) {
     console.warn('positionDisclaimer failed', e);
   }
+}
+
+function resetDisclaimerPosition() {
+  disclaimerUserPos = null;
+  positionDisclaimer();
 }
 
 function initDisclaimerDrag() {
