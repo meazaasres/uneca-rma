@@ -1,6 +1,10 @@
 /* === Beautified Overrides === */
 /* Shared UI typography (browser-safe stack) */
-body {
+#sidebar,
+#right-sidebar,
+#layers-container,
+#legend-items,
+.leaflet-control-layers {
   font-family: "Segoe UI", "Trebuchet MS", Tahoma, Verdana, Arial, sans-serif;
 }
 
@@ -80,7 +84,7 @@ body {
 
 /* Map title */
 #map-title {
-  font-family: inherit;
+  font-family: 'Segoe UI', sans-serif;
   font-size: 1rem;
   font-weight: 600;
   color: #12324f;
