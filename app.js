@@ -51,11 +51,69 @@ if (IS_FRAMED_CONTEXT) {
   try { window.top.location = window.self.location.href; } catch (e) {}
   try {
     document.documentElement.innerHTML = "";
-    document.documentElement.style.display = "none";
+    document.documentElement.setAttribute("data-ui-hidden", "1");
   } catch (e) {}
   throw new Error("Framed execution is blocked.");
 }
 // --- Helpers ---
+let dynamicSheet = null;
+let dynamicRuleIds = new Map();
+let dynamicStyleSeq = 0;
+
+function initDynamicSheet() {
+  if (dynamicSheet) return dynamicSheet;
+  const sheets = Array.from(document.styleSheets || []);
+  dynamicSheet = sheets.find(s => {
+    try {
+      return s && s.href && /dynamic\.css/i.test(s.href);
+    } catch (e) {
+      return false;
+    }
+  }) || null;
+  if (!dynamicSheet) {
+    // Fallback: no dynamic sheet available
+    console.warn("dynamic.css not found; dynamic styles will be limited.");
+  }
+  return dynamicSheet;
+}
+
+function ensureDynamicRuleId(el) {
+  if (!el) return "";
+  if (el.dataset && el.dataset.dynId) return el.dataset.dynId;
+  const id = "dyn-" + (++dynamicStyleSeq);
+  el.dataset.dynId = id;
+  return id;
+}
+
+function upsertDynamicRule(el, declarations) {
+  const sheet = initDynamicSheet();
+  if (!sheet || !declarations) return;
+  const id = ensureDynamicRuleId(el);
+  const selector = `[data-dyn-id="${id}"]`;
+  const cssText = `${selector}{${declarations}}`;
+  const existing = dynamicRuleIds.get(id);
+  try {
+    if (existing != null && sheet.cssRules && sheet.cssRules[existing]) {
+      sheet.deleteRule(existing);
+    }
+    const idx = sheet.cssRules ? sheet.cssRules.length : 0;
+    sheet.insertRule(cssText, idx);
+    dynamicRuleIds.set(id, idx);
+  } catch (e) {
+    console.warn("Failed to update dynamic CSS rule:", e);
+  }
+}
+
+function setDynamicStyle(el, styleObj) {
+  if (!el || !styleObj) return;
+  const parts = [];
+  Object.keys(styleObj).forEach(k => {
+    const v = styleObj[k];
+    if (v == null || v === "") return;
+    parts.push(`${k}:${v}`);
+  });
+  if (parts.length) upsertDynamicRule(el, parts.join(";"));
+}
 function sanitizeId(str) {
   return String(str).replace(/[^\w\-]/g, "_");
 }
@@ -508,7 +566,7 @@ function ensureBaseLayerListedLastInControl() {
 function showRow(id) {
   const el = document.getElementById(id);
   if (el) {
-    el.style.display = 'block';
+    setDynamicStyle(el, { display: "block" });
   } else {
     console.warn(`showRow: element not found: ${id}`);
   }
@@ -517,7 +575,7 @@ function showRow(id) {
 function hideRow(id) {
   const el = document.getElementById(id);
   if (el) {
-    el.style.display = 'none';
+    setDynamicStyle(el, { display: "none" });
   } else {
     console.warn(`hideRow: element not found: ${id}`);
   }
@@ -1329,7 +1387,7 @@ function bindFeaturePopup(feature, layer) {
 
     // Use textContent inside a <pre> for safety
     const div = document.createElement("div");
-    div.style.whiteSpace = "pre-wrap";
+    div.className = "popup-prewrap";
     div.textContent = content;
 
     layer.bindPopup(div);
@@ -1410,7 +1468,7 @@ function syncLayoutWithHeaderHeight() {
   if (!header || !document.documentElement) return;
   const headerHeight = Math.max(0, Math.ceil(header.getBoundingClientRect().height));
   if (!headerHeight) return;
-  document.documentElement.style.setProperty('--app-header-height', `${headerHeight}px`);
+  setDynamicStyle(document.documentElement, { "--app-header-height": `${headerHeight}px` });
   if (map && typeof map.invalidateSize === "function") {
     setTimeout(() => map.invalidateSize({ pan: false }), 0);
   }
@@ -1447,17 +1505,7 @@ const HomeControl = L.Control.extend({
     link.title = 'Home view';
     link.setAttribute('aria-label', 'Home view');
     link.textContent = '⌂';
-    // Inline style to avoid stylesheet caching issues.
-    link.style.display = 'block';
-    link.style.width = '30px';
-    link.style.height = '30px';
-    link.style.lineHeight = '30px';
-    link.style.textAlign = 'center';
-    link.style.fontSize = '18px';
-    link.style.fontWeight = '700';
-    link.style.background = '#ffffff';
-    link.style.color = '#1E90FF';
-    link.style.textDecoration = 'none';
+    // styles moved to CSS (CSP-safe)
     L.DomEvent.on(link, 'click', L.DomEvent.stop)
       .on(link, 'click', () => goHomeView());
     return container;
@@ -1470,7 +1518,7 @@ setTimeout(() => {
   const zoomControl = map.zoomControl && map.zoomControl.getContainer ? map.zoomControl.getContainer() : null;
   const homeContainer = homeControl && homeControl.getContainer ? homeControl.getContainer() : null;
   if (!zoomControl || !homeContainer || !zoomControl.parentNode) return;
-  homeContainer.style.marginTop = '8px';
+  setDynamicStyle(homeContainer, { "margin-top": "8px" });
   zoomControl.parentNode.insertBefore(homeContainer, zoomControl.nextSibling);
 }, 0);
 
@@ -1480,10 +1528,11 @@ function clampDraggableControl(el, mapEl) {
   const rect = mapEl.getBoundingClientRect();
   const maxLeft = Math.max(0, rect.width - el.offsetWidth);
   const maxTop = Math.max(0, rect.height - el.offsetHeight);
-  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.style.left) || 0));
-  const top = Math.max(0, Math.min(maxTop, parseFloat(el.style.top) || 0));
-  el.style.left = `${left}px`;
-  el.style.top = `${top}px`;
+  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.dataset.leftPx) || 0));
+  const top = Math.max(0, Math.min(maxTop, parseFloat(el.dataset.topPx) || 0));
+  el.dataset.leftPx = String(left);
+  el.dataset.topPx = String(top);
+  setDynamicStyle(el, { left: `${left}px`, top: `${top}px` });
   return { left, top, maxLeft, maxTop };
 }
 
@@ -1491,8 +1540,8 @@ function updateDraggableControlNorm(el, mapEl) {
   const rect = mapEl.getBoundingClientRect();
   const maxLeft = Math.max(0, rect.width - el.offsetWidth);
   const maxTop = Math.max(0, rect.height - el.offsetHeight);
-  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.style.left) || 0));
-  const top = Math.max(0, Math.min(maxTop, parseFloat(el.style.top) || 0));
+  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.dataset.leftPx) || 0));
+  const top = Math.max(0, Math.min(maxTop, parseFloat(el.dataset.topPx) || 0));
   el.dataset.normX = maxLeft > 0 ? String(left / maxLeft) : "0";
   el.dataset.normY = maxTop > 0 ? String(top / maxTop) : "0";
 }
@@ -1505,8 +1554,9 @@ function applyDraggableControlNorm(el, mapEl) {
   const ny = Number(el.dataset.normY);
   const left = isFinite(nx) ? Math.max(0, Math.min(maxLeft, Math.round(nx * maxLeft))) : 0;
   const top = isFinite(ny) ? Math.max(0, Math.min(maxTop, Math.round(ny * maxTop))) : 0;
-  el.style.left = `${left}px`;
-  el.style.top = `${top}px`;
+  el.dataset.leftPx = String(left);
+  el.dataset.topPx = String(top);
+  setDynamicStyle(el, { left: `${left}px`, top: `${top}px` });
 }
 
 function repositionDraggableControls() {
@@ -1536,10 +1586,14 @@ function makeControlDraggable(control, initial) {
   const initialPos = typeof initial === "function" ? initial(el, mapEl) : initial;
   const initLeft = Math.max(0, Math.round(initialPos.left || 0));
   const initTop = Math.max(0, Math.round(initialPos.top || 0));
-  el.style.left = `${initLeft}px`;
-  el.style.top = `${initTop}px`;
-  el.style.right = "auto";
-  el.style.bottom = "auto";
+  el.dataset.leftPx = String(initLeft);
+  el.dataset.topPx = String(initTop);
+  setDynamicStyle(el, {
+    left: `${initLeft}px`,
+    top: `${initTop}px`,
+    right: "auto",
+    bottom: "auto"
+  });
   el.dataset.initLeft = String(initLeft);
   el.dataset.initTop = String(initTop);
   updateDraggableControlNorm(el, mapEl);
@@ -1560,8 +1614,9 @@ function makeControlDraggable(control, initial) {
     const maxTop = Math.max(0, rect.height - el.offsetHeight);
     const nextLeft = Math.max(0, Math.min(maxLeft, baseLeft + dx));
     const nextTop = Math.max(0, Math.min(maxTop, baseTop + dy));
-    el.style.left = `${nextLeft}px`;
-    el.style.top = `${nextTop}px`;
+    el.dataset.leftPx = String(nextLeft);
+    el.dataset.topPx = String(nextTop);
+    setDynamicStyle(el, { left: `${nextLeft}px`, top: `${nextTop}px` });
   };
 
   const stopDrag = () => {
@@ -1579,8 +1634,8 @@ function makeControlDraggable(control, initial) {
     dragging = true;
     startX = evt.clientX;
     startY = evt.clientY;
-    baseLeft = parseFloat(el.style.left) || 0;
-    baseTop = parseFloat(el.style.top) || 0;
+    baseLeft = parseFloat(el.dataset.leftPx) || 0;
+    baseTop = parseFloat(el.dataset.topPx) || 0;
     map.dragging.disable();
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", stopDrag);
@@ -1736,8 +1791,8 @@ function positionDisclaimer() {
     const mapEl = map.getContainer();
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
-    const left = 12;
-    const bottom = 30;
+  const left = 12;
+  const bottom = 30;
     const preferredFixedWidth = 240;
     const margin = 12;
     const maxAvailableWidth = mapRect
@@ -1746,12 +1801,14 @@ function positionDisclaimer() {
     const desiredWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
 
     disc.classList.add('clamp-5-lines');
-    disc.style.top = 'auto';
-    disc.style.left = left + 'px';
-    disc.style.right = 'auto';
-    disc.style.bottom = bottom + 'px';
-    disc.style.width = desiredWidth + 'px';
-    disc.style.maxWidth = desiredWidth + 'px';
+    setDynamicStyle(disc, {
+      top: "auto",
+      left: left + "px",
+      right: "auto",
+      bottom: bottom + "px",
+      width: desiredWidth + "px",
+      "max-width": desiredWidth + "px"
+    });
 
     // Keep user-dragged position across resize/move while clamping to map bounds.
     if (disclaimerUserPos) {
@@ -1764,9 +1821,11 @@ function positionDisclaimer() {
       const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
       const leftPx = Math.min(maxLeft, Math.max(marginClamp, disclaimerUserPos.left));
       const topPx = Math.min(maxTop, Math.max(marginClamp, disclaimerUserPos.top));
-      disc.style.top = topPx + 'px';
-      disc.style.left = leftPx + 'px';
-      disc.style.bottom = 'auto';
+      setDynamicStyle(disc, {
+        top: topPx + "px",
+        left: leftPx + "px",
+        bottom: "auto"
+      });
       disclaimerUserPos = { left: leftPx, top: topPx };
     }
   } catch (e) {
@@ -1787,8 +1846,9 @@ function resetDraggableControlsToInitial() {
     const initLeft = Number(el.dataset.initLeft);
     const initTop = Number(el.dataset.initTop);
     if (isFinite(initLeft) && isFinite(initTop)) {
-      el.style.left = `${initLeft}px`;
-      el.style.top = `${initTop}px`;
+      el.dataset.leftPx = String(initLeft);
+      el.dataset.topPx = String(initTop);
+      setDynamicStyle(el, { left: `${initLeft}px`, top: `${initTop}px` });
     } else {
       clampDraggableControl(el, mapEl);
     }
@@ -1827,9 +1887,11 @@ function initDisclaimerDrag() {
     const clampedLeft = Math.min(maxLeft, Math.max(marginClamp, left));
     const clampedTop = Math.min(maxTop, Math.max(marginClamp, top));
 
-    disc.style.top = clampedTop + 'px';
-    disc.style.left = clampedLeft + 'px';
-    disc.style.bottom = 'auto';
+    setDynamicStyle(disc, {
+      top: clampedTop + "px",
+      left: clampedLeft + "px",
+      bottom: "auto"
+    });
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
   };
 
@@ -1968,9 +2030,9 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
     if (/Polygon/.test(geom)) sym.classList.add('legend-sym-polygon');
 
     if (/^#[0-9A-Fa-f]{3,6}$/.test(color) || /^[a-zA-Z]+$/.test(color)) {
-      sym.style.backgroundColor = color;
+      setDynamicStyle(sym, { "background-color": color });
     } else {
-      sym.style.backgroundColor = "#ccc";
+      setDynamicStyle(sym, { "background-color": "#ccc" });
       console.warn("Invalid color blocked:", color);
     }
 
@@ -2478,15 +2540,15 @@ async function populateFilterControls(data) {
     selectedContinentValues = new Set();
     updateContinentFilterButtonLabel();
     showRow(contCol);
-    if (africaBtn) africaBtn.style.display = '';
-    if (contBtnAll) contBtnAll.style.display = '';
-    if (contBtnClear) contBtnClear.style.display = '';
+    if (africaBtn) setDynamicStyle(africaBtn, { display: "" });
+    if (contBtnAll) setDynamicStyle(contBtnAll, { display: "" });
+    if (contBtnClear) setDynamicStyle(contBtnClear, { display: "" });
   } else {
     updateContinentFilterButtonLabel();
     hideRow(contCol);
-    if (africaBtn) africaBtn.style.display = 'none';
-    if (contBtnAll) contBtnAll.style.display = 'none';
-    if (contBtnClear) contBtnClear.style.display = 'none';
+    if (africaBtn) setDynamicStyle(africaBtn, { display: "none" });
+    if (contBtnAll) setDynamicStyle(contBtnAll, { display: "none" });
+    if (contBtnClear) setDynamicStyle(contBtnClear, { display: "none" });
   }
 
   populateCountryFilterOptions(data);
@@ -2778,7 +2840,7 @@ function applyClassification() {
   }
 
   const tbl = document.getElementById('table-container');
-  if (tbl) tbl.style.display = 'block';
+  if (tbl) setDynamicStyle(tbl, { display: "block" });
   applyLayerStackOrder();
 }
 //Classification Tables and Helpers
@@ -3081,9 +3143,9 @@ function showPopup(msg, type = "error") {
   popup.classList.remove('popup-error', 'popup-success');
   popup.classList.add(type === 'error' ? 'popup-error' : 'popup-success');
   popup.textContent = msg;
-  popup.style.display = 'block';
+  setDynamicStyle(popup, { display: "block" });
 
-  setTimeout(() => { popup.style.display = 'none'; }, 6000);
+  setTimeout(() => { setDynamicStyle(popup, { display: "none" }); }, 6000);
 }
 
 // --- Sidebar toggle helpers (buttons cached) ---
@@ -3092,7 +3154,7 @@ function toggleClassTable() {
   const wrap = document.getElementById('classification-wrapper');
   if (!wrap || !btnClassTable) return;
   const hidden = window.getComputedStyle(wrap).display === 'none';
-  wrap.style.display = hidden ? 'block' : 'none';
+  setDynamicStyle(wrap, { display: hidden ? "block" : "none" });
   btnClassTable.classList.toggle('active', hidden);
 }
 
@@ -3117,7 +3179,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const wrap = document.getElementById('classification-wrapper');
 
   if (wrap && btnClassTable) {
-    wrap.style.display = 'block';
+    setDynamicStyle(wrap, { display: "block" });
     btnClassTable.classList.add('active');
   }
 
@@ -3162,13 +3224,15 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
-      wrapper.style.width = W + 'px';
-      // Avoid transform-based offscreen positioning for Firefox/html2canvas.
-      wrapper.style.transform = 'none';
-      wrapper.style.position = 'fixed';
-      wrapper.style.left = '-100000px';
-      wrapper.style.top = '0';
-      wrapper.style.zIndex = '-1';
+      setDynamicStyle(wrapper, {
+        width: W + "px",
+        // Avoid transform-based offscreen positioning for Firefox/html2canvas.
+        transform: "none",
+        position: "fixed",
+        left: "-100000px",
+        top: "0",
+        "z-index": "-1"
+      });
       document.body.appendChild(wrapper);
 
       // Title (safe insertion)
@@ -3178,37 +3242,30 @@ window.addEventListener('load', resetInitialScrollPositions);
         t.className = 'export-title';
         t.textContent = titleEl.textContent || "Map Export"; // safe fallback
         // enforce a reasonable export title size to avoid oversized fonts
-        t.style.fontSize = '20px';
-        t.style.fontWeight = '600';
-        t.style.margin = '0 0 8px 0';
-        t.style.textAlign = 'center';
-        t.style.width = '100%';
-        t.style.display = 'block';
+        setDynamicStyle(t, {
+          "font-size": "20px",
+          "font-weight": "600",
+          margin: "0 0 8px 0",
+          "text-align": "center",
+          width: "100%",
+          display: "block"
+        });
         wrapper.appendChild(t);
       }
 
       // Map image container
       const mapWrapper = document.createElement('div');
       mapWrapper.className = 'export-map-wrapper';
-      mapWrapper.style.width = W + 'px';
-      mapWrapper.style.height = H + 'px';
-      mapWrapper.style.position = 'relative';
-      mapWrapper.style.overflow = 'hidden';
+      setDynamicStyle(mapWrapper, {
+        width: W + "px",
+        height: H + "px",
+        position: "relative",
+        overflow: "hidden"
+      });
       wrapper.appendChild(mapWrapper);
 
       // Add export-specific styles to normalize title/disclaimer for canvas export
-      const styleEl = document.createElement('style');
-      styleEl.type = 'text/css';
-      styleEl.textContent = `
-        .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;width:100% !important;display:block !important}
-        .export-map-wrapper .export-disclaimer-clone{word-break:break-word !important;display:inline-block !important;width:auto !important;white-space:normal !important}
-        .export-legend-clone{display:block !important;margin-top:10px !important;overflow:visible !important}
-        .export-legend-clone .legend-block{overflow:visible !important}
-        .export-legend-clone .legend-row{align-items:center !important;overflow:visible !important}
-        .export-legend-clone .legend-sym{display:inline-block !important;box-sizing:border-box !important;overflow:visible !important;min-width:15px !important;min-height:15px !important;flex:0 0 15px !important}
-        .export-img{width:100%;height:auto;display:block}
-      `;
-      wrapper.appendChild(styleEl);
+      // Export styles should live in CSS (CSP-safe); keep wrapper clean.
 
       const img = document.createElement('img');
       img.className = 'export-img';
@@ -3269,8 +3326,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       function getControlAnchorPosition(sourceEl, mapContainerEl) {
         // Draggable controls store canonical map-local position in inline left/top.
         if (sourceEl && sourceEl.classList && sourceEl.classList.contains('draggable-map-control')) {
-          const leftInline = parseFloat(sourceEl.style.left || "");
-          const topInline = parseFloat(sourceEl.style.top || "");
+    const leftInline = parseFloat(sourceEl.dataset.leftPx || "");
+    const topInline = parseFloat(sourceEl.dataset.topPx || "");
           if (Number.isFinite(leftInline) && Number.isFinite(topInline)) {
             return { left: leftInline, top: topInline };
           }
@@ -3295,17 +3352,19 @@ window.addEventListener('load', resetInitialScrollPositions);
         const exportWidth = Math.max(1, srcRect.width * rawScaleX);
         const exportHeight = Math.max(1, srcRect.height * rawScaleY);
 
-        clone.style.position = 'absolute';
-        clone.style.left = exportLeft + 'px';
-        clone.style.top = exportTop + 'px';
-        clone.style.right = 'auto';
-        clone.style.bottom = 'auto';
-        clone.style.width = exportWidth + 'px';
-        clone.style.height = exportHeight + 'px';
-        clone.style.margin = '0';
-        clone.style.transform = 'none';
-        clone.style.cursor = 'default';
-        clone.style.pointerEvents = 'none';
+        setDynamicStyle(clone, {
+          position: "absolute",
+          left: exportLeft + "px",
+          top: exportTop + "px",
+          right: "auto",
+          bottom: "auto",
+          width: exportWidth + "px",
+          height: exportHeight + "px",
+          margin: "0",
+          transform: "none",
+          cursor: "default",
+          "pointer-events": "none"
+        });
         mapWrapper.appendChild(clone);
       }
 
@@ -3322,28 +3381,30 @@ window.addEventListener('load', resetInitialScrollPositions);
         const exportLeft = Math.max(0, discPos.left * rawScaleX);
         const exportTop = Math.max(0, discPos.top * rawScaleY);
         const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX));
-        clone.style.left = exportLeft + 'px';
-        clone.style.top = exportTop + 'px';
-        clone.style.right = 'auto';
-        clone.style.bottom = 'auto';
-        clone.style.position = 'absolute';
-        clone.style.display = 'inline-block';
-        clone.style.width = 'auto';
-        clone.style.maxWidth = exportWidth + 'px';
-        clone.style.background = discStyles.background;
-        clone.style.border = discStyles.border;
-        clone.style.borderRadius = discStyles.borderRadius;
-        clone.style.boxShadow = discStyles.boxShadow;
-        clone.style.color = discStyles.color;
-        clone.style.fontSize = discStyles.fontSize;
-        clone.style.fontStyle = discStyles.fontStyle;
-        clone.style.fontWeight = discStyles.fontWeight;
-        clone.style.lineHeight = discStyles.lineHeight;
-        clone.style.padding = discStyles.padding;
-        clone.style.textAlign = discStyles.textAlign;
-        clone.style.whiteSpace = discStyles.whiteSpace;
-        clone.style.maxHeight = discStyles.maxHeight;
-        clone.style.overflow = discStyles.overflow;
+        setDynamicStyle(clone, {
+          left: exportLeft + "px",
+          top: exportTop + "px",
+          right: "auto",
+          bottom: "auto",
+          position: "absolute",
+          display: "inline-block",
+          width: "auto",
+          "max-width": exportWidth + "px",
+          background: discStyles.background,
+          border: discStyles.border,
+          "border-radius": discStyles.borderRadius,
+          "box-shadow": discStyles.boxShadow,
+          color: discStyles.color,
+          "font-size": discStyles.fontSize,
+          "font-style": discStyles.fontStyle,
+          "font-weight": discStyles.fontWeight,
+          "line-height": discStyles.lineHeight,
+          padding: discStyles.padding,
+          "text-align": discStyles.textAlign,
+          "white-space": discStyles.whiteSpace,
+          "max-height": discStyles.maxHeight,
+          overflow: discStyles.overflow
+        });
         mapWrapper.appendChild(clone);
       }
 
@@ -3357,51 +3418,56 @@ window.addEventListener('load', resetInitialScrollPositions);
         const clone = legend.cloneNode(true);
         clone.removeAttribute('id');
         clone.classList.add('export-legend-clone');
-        clone.style.marginLeft = '5px';
+        setDynamicStyle(clone, { "margin-left": "5px" });
         // Firefox/html2canvas: normalize legend symbol geometry to avoid clipping.
         const rows = Array.from(clone.querySelectorAll('.legend-row'));
         rows.forEach((row) => {
-          row.style.display = 'flex';
-          row.style.alignItems = 'center';
-          row.style.gap = '6px';
-          row.style.minHeight = '18px';
-          row.style.padding = '1px 0';
-          row.style.overflow = 'visible';
+          setDynamicStyle(row, {
+            display: "flex",
+            "align-items": "center",
+            gap: "6px",
+            "min-height": "18px",
+            padding: "1px 0",
+            overflow: "visible"
+          });
         });
         const syms = Array.from(clone.querySelectorAll('.legend-sym'));
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
         syms.forEach((sym, idx) => {
           const sourceSym = sourceSyms[idx] || null;
           const sourceCs = sourceSym ? window.getComputedStyle(sourceSym) : null;
-          const sourceInlineBg = sourceSym && sourceSym.style ? sourceSym.style.backgroundColor : "";
-          const fillColor = sourceInlineBg || (sourceCs ? sourceCs.backgroundColor : "") || "#ccc";
+          const fillColor = (sourceCs ? sourceCs.backgroundColor : "") || "#ccc";
           const borderValue = (sourceCs && sourceCs.border && sourceCs.border !== "0px none rgb(0, 0, 0)")
             ? sourceCs.border
             : "1px solid #333";
-          sym.style.display = 'inline-block';
-          sym.style.boxSizing = 'border-box';
-          sym.style.flex = '0 0 16px';
-          sym.style.width = '16px';
-          sym.style.minWidth = '16px';
-          sym.style.maxWidth = '16px';
-          sym.style.height = '16px';
-          sym.style.minHeight = '16px';
-          sym.style.maxHeight = '16px';
-          sym.style.margin = '0';
-          sym.style.padding = '0';
-          sym.style.overflow = 'visible';
-          sym.style.backgroundColor = fillColor;
-          sym.style.border = borderValue;
+          setDynamicStyle(sym, {
+            display: "inline-block",
+            "box-sizing": "border-box",
+            flex: "0 0 16px",
+            width: "16px",
+            "min-width": "16px",
+            "max-width": "16px",
+            height: "16px",
+            "min-height": "16px",
+            "max-height": "16px",
+            margin: "0",
+            padding: "0",
+            overflow: "visible",
+            "background-color": fillColor,
+            border: borderValue
+          });
           if (sym.classList.contains('legend-sym-line')) {
             const lineColor = fillColor && fillColor !== 'rgba(0, 0, 0, 0)' ? fillColor : '#333';
-            sym.style.height = '0';
-            sym.style.minHeight = '0';
-            sym.style.maxHeight = '0';
-            sym.style.border = '0';
-            sym.style.borderTop = `3px solid ${lineColor}`;
-            sym.style.background = 'transparent';
+            setDynamicStyle(sym, {
+              height: "0",
+              "min-height": "0",
+              "max-height": "0",
+              border: "0",
+              "border-top": `3px solid ${lineColor}`,
+              background: "transparent"
+            });
           } else if (sym.classList.contains('legend-sym-point')) {
-            sym.style.borderRadius = '50%';
+            setDynamicStyle(sym, { "border-radius": "50%" });
           }
         });
         wrapper.appendChild(clone);
@@ -3445,13 +3511,13 @@ window.addEventListener('load', resetInitialScrollPositions);
     document.body.appendChild(loader);
     } else {
     loader.querySelector("div:last-child").textContent = msg;
-    loader.style.display = "flex";
+    setDynamicStyle(loader, { display: "flex" });
     }
     }
 
     function hideLoading() {
     const loader = document.getElementById("export-loader");
-    if (loader) loader.style.display = "none";
+    if (loader) setDynamicStyle(loader, { display: "none" });
     }
     function exportMap() {
       showLoading("Exporting map as PNG...");
@@ -4006,7 +4072,8 @@ function exportSVG() {
           rows.forEach(row => {
             const symEl = row.querySelector('.legend-sym');
             const lblEl = row.querySelector('span');
-            const fillColor = (symEl && symEl.style && symEl.style.backgroundColor) || '#ccc';
+            const symCs = symEl ? window.getComputedStyle(symEl) : null;
+            const fillColor = (symCs ? symCs.backgroundColor : "") || "#ccc";
 
             if (symEl && symEl.classList.contains('legend-sym-line')) {
               const line = document.createElementNS(svgNS, "line");

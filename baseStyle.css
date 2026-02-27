@@ -1,6 +1,9 @@
     :root {
       --app-header-height: 80px;
     }
+    html[data-ui-hidden="1"] {
+      display: none !important;
+    }
 
     /* Sidebar styling */
     #sidebar {
@@ -204,15 +207,22 @@ footer {
   transform: translateX(-9999px); /* off-screen for export */
 }
 .export-title {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
   text-align: center;
-  margin-bottom: 10px;
+  margin: 0 0 8px 0;
+  width: 100%;
+  display: block;
 }
 .export-map-wrapper {
   position: relative;
+  overflow: hidden;
 }
 .export-img {
   width: 100%;
-  height: 100%;
+  height: auto;
+  display: block;
 }
 .export-disclaimer-clone {
   position: absolute;
@@ -220,10 +230,30 @@ footer {
   left: 10px;
   background: rgba(255,255,255,0.7);
   padding: 4px;
+  word-break: break-word;
+  display: inline-block;
+  width: auto;
+  white-space: normal;
 }
 .export-legend-clone {
   margin-top: 10px;
   display: block;
+  overflow: visible;
+}
+.export-legend-clone .legend-block {
+  overflow: visible;
+}
+.export-legend-clone .legend-row {
+  align-items: center;
+  overflow: visible;
+}
+.export-legend-clone .legend-sym {
+  display: inline-block;
+  box-sizing: border-box;
+  overflow: visible;
+  min-width: 15px;
+  min-height: 15px;
+  flex: 0 0 15px;
 }
 
 .export-loader {
@@ -299,6 +329,9 @@ footer {
 }
 .legend-sym-polygon {
   border: 1px solid #333;
+}
+.popup-prewrap {
+  white-space: pre-wrap;
 }
 
 /* Control container placement class for sidebar insertion */
