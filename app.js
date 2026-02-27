@@ -1793,7 +1793,7 @@ function positionDisclaimer() {
 
   const left = 12;
   const bottom = 30;
-    const preferredFixedWidth = 240;
+    const preferredFixedWidth = 360;
     const margin = 12;
     const maxAvailableWidth = mapRect
       ? Math.max(120, Math.round(mapRect.width - left - margin))
