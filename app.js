@@ -1935,6 +1935,26 @@ function initDisclaimerDrag() {
   window.addEventListener('pointercancel', onPointerUp);
 }
 
+function runMapUiReflowPasses() {
+  // Browser zoom updates element metrics asynchronously; run multiple passes.
+  [20, 90, 180].forEach((delayMs) => {
+    setTimeout(() => {
+      syncLayoutWithHeaderHeight();
+      positionDisclaimer();
+      repositionDraggableControls();
+    }, delayMs);
+  });
+}
+
+let mapUiReflowRaf = 0;
+function queueMapUiReflow() {
+  if (mapUiReflowRaf) cancelAnimationFrame(mapUiReflowRaf);
+  mapUiReflowRaf = requestAnimationFrame(() => {
+    mapUiReflowRaf = 0;
+    runMapUiReflowPasses();
+  });
+}
+
 // run initially and on relevant events
 window.addEventListener('load', () => {
   syncLayoutWithHeaderHeight();
@@ -1944,17 +1964,16 @@ window.addEventListener('load', () => {
   setTimeout(resetAllMapUiPositions, 300);
   setTimeout(initDisclaimerDrag, 350);
   setTimeout(repositionDraggableControls, 360);
+  queueMapUiReflow();
 });
-window.addEventListener('resize', () => {
-  setTimeout(syncLayoutWithHeaderHeight, 20);
-  setTimeout(positionDisclaimer, 50);
-  setTimeout(repositionDraggableControls, 60);
-});
-map.on && map.on('resize', () => {
-  setTimeout(syncLayoutWithHeaderHeight, 20);
-  setTimeout(positionDisclaimer, 50);
-  setTimeout(repositionDraggableControls, 60);
-});
+window.addEventListener('resize', queueMapUiReflow);
+window.addEventListener('orientationchange', queueMapUiReflow);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', queueMapUiReflow);
+  window.visualViewport.addEventListener('scroll', queueMapUiReflow);
+}
+map.on && map.on('resize', queueMapUiReflow);
+map.on && map.on('zoomend', queueMapUiReflow);
 map.on && map.on('moveend', () => setTimeout(positionDisclaimer, 50));
 
 // --- Layers control (moved into sidebar if present) ---
