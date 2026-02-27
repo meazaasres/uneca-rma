@@ -1565,6 +1565,12 @@ function repositionDraggableControls() {
   if (!mapEl) return;
   draggableMapControls.forEach((el) => {
     if (!el || !el.isConnected) return;
+    const userMoved = el.dataset && el.dataset.userMoved === "1";
+    if (!userMoved && draggableControlInitialResolvers.has(el)) {
+      applyDraggableControlInitialPosition(el, mapEl, false);
+      clampDraggableControl(el, mapEl);
+      return;
+    }
     if (el.dataset && (el.dataset.normX || el.dataset.normY)) {
       applyDraggableControlNorm(el, mapEl);
       clampDraggableControl(el, mapEl);
