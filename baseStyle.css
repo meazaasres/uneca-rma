@@ -73,12 +73,13 @@
       padding-top: 6px;
       margin-top: 6px;
     }
-    #disclaimer {
+#disclaimer {
       position: absolute;
       /* anchored to bottom-left of the map container */
       top: auto;
       left: 10px;
       bottom: 30px;
+      font-family: initial;
       transform: none;
       max-width: 24%;
       background: rgba(255,255,255,0.90);
