@@ -1937,11 +1937,20 @@ function initDisclaimerDrag() {
 
 function runMapUiReflowPasses() {
   // Browser zoom updates element metrics asynchronously; run multiple passes.
-  [20, 90, 180].forEach((delayMs) => {
+  [20, 110, 240].forEach((delayMs) => {
     setTimeout(() => {
       syncLayoutWithHeaderHeight();
-      positionDisclaimer();
-      repositionDraggableControls();
+      // Reflow after Leaflet has processed the new container size.
+      setTimeout(() => {
+        if (map && typeof map.invalidateSize === "function") {
+          map.invalidateSize({ pan: false });
+        }
+        if (scaleControl && typeof scaleControl._update === "function") {
+          scaleControl._update();
+        }
+        positionDisclaimer();
+        repositionDraggableControls();
+      }, 40);
     }, delayMs);
   });
 }
