@@ -1422,7 +1422,7 @@ map.options.maxBoundsViscosity = 1.0;
 
 function goHomeView() {
   applyHomeView();
-  resetDisclaimerPosition();
+  resetAllMapUiPositions();
 }
 
 function fitToLayerExtent(layer) {
@@ -1534,10 +1534,14 @@ function makeControlDraggable(control, initial) {
   mapEl.appendChild(el);
   el.classList.add("draggable-map-control");
   const initialPos = typeof initial === "function" ? initial(el, mapEl) : initial;
-  el.style.left = `${Math.max(0, Math.round(initialPos.left || 0))}px`;
-  el.style.top = `${Math.max(0, Math.round(initialPos.top || 0))}px`;
+  const initLeft = Math.max(0, Math.round(initialPos.left || 0));
+  const initTop = Math.max(0, Math.round(initialPos.top || 0));
+  el.style.left = `${initLeft}px`;
+  el.style.top = `${initTop}px`;
   el.style.right = "auto";
   el.style.bottom = "auto";
+  el.dataset.initLeft = String(initLeft);
+  el.dataset.initTop = String(initTop);
   updateDraggableControlNorm(el, mapEl);
   draggableMapControls.add(el);
 
@@ -1775,6 +1779,30 @@ function resetDisclaimerPosition() {
   positionDisclaimer();
 }
 
+function resetDraggableControlsToInitial() {
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
+  if (!mapEl) return;
+  draggableMapControls.forEach((el) => {
+    if (!el || !el.isConnected) return;
+    const initLeft = Number(el.dataset.initLeft);
+    const initTop = Number(el.dataset.initTop);
+    if (isFinite(initLeft) && isFinite(initTop)) {
+      el.style.left = `${initLeft}px`;
+      el.style.top = `${initTop}px`;
+    } else {
+      clampDraggableControl(el, mapEl);
+    }
+    el.dataset.normX = "";
+    el.dataset.normY = "";
+    updateDraggableControlNorm(el, mapEl);
+  });
+}
+
+function resetAllMapUiPositions() {
+  resetDisclaimerPosition();
+  resetDraggableControlsToInitial();
+}
+
 function initDisclaimerDrag() {
   const disc = document.getElementById('disclaimer');
   const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
@@ -1851,7 +1879,7 @@ window.addEventListener('load', () => {
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
   setTimeout(syncLayoutWithHeaderHeight, 80);
-  setTimeout(positionDisclaimer, 300);
+  setTimeout(resetAllMapUiPositions, 300);
   setTimeout(initDisclaimerDrag, 350);
   setTimeout(repositionDraggableControls, 360);
 });
