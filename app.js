@@ -1473,6 +1473,56 @@ setTimeout(() => {
   zoomControl.parentNode.insertBefore(homeContainer, zoomControl.nextSibling);
 }, 0);
 
+const draggableMapControls = new Set();
+
+function clampDraggableControl(el, mapEl) {
+  const rect = mapEl.getBoundingClientRect();
+  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
+  const maxTop = Math.max(0, rect.height - el.offsetHeight);
+  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.style.left) || 0));
+  const top = Math.max(0, Math.min(maxTop, parseFloat(el.style.top) || 0));
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+  return { left, top, maxLeft, maxTop };
+}
+
+function updateDraggableControlNorm(el, mapEl) {
+  const rect = mapEl.getBoundingClientRect();
+  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
+  const maxTop = Math.max(0, rect.height - el.offsetHeight);
+  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.style.left) || 0));
+  const top = Math.max(0, Math.min(maxTop, parseFloat(el.style.top) || 0));
+  el.dataset.normX = maxLeft > 0 ? String(left / maxLeft) : "0";
+  el.dataset.normY = maxTop > 0 ? String(top / maxTop) : "0";
+}
+
+function applyDraggableControlNorm(el, mapEl) {
+  const rect = mapEl.getBoundingClientRect();
+  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
+  const maxTop = Math.max(0, rect.height - el.offsetHeight);
+  const nx = Number(el.dataset.normX);
+  const ny = Number(el.dataset.normY);
+  const left = isFinite(nx) ? Math.max(0, Math.min(maxLeft, Math.round(nx * maxLeft))) : 0;
+  const top = isFinite(ny) ? Math.max(0, Math.min(maxTop, Math.round(ny * maxTop))) : 0;
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+
+function repositionDraggableControls() {
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
+  if (!mapEl) return;
+  draggableMapControls.forEach((el) => {
+    if (!el || !el.isConnected) return;
+    if (el.dataset && (el.dataset.normX || el.dataset.normY)) {
+      applyDraggableControlNorm(el, mapEl);
+      clampDraggableControl(el, mapEl);
+    } else {
+      clampDraggableControl(el, mapEl);
+      updateDraggableControlNorm(el, mapEl);
+    }
+  });
+}
+
 function makeControlDraggable(control, initial) {
   if (!control || typeof control.getContainer !== "function") return;
   const el = control.getContainer();
@@ -1487,6 +1537,8 @@ function makeControlDraggable(control, initial) {
   el.style.top = `${Math.max(0, Math.round(initialPos.top || 0))}px`;
   el.style.right = "auto";
   el.style.bottom = "auto";
+  updateDraggableControlNorm(el, mapEl);
+  draggableMapControls.add(el);
 
   let dragging = false;
   let startX = 0;
@@ -1509,6 +1561,8 @@ function makeControlDraggable(control, initial) {
 
   const stopDrag = () => {
     dragging = false;
+    clampDraggableControl(el, mapEl);
+    updateDraggableControlNorm(el, mapEl);
     map.dragging.enable();
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", stopDrag);
@@ -1793,14 +1847,17 @@ window.addEventListener('load', () => {
   setTimeout(syncLayoutWithHeaderHeight, 80);
   setTimeout(positionDisclaimer, 300);
   setTimeout(initDisclaimerDrag, 350);
+  setTimeout(repositionDraggableControls, 360);
 });
 window.addEventListener('resize', () => {
   setTimeout(syncLayoutWithHeaderHeight, 20);
   setTimeout(positionDisclaimer, 50);
+  setTimeout(repositionDraggableControls, 60);
 });
 map.on && map.on('resize', () => {
   setTimeout(syncLayoutWithHeaderHeight, 20);
   setTimeout(positionDisclaimer, 50);
+  setTimeout(repositionDraggableControls, 60);
 });
 map.on && map.on('moveend', () => setTimeout(positionDisclaimer, 50));
 
