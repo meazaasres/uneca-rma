@@ -466,24 +466,6 @@ footer {
   border-bottom: 12px solid #1e3a8a;
 }
 
-#map .leaflet-bottom.leaflet-left {
-  left: auto !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  transform: translate(10px, -5px) !important; /* move right 10px, up 5px */
-}
-#map .leaflet-bottom.leaflet-left .leaflet-control {
-  margin: 0 !important;
-}
-#map .leaflet-control-scale {
-  position: relative !important;
-  right: auto !important;
-  bottom: auto !important;
-  left: auto !important;
-  margin: 0 !important;
-  transform: translateY(-5px) !important;
-}
-
 .leaflet-control-exact-scale {
   background: #ffffff;
   border: 1px solid #cfd6e4;

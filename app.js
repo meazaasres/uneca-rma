@@ -1744,7 +1744,7 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 5, 20));
+makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 8, 0));
 makeControlDraggable(northArrowControl, (el, mapEl) => {
   const pos = getTopRightPosition(el, mapEl, 12);
   return { left: pos.left, top: pos.top + 30 };
