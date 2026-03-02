@@ -3322,11 +3322,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       const mapEl = document.getElementById('map');
-      const holderEl = document.getElementById('map-container');
       const cssW = mapEl ? mapEl.clientWidth : mapCanvas.width;
-      const cssH = holderEl
-        ? Math.min(holderEl.clientHeight || mapCanvas.height, mapEl ? mapEl.clientHeight : mapCanvas.height)
-        : (mapEl ? mapEl.clientHeight : mapCanvas.height);
+      const cssH = mapEl ? mapEl.clientHeight : mapCanvas.height;
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
       const expectedW = Math.round(cssW * rawScaleX);
