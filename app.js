@@ -3011,6 +3011,9 @@ function updateClassificationTableNumeric(brks, cols) {
         tdR.textContent = `${formatLegendClassValue(brks[i])} - ${formatLegendClassValue(brks[i + 1])}`;
         console.warn("Invalid range reset:", rangeText);
       } else {
+        const start = roundToOneDecimal(parts[0]);
+        const end = roundToOneDecimal(parts[1]);
+        tdR.textContent = `${formatLegendClassValue(start)} - ${formatLegendClassValue(end)}`;
         updateCustomBreaks();
       }
     });
@@ -3081,7 +3084,7 @@ function updateCustomBreaks() {
     const rangeText = row.cells[1].textContent.replace(/[–—]/g, '-').trim();
     const parts = rangeText.split('-').map(p => parseFloat(p.trim()));
     if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return;
-    newBreaks.push(parts[0]);
+    newBreaks.push(roundToOneDecimal(parts[0]));
     const colorInput = row.querySelector('input[type="color"]');
     newColors.push(colorInput ? colorInput.value : '#ccc');
   });
@@ -3090,7 +3093,7 @@ function updateCustomBreaks() {
   if (lastCell) {
     const lastRange = lastCell.textContent.replace(/[–—]/g, '-').trim();
     const parts = lastRange.split('-').map(p => parseFloat(p.trim()));
-    if (parts.length === 2 && !isNaN(parts[1])) newBreaks.push(parts[1]);
+    if (parts.length === 2 && !isNaN(parts[1])) newBreaks.push(roundToOneDecimal(parts[1]));
   }
 
   if (newBreaks.length >= 2) {
