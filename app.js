@@ -2332,7 +2332,7 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
   reorderLayersControlUI();
   applyLayerStackOrder();
   refreshLayerSelector();
-  setActiveLayer(safeName);
+  await setActiveLayer(safeName);
   initializeMapTitleFromLayer(safeName);
 
   return safeName;
@@ -2369,6 +2369,7 @@ async function importFile(file) {
   }
 
   showLoading("Loading data from file...");
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
     let geojson;
     if (ext === ".zip") {
@@ -2394,6 +2395,7 @@ async function importUrl(rawUrl) {
   if (!rawUrl) throw new Error("Enter a valid URL");
 
   showLoading("Loading data from URL...");
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
     const { parsed, ext } = validateImportUrl(rawUrl);
     const fetched = await fetchWithLimits(parsed.href);
@@ -3605,10 +3607,10 @@ window.addEventListener('load', resetInitialScrollPositions);
     loader.appendChild(spinner);
     loader.appendChild(text);
     document.body.appendChild(loader);
-    } else {
-    loader.querySelector("div:last-child").textContent = msg;
-    setDynamicStyle(loader, { display: "flex" });
     }
+    const label = loader.querySelector("div:last-child");
+    if (label) label.textContent = msg;
+    setDynamicStyle(loader, { display: "flex" });
     }
 
     function hideLoading() {
