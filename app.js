@@ -3645,6 +3645,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
         const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 10);
         const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
+        clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
         clone.style.right = 'auto';
@@ -3676,9 +3677,36 @@ window.addEventListener('load', resetInitialScrollPositions);
           const src = sourceSyms[idx];
           if (!src) return;
           const cs = window.getComputedStyle(src);
-          if (cs && cs.backgroundColor) sym.style.backgroundColor = cs.backgroundColor;
-          if (cs && cs.border) sym.style.border = cs.border;
-          if (sym.classList.contains('legend-sym-point')) {
+          const fillColor = (cs && cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)')
+            ? cs.backgroundColor
+            : '#ccc';
+          const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
+            ? cs.border
+            : '1px solid #333';
+          sym.style.display = 'inline-block';
+          sym.style.boxSizing = 'border-box';
+          sym.style.width = '16px';
+          sym.style.minWidth = '16px';
+          sym.style.maxWidth = '16px';
+          sym.style.height = '16px';
+          sym.style.minHeight = '16px';
+          sym.style.maxHeight = '16px';
+          sym.style.margin = '0';
+          sym.style.padding = '0';
+          sym.style.overflow = 'visible';
+          sym.style.backgroundColor = fillColor;
+          sym.style.border = borderValue;
+          if (sym.classList.contains('legend-sym-line')) {
+            const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
+              ? cs.borderTopColor
+              : fillColor;
+            sym.style.height = '0';
+            sym.style.minHeight = '0';
+            sym.style.maxHeight = '0';
+            sym.style.border = '0';
+            sym.style.borderTop = `3px solid ${lineColor}`;
+            sym.style.background = 'transparent';
+          } else if (sym.classList.contains('legend-sym-point')) {
             sym.style.borderRadius = '50%';
           }
         });
