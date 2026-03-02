@@ -4304,7 +4304,7 @@ function exportSVG() {
           )
         );
         const legendX = Math.max(
-          marginPx,
+          contentOffsetXPx + marginPx,
           Math.round((totalWidthPx - estimatedLegendWidth) / 2)
         );
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
