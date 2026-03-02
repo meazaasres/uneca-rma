@@ -2686,20 +2686,36 @@ async function setActiveLayer(name) {
   layerGroup  = obj.layerGroup;
   currentAttribute = null;
 
-  if (geojsonData && geojsonData.type === "FeatureCollection") {
-    await populateFilterControls(geojsonData);
-    if (currentLayerName !== targetLayerName) return;
-    populateAttributeList(geojsonData);
-    updatePointSizeControl();
-    updateLineWidthControl();
-    updateClassificationOptions();
-    // Do not force classification; apply only if attribute already selected
-    if (currentAttribute) applyClassification();
-    else renderDefaultFilteredLayer();
+  try {
+    if (geojsonData && geojsonData.type === "FeatureCollection") {
+      await populateFilterControls(geojsonData);
+      if (currentLayerName !== targetLayerName) return;
+      populateAttributeList(geojsonData);
+      updatePointSizeControl();
+      updateLineWidthControl();
+      updateClassificationOptions();
+      // Do not force classification; apply only if attribute already selected
+      if (currentAttribute) applyClassification();
+      else renderDefaultFilteredLayer();
+    }
+  } catch (e) {
+    console.error("Layer activation UI failed; applying safe fallback.", e);
+    try {
+      populateAttributeList(geojsonData || { type: "FeatureCollection", features: [] });
+      updatePointSizeControl();
+      updateLineWidthControl();
+      updateClassificationOptions();
+      renderDefaultFilteredLayer();
+    } catch (inner) {
+      console.error("Layer activation fallback also failed.", inner);
+    }
   }
 
   const sel = document.getElementById('layer-select');
-  if (sel) sel.value = name;
+  if (sel) {
+    sel.value = name;
+    showRow('layer-select-col');
+  }
 }
 //Attribute Population, Controls, and Classification Options
 // --- Populate attribute dropdown ---
