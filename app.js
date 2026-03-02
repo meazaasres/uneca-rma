@@ -1763,13 +1763,26 @@ const scaleControl = new ExactScaleControl({ widthPx: 160 });
 map.addControl(scaleControl);
 
 function placeScaleBarOnMapBottom(control) {
-  // Backward-compatible alias kept for existing call sites.
-  ensureScaleBarPinnedToMapBottom(control);
-}
-
-function ensureScaleBarPinnedToMapBottom(control = scaleControl) {
   if (!control || typeof control.getContainer !== "function") return;
   const el = control.getContainer();
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
+  if (!el) return;
+  if (mapEl && el.parentElement !== mapEl) {
+    mapEl.appendChild(el);
+  }
+  el.classList.remove("fixed-page-scale-control");
+  el.classList.add("map-bottom-scale-control");
+  setDynamicStyle(el, {
+    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
+    right: "auto",
+    top: "auto",
+    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
+  });
+}
+
+function ensureScaleBarPinnedToMapBottom() {
+  if (!scaleControl || typeof scaleControl.getContainer !== "function") return;
+  const el = scaleControl.getContainer();
   const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
   if (!el) return;
   if (mapEl && el.parentElement !== mapEl) {
@@ -2054,7 +2067,6 @@ function queueMapUiReflow() {
 
 // run initially and on relevant events
 window.addEventListener('load', () => {
-  resetInitialScrollPositions();
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
@@ -3194,6 +3206,37 @@ function reorderCategoricalClasses(fromIdx, toIdx) {
   applyClassification();
 }
 
+function updateCustomBreaks() {
+  const rows = document.querySelectorAll('#classification-table tr');
+  const newBreaks = [];
+  const newColors = [];
+
+  rows.forEach((row, i) => {
+    if (!row.cells[1]) return;
+    const rangeText = row.cells[1].textContent.replace(/[–—]/g, '-').trim();
+    const parts = rangeText.split('-').map(p => parseFloat(p.trim()));
+    if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return;
+    newBreaks.push(roundToOneDecimal(parts[0]));
+    const colorInput = row.querySelector('input[type="color"]');
+    newColors.push(colorInput ? colorInput.value : '#ccc');
+  });
+
+  const lastCell = document.querySelector('#classification-table tr:last-child td:nth-child(2)');
+  if (lastCell) {
+    const lastRange = lastCell.textContent.replace(/[–—]/g, '-').trim();
+    const parts = lastRange.split('-').map(p => parseFloat(p.trim()));
+    if (parts.length === 2 && !isNaN(parts[1])) newBreaks.push(roundToOneDecimal(parts[1]));
+  }
+
+  if (newBreaks.length >= 2) {
+    if (overlayData[currentLayerName]) {
+      overlayData[currentLayerName].vals = newBreaks;
+      overlayData[currentLayerName].cols = newColors;
+      overlayData[currentLayerName].isNumeric = true;
+    }
+    applyClassification();
+  }
+}
 //UI Event Wiring (live updates before/after classification)
 // Wire up control inputs so changes apply before and after classification
 (function wireControls() {
@@ -3412,6 +3455,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
   resetInitialScrollPositions();
 });
+
+window.addEventListener('load', resetInitialScrollPositions);
 
         // --- Secure Export Helper ---
     function compositeExportElement(cb) {
