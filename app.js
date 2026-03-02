@@ -4294,13 +4294,41 @@ function exportSVG() {
 
       // legend below map (render from current legend DOM so all layers/symbol types are included)
       if (legendEl && legendEl.children && legendEl.children.length) {
+        const measureCanvas = document.createElement('canvas');
+        const measureCtx = measureCanvas.getContext('2d');
         const legendGroup = document.createElementNS(svgNS, "g");
         const legendRect = legendEl.getBoundingClientRect();
+        const blocksForMeasure = Array.from(legendEl.querySelectorAll('.legend-block'));
+        const symSize = Math.max(8, Math.round(12 * scale));
+        const labelOffset = symSize + Math.round(6 * scale);
+        const pad = Math.round(8 * scale);
+        const fontSize = Math.max(10, Math.round(12 * scale));
+        const headerFont = `600 ${fontSize}px Segoe UI, sans-serif`;
+        const rowFont = `${fontSize}px Segoe UI, sans-serif`;
+        let measuredLegendWidth = 0;
+        blocksForMeasure.forEach((block) => {
+          const blockHeader = block.querySelector('.legend-header');
+          if (blockHeader) {
+            const txt = safeText(blockHeader) || "Legend";
+            const w = measureCtx ? Math.ceil((measureCtx.font = headerFont, measureCtx.measureText(txt).width)) : Math.round(txt.length * fontSize * 0.6);
+            measuredLegendWidth = Math.max(measuredLegendWidth, w + (pad * 2));
+          }
+          const rowsM = Array.from(block.querySelectorAll('.legend-row'));
+          rowsM.forEach((row) => {
+            const lblEl = row.querySelector('span');
+            const lbl = safeText(lblEl);
+            const w = measureCtx ? Math.ceil((measureCtx.font = rowFont, measureCtx.measureText(lbl).width)) : Math.round(lbl.length * fontSize * 0.58);
+            measuredLegendWidth = Math.max(measuredLegendWidth, labelOffset + w + (pad * 2));
+          });
+        });
         const estimatedLegendWidth = Math.max(
           Math.round(180 * scale),
           Math.min(
             usedCanvasWidth,
-            Math.round((legendRect.width || 260) * scale)
+            Math.max(
+              Math.round((legendRect.width || 260) * scale),
+              measuredLegendWidth
+            )
           )
         );
         const legendX = Math.max(
@@ -4308,8 +4336,6 @@ function exportSVG() {
           Math.round((totalWidthPx - estimatedLegendWidth) / 2)
         );
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
-        const symSize = Math.max(8, Math.round(12 * scale));
-        const fontSize = Math.max(10, Math.round(12 * scale));
         const rowGap = Math.max(3, Math.round(5 * scale));
         const blockGap = Math.max(6, Math.round(8 * scale));
 
