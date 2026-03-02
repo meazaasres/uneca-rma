@@ -4292,10 +4292,21 @@ function exportSVG() {
         svg.appendChild(sbTextEl);
       }
 
-            // legend below map (render from current legend DOM so all layers/symbol types are included)
+      // legend below map (render from current legend DOM so all layers/symbol types are included)
       if (legendEl && legendEl.children && legendEl.children.length) {
         const legendGroup = document.createElementNS(svgNS, "g");
-        const legendX = contentOffsetXPx + marginPx;
+        const legendRect = legendEl.getBoundingClientRect();
+        const estimatedLegendWidth = Math.max(
+          Math.round(180 * scale),
+          Math.min(
+            usedCanvasWidth,
+            Math.round((legendRect.width || 260) * scale)
+          )
+        );
+        const legendX = Math.max(
+          contentOffsetXPx + marginPx,
+          Math.round((totalWidthPx - estimatedLegendWidth) / 2)
+        );
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
         const symSize = Math.max(8, Math.round(12 * scale));
         const fontSize = Math.max(10, Math.round(12 * scale));
