@@ -4,6 +4,8 @@ const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
+const SCALE_BAR_OFFSET_X_PX = 23;
+const SCALE_BAR_OFFSET_Y_PX = 7;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
@@ -57,7 +59,6 @@ if (IS_FRAMED_CONTEXT) {
 }
 // --- Helpers ---
 let dynamicSheet = null;
-let dynamicRuleIds = new Map();
 let dynamicStyleSeq = 0;
 
 function initDynamicSheet() {
@@ -91,14 +92,18 @@ function upsertDynamicRule(el, declarations) {
   const id = ensureDynamicRuleId(el);
   const selector = `[data-dyn-id="${id}"]`;
   const cssText = `${selector}{${declarations}}`;
-  const existing = dynamicRuleIds.get(id);
   try {
-    if (existing != null && sheet.cssRules && sheet.cssRules[existing]) {
-      sheet.deleteRule(existing);
+    if (sheet.cssRules && sheet.cssRules.length) {
+      for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
+        const rule = sheet.cssRules[i];
+        if (rule && rule.selectorText === selector) {
+          sheet.deleteRule(i);
+          break;
+        }
+      }
     }
     const idx = sheet.cssRules ? sheet.cssRules.length : 0;
     sheet.insertRule(cssText, idx);
-    dynamicRuleIds.set(id, idx);
   } catch (e) {
     console.warn("Failed to update dynamic CSS rule:", e);
   }
@@ -566,6 +571,9 @@ function ensureBaseLayerListedLastInControl() {
 function showRow(id) {
   const el = document.getElementById(id);
   if (el) {
+    el.classList.add("force-show");
+    el.classList.remove("force-hide");
+    el.style.setProperty("display", "block", "important");
     setDynamicStyle(el, { display: "block" });
   } else {
     console.warn(`showRow: element not found: ${id}`);
@@ -575,6 +583,9 @@ function showRow(id) {
 function hideRow(id) {
   const el = document.getElementById(id);
   if (el) {
+    el.classList.remove("force-show");
+    el.classList.add("force-hide");
+    el.style.setProperty("display", "none", "important");
     setDynamicStyle(el, { display: "none" });
   } else {
     console.warn(`hideRow: element not found: ${id}`);
@@ -759,14 +770,12 @@ function isAllowedRemoteContentType(ext, contentType) {
     "application/json",
     "application/geo+json",
     "application/vnd.geo+json",
-    "text/json",
-    "text/plain" // common misconfigured static hosting for JSON
+    "text/json"
   ]);
   const CSV_TYPES = new Set([
     "text/csv",
     "application/csv",
-    "application/vnd.ms-excel",
-    "text/plain" // common misconfigured static hosting for CSV
+    "application/vnd.ms-excel"
   ]);
   if (!ct) return false;
   if (ext === ".csv") return CSV_TYPES.has(ct);
@@ -1726,6 +1735,42 @@ const ExactScaleControl = L.Control.extend({
 const scaleControl = new ExactScaleControl({ widthPx: 160 });
 map.addControl(scaleControl);
 
+function placeScaleBarOnMapBottom(control) {
+  if (!control || typeof control.getContainer !== "function") return;
+  const el = control.getContainer();
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
+  if (!el) return;
+  if (mapEl && el.parentElement !== mapEl) {
+    mapEl.appendChild(el);
+  }
+  el.classList.remove("fixed-page-scale-control");
+  el.classList.add("map-bottom-scale-control");
+  setDynamicStyle(el, {
+    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
+    right: "auto",
+    top: "auto",
+    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
+  });
+}
+
+function ensureScaleBarPinnedToMapBottom() {
+  if (!scaleControl || typeof scaleControl.getContainer !== "function") return;
+  const el = scaleControl.getContainer();
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
+  if (!el) return;
+  if (mapEl && el.parentElement !== mapEl) {
+    mapEl.appendChild(el);
+  }
+  el.classList.remove("fixed-page-scale-control");
+  el.classList.add("map-bottom-scale-control");
+  setDynamicStyle(el, {
+    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
+    right: "auto",
+    top: "auto",
+    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
+  });
+}
+
 // North arrow
 const NorthArrowControl = L.Control.extend({
   options: { position: 'topright' },
@@ -1744,7 +1789,7 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 5, 20));
+placeScaleBarOnMapBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
   const pos = getTopRightPosition(el, mapEl, 12);
   return { left: pos.left, top: pos.top + 30 };
@@ -1976,6 +2021,7 @@ function runMapUiReflowPasses() {
         if (scaleControl && typeof scaleControl._update === "function") {
           scaleControl._update();
         }
+        ensureScaleBarPinnedToMapBottom();
         positionDisclaimer();
         repositionDraggableControls();
       }, 40);
@@ -2001,6 +2047,7 @@ window.addEventListener('load', () => {
   setTimeout(resetAllMapUiPositions, 300);
   setTimeout(initDisclaimerDrag, 350);
   setTimeout(repositionDraggableControls, 360);
+  setTimeout(ensureScaleBarPinnedToMapBottom, 380);
   queueMapUiReflow();
 });
 window.addEventListener('resize', queueMapUiReflow);
@@ -2292,7 +2339,7 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
   reorderLayersControlUI();
   applyLayerStackOrder();
   refreshLayerSelector();
-  setActiveLayer(safeName);
+  await setActiveLayer(safeName);
   initializeMapTitleFromLayer(safeName);
 
   return safeName;
@@ -2329,6 +2376,7 @@ async function importFile(file) {
   }
 
   showLoading("Loading data from file...");
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
     let geojson;
     if (ext === ".zip") {
@@ -2354,6 +2402,7 @@ async function importUrl(rawUrl) {
   if (!rawUrl) throw new Error("Enter a valid URL");
 
   showLoading("Loading data from URL...");
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
     const { parsed, ext } = validateImportUrl(rawUrl);
     const fetched = await fetchWithLimits(parsed.href);
@@ -2644,20 +2693,36 @@ async function setActiveLayer(name) {
   layerGroup  = obj.layerGroup;
   currentAttribute = null;
 
-  if (geojsonData && geojsonData.type === "FeatureCollection") {
-    await populateFilterControls(geojsonData);
-    if (currentLayerName !== targetLayerName) return;
-    populateAttributeList(geojsonData);
-    updatePointSizeControl();
-    updateLineWidthControl();
-    updateClassificationOptions();
-    // Do not force classification; apply only if attribute already selected
-    if (currentAttribute) applyClassification();
-    else renderDefaultFilteredLayer();
+  try {
+    if (geojsonData && geojsonData.type === "FeatureCollection") {
+      await populateFilterControls(geojsonData);
+      if (currentLayerName !== targetLayerName) return;
+      populateAttributeList(geojsonData);
+      updatePointSizeControl();
+      updateLineWidthControl();
+      updateClassificationOptions();
+      // Do not force classification; apply only if attribute already selected
+      if (currentAttribute) applyClassification();
+      else renderDefaultFilteredLayer();
+    }
+  } catch (e) {
+    console.error("Layer activation UI failed; applying safe fallback.", e);
+    try {
+      populateAttributeList(geojsonData || { type: "FeatureCollection", features: [] });
+      updatePointSizeControl();
+      updateLineWidthControl();
+      updateClassificationOptions();
+      renderDefaultFilteredLayer();
+    } catch (inner) {
+      console.error("Layer activation fallback also failed.", inner);
+    }
   }
 
   const sel = document.getElementById('layer-select');
-  if (sel) sel.value = name;
+  if (sel) {
+    sel.value = name;
+    showRow('layer-select-col');
+  }
 }
 //Attribute Population, Controls, and Classification Options
 // --- Populate attribute dropdown ---
@@ -3565,10 +3630,10 @@ window.addEventListener('load', resetInitialScrollPositions);
     loader.appendChild(spinner);
     loader.appendChild(text);
     document.body.appendChild(loader);
-    } else {
-    loader.querySelector("div:last-child").textContent = msg;
-    setDynamicStyle(loader, { display: "flex" });
     }
+    const label = loader.querySelector("div:last-child");
+    if (label) label.textContent = msg;
+    setDynamicStyle(loader, { display: "flex" });
     }
 
     function hideLoading() {
