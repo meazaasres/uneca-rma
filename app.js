@@ -614,6 +614,10 @@ function formatLegendClassValue(val) {
   return rounded.toFixed(1);
 }
 
+function categoryKey(val) {
+  return `${typeof val}::${String(val)}`;
+}
+
 function norm(v) {
   return String(v == null ? "" : v).trim().toLowerCase();
 }
@@ -2882,10 +2886,39 @@ function applyClassification() {
 
   // --- Categorical classification ---
   if (method === 'unique') {
-    const uniques = [...new Set(vals)];
-    const cols = (categoricalUserColors && categoricalUserColors.length === uniques.length)
-      ? categoricalUserColors.slice()
-      : generateColorPalette(uniques.length);
+    const sourceUniques = [...new Set(vals)];
+    const state = overlayData[currentLayerName] || null;
+    const priorVals = Array.isArray(state?.vals) ? state.vals.slice() : null;
+    const priorCols = Array.isArray(state?.cols) ? state.cols.slice() : null;
+    const sourceKeys = new Set(sourceUniques.map(categoryKey));
+    const priorKeys = priorVals ? new Set(priorVals.map(categoryKey)) : null;
+    const canReusePriorOrder = !!(
+      priorVals &&
+      priorVals.length === sourceUniques.length &&
+      priorKeys &&
+      priorKeys.size === sourceKeys.size &&
+      Array.from(sourceKeys).every((k) => priorKeys.has(k))
+    );
+    const uniques = canReusePriorOrder ? priorVals.slice() : sourceUniques.slice();
+    let cols;
+    if (priorVals && priorCols && priorVals.length === priorCols.length) {
+      const colorByKey = new Map();
+      priorVals.forEach((v, idx) => {
+        const col = priorCols[idx];
+        if (/^#[0-9A-Fa-f]{6}$/.test(col)) colorByKey.set(categoryKey(v), col);
+      });
+      const fallback = generateColorPalette(uniques.length);
+      cols = uniques.map((u, i) => {
+        const mapped = colorByKey.get(categoryKey(u));
+        if (mapped) return mapped;
+        if (categoricalUserColors && /^#[0-9A-Fa-f]{6}$/.test(categoricalUserColors[i])) return categoricalUserColors[i];
+        return fallback[i] || '#ccc';
+      });
+    } else {
+      cols = (categoricalUserColors && categoricalUserColors.length === uniques.length)
+        ? categoricalUserColors.slice()
+        : generateColorPalette(uniques.length);
+    }
     categoricalUserColors = cols.slice();
 
     L.geoJSON(filteredGeojson, {
@@ -3072,7 +3105,7 @@ function updateClassificationTableCategorical(uniques, cols) {
   tbody.textContent = "";
 
   const headerRow = document.createElement('tr');
-  ["Category", "Color"].forEach(label => {
+  ["Category", "Color", "Order"].forEach(label => {
     const th = document.createElement('th');
     th.textContent = label;
     headerRow.appendChild(th);
@@ -3121,9 +3154,56 @@ function updateClassificationTableCategorical(uniques, cols) {
     });
     tdCol.append(inputCol);
 
-    tr.append(tdC, tdCol);
+    const tdAct = document.createElement('td');
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button';
+    btnUp.className = 'layer-reorder-btn';
+    btnUp.textContent = '↑';
+    btnUp.setAttribute('aria-label', `Move category ${i + 1} up`);
+    btnUp.disabled = i === 0;
+    btnUp.addEventListener('click', () => {
+      reorderCategoricalClasses(i, i - 1);
+    });
+
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button';
+    btnDown.className = 'layer-reorder-btn';
+    btnDown.textContent = '↓';
+    btnDown.setAttribute('aria-label', `Move category ${i + 1} down`);
+    btnDown.disabled = i === uniques.length - 1;
+    btnDown.addEventListener('click', () => {
+      reorderCategoricalClasses(i, i + 1);
+    });
+
+    tdAct.append(btnUp, btnDown);
+
+    tr.append(tdC, tdCol, tdAct);
     tbody.append(tr);
   });
+}
+
+function reorderCategoricalClasses(fromIdx, toIdx) {
+  const state = overlayData[currentLayerName] || null;
+  if (!state || !Array.isArray(state.vals) || !Array.isArray(state.cols)) return;
+  const len = state.vals.length;
+  if (!Number.isInteger(fromIdx) || !Number.isInteger(toIdx)) return;
+  if (fromIdx < 0 || toIdx < 0 || fromIdx >= len || toIdx >= len || fromIdx === toIdx) return;
+
+  const move = (arr) => {
+    if (!Array.isArray(arr) || arr.length !== len) return arr;
+    const copy = arr.slice();
+    const [item] = copy.splice(fromIdx, 1);
+    copy.splice(toIdx, 0, item);
+    return copy;
+  };
+
+  state.vals = move(state.vals);
+  state.cols = move(state.cols);
+  if (Array.isArray(state.legendLabels) && state.legendLabels.length === len) {
+    state.legendLabels = move(state.legendLabels);
+  }
+  categoricalUserColors = Array.isArray(state.cols) ? state.cols.slice() : null;
+  applyClassification();
 }
 
 function updateCustomBreaks() {
