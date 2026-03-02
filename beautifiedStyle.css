@@ -56,6 +56,15 @@
   font-family: "Segoe UI", sans-serif !important;
 }
 
+/* Map feature popup typography */
+.leaflet-popup-content,
+.leaflet-popup-content-wrapper,
+.popup-prewrap {
+  font-family: "Segoe UI", sans-serif !important;
+  font-size: 10px !important;
+  line-height: 1.25;
+}
+
 .country-filter-list {
   max-height: 140px;
   overflow-y: auto;
