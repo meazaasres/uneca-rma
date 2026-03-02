@@ -1726,32 +1726,36 @@ const ExactScaleControl = L.Control.extend({
 const scaleControl = new ExactScaleControl({ widthPx: 160 });
 map.addControl(scaleControl);
 
-function placeScaleBarAtPageBottom(control) {
+function placeScaleBarOnMapBottom(control) {
   if (!control || typeof control.getContainer !== "function") return;
   const el = control.getContainer();
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
   if (!el) return;
-  if (document.body && el.parentElement !== document.body) {
-    document.body.appendChild(el);
+  if (mapEl && el.parentElement !== mapEl) {
+    mapEl.appendChild(el);
   }
-  el.classList.add("fixed-page-scale-control");
+  el.classList.remove("fixed-page-scale-control");
+  el.classList.add("map-bottom-scale-control");
   setDynamicStyle(el, {
-    left: "calc(50% + 5px)",
+    left: "calc(50% + 8px)",
     right: "auto",
     top: "auto",
     bottom: "5px"
   });
 }
 
-function ensureScaleBarPinnedToPageBottom() {
+function ensureScaleBarPinnedToMapBottom() {
   if (!scaleControl || typeof scaleControl.getContainer !== "function") return;
   const el = scaleControl.getContainer();
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
   if (!el) return;
-  if (document.body && el.parentElement !== document.body) {
-    document.body.appendChild(el);
+  if (mapEl && el.parentElement !== mapEl) {
+    mapEl.appendChild(el);
   }
-  el.classList.add("fixed-page-scale-control");
+  el.classList.remove("fixed-page-scale-control");
+  el.classList.add("map-bottom-scale-control");
   setDynamicStyle(el, {
-    left: "calc(50% + 5px)",
+    left: "calc(50% + 8px)",
     right: "auto",
     top: "auto",
     bottom: "5px"
@@ -1776,7 +1780,7 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-placeScaleBarAtPageBottom(scaleControl);
+placeScaleBarOnMapBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
   const pos = getTopRightPosition(el, mapEl, 12);
   return { left: pos.left, top: pos.top + 30 };
@@ -2008,7 +2012,7 @@ function runMapUiReflowPasses() {
         if (scaleControl && typeof scaleControl._update === "function") {
           scaleControl._update();
         }
-        ensureScaleBarPinnedToPageBottom();
+        ensureScaleBarPinnedToMapBottom();
         positionDisclaimer();
         repositionDraggableControls();
       }, 40);
@@ -2034,7 +2038,7 @@ window.addEventListener('load', () => {
   setTimeout(resetAllMapUiPositions, 300);
   setTimeout(initDisclaimerDrag, 350);
   setTimeout(repositionDraggableControls, 360);
-  setTimeout(ensureScaleBarPinnedToPageBottom, 380);
+  setTimeout(ensureScaleBarPinnedToMapBottom, 380);
   queueMapUiReflow();
 });
 window.addEventListener('resize', queueMapUiReflow);
