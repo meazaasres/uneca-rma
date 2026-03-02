@@ -1459,9 +1459,9 @@ function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
     map.fitBounds(INITIAL_HOME_BOUNDS, {
       animate: false,
-      // Reduce left/right empty margins while keeping top/bottom framing stable.
-      paddingTopLeft: [8, 10],
-      paddingBottomRight: [8, 10],
+      // Reduce left/right empty margins by ~50px each side, keep vertical framing stable.
+      paddingTopLeft: [-42, 10],
+      paddingBottomRight: [-42, 10],
       maxZoom: 3.6
     });
   } else {
