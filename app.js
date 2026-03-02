@@ -3993,8 +3993,8 @@ function exportSVG() {
       const usedCanvasWidth  = cropW;
       const usedCanvasHeight = cropH;
 
-      const contentOffsetXPx = 0;
-      const totalWidthPx  = usedCanvasWidth;
+      const contentOffsetXPx = marginPx;
+      const totalWidthPx  = usedCanvasWidth + (contentOffsetXPx * 2);
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
 
       const svg = document.createElementNS(svgNS, "svg");
