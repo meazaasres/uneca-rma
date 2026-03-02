@@ -3326,10 +3326,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cssH = mapEl ? mapEl.clientHeight : mapCanvas.height;
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
-      const expectedW = Math.round(cssW * rawScaleX);
-      const expectedH = Math.round(cssH * rawScaleY);
-      const cropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
-      const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
+      const cropW = Math.max(1, mapCanvas.width);
+      const cropH = Math.max(1, mapCanvas.height);
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
@@ -3343,10 +3341,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
-      // Prevent transform-based offscreen positioning from shifting raster capture.
+      // Keep wrapper off-screen without extreme offsets to avoid html2canvas drift.
       wrapper.style.transform = 'none';
-      wrapper.style.position = 'fixed';
-      wrapper.style.left = '-100000px';
+      wrapper.style.position = 'absolute';
+      wrapper.style.left = '-9999px';
       wrapper.style.top = '0';
       wrapper.style.zIndex = '-1';
       document.body.appendChild(wrapper);

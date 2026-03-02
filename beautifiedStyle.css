@@ -15,7 +15,7 @@
 /* Explicit upload area font alignment */
 #sidebar label[for="file-upload"],
 #custom-file-button {
-  font-family: "Segoe UI", sans-serif;
+  font-family: "Segoe UI", sans-serif !important;
 }
 
 /* Left sidebar typography (smaller and cleaner) */
