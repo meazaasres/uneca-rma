@@ -1737,10 +1737,10 @@ function placeScaleBarOnMapBottom(control) {
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
   setDynamicStyle(el, {
-    left: "calc(50% + 11px)",
+    left: "calc(50% + 13px)",
     right: "auto",
     top: "auto",
-    bottom: "5px"
+    bottom: "7px"
   });
 }
 
@@ -1755,10 +1755,10 @@ function ensureScaleBarPinnedToMapBottom() {
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
   setDynamicStyle(el, {
-    left: "calc(50% + 11px)",
+    left: "calc(50% + 13px)",
     right: "auto",
     top: "auto",
-    bottom: "5px"
+    bottom: "7px"
   });
 }
 

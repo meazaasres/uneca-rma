@@ -499,8 +499,8 @@ footer {
 
 .map-bottom-scale-control {
   position: absolute !important;
-  left: calc(50% + 11px) !important;
-  bottom: 5px !important;
+  left: calc(50% + 13px) !important;
+  bottom: 7px !important;
   transform: translateX(-50%);
   z-index: 1200;
   margin: 0 !important;
