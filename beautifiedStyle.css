@@ -1,11 +1,15 @@
 /* === Beautified Overrides === */
-/* Shared UI typography (browser-safe stack) */
+/* Shared panel typography aligned with header title style */
 #sidebar,
+#sidebar *,
 #right-sidebar,
+#right-sidebar *,
 #layers-container,
+#layers-container *,
 #legend-items,
-.leaflet-control-layers {
-  font-family: "Segoe UI", "Trebuchet MS", Tahoma, Verdana, Arial, sans-serif;
+.leaflet-control-layers,
+.leaflet-control-layers * {
+  font-family: "Segoe UI", sans-serif;
 }
 
 /* Left sidebar typography (smaller and cleaner) */
