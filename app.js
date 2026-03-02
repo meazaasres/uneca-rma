@@ -3030,21 +3030,9 @@ function updateClassificationTableNumeric(brks, cols) {
     tdC.textContent = 'Class ' + (i + 1);
 
     const tdR = document.createElement('td');
-    tdR.contentEditable = true;
+    // Numeric class ranges are read-only to prevent accidental/unsafe edits.
+    tdR.contentEditable = 'false';
     tdR.textContent = `${formatLegendClassValue(brks[i])} - ${formatLegendClassValue(brks[i + 1])}`;
-    tdR.addEventListener('blur', () => {
-      const rangeText = tdR.textContent.replace(/[–—]/g, '-').trim();
-      const parts = rangeText.split('-').map(p => parseFloat(p.trim()));
-      if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) {
-        tdR.textContent = `${formatLegendClassValue(brks[i])} - ${formatLegendClassValue(brks[i + 1])}`;
-        console.warn("Invalid range reset:", rangeText);
-      } else {
-        const start = roundToOneDecimal(parts[0]);
-        const end = roundToOneDecimal(parts[1]);
-        tdR.textContent = `${formatLegendClassValue(start)} - ${formatLegendClassValue(end)}`;
-        updateCustomBreaks();
-      }
-    });
 
     const tdCol = document.createElement('td');
     const inputCol = document.createElement('input');
@@ -3083,7 +3071,22 @@ function updateClassificationTableCategorical(uniques, cols) {
     const tr = document.createElement('tr');
 
     const tdC = document.createElement('td');
-    tdC.textContent = u;
+    // Categorical labels are editable, but sanitized to plain text.
+    const defaultLabel = sanitizePlainText(u, "Category");
+    tdC.contentEditable = 'true';
+    tdC.setAttribute('role', 'textbox');
+    tdC.setAttribute('aria-label', `Category label ${i + 1}`);
+    tdC.spellcheck = false;
+    tdC.textContent = defaultLabel;
+    tdC.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      insertTextAtCaret(tdC, text);
+    });
+    tdC.addEventListener('blur', () => {
+      const next = sanitizePlainText(tdC.textContent, defaultLabel);
+      tdC.textContent = next;
+    });
 
     const tdCol = document.createElement('td');
     const inputCol = document.createElement('input');
