@@ -1763,13 +1763,26 @@ const scaleControl = new ExactScaleControl({ widthPx: 160 });
 map.addControl(scaleControl);
 
 function placeScaleBarOnMapBottom(control) {
-  // Backward-compatible alias kept for existing call sites.
-  ensureScaleBarPinnedToMapBottom(control);
-}
-
-function ensureScaleBarPinnedToMapBottom(control = scaleControl) {
   if (!control || typeof control.getContainer !== "function") return;
   const el = control.getContainer();
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
+  if (!el) return;
+  if (mapEl && el.parentElement !== mapEl) {
+    mapEl.appendChild(el);
+  }
+  el.classList.remove("fixed-page-scale-control");
+  el.classList.add("map-bottom-scale-control");
+  setDynamicStyle(el, {
+    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
+    right: "auto",
+    top: "auto",
+    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
+  });
+}
+
+function ensureScaleBarPinnedToMapBottom() {
+  if (!scaleControl || typeof scaleControl.getContainer !== "function") return;
+  const el = scaleControl.getContainer();
   const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
   if (!el) return;
   if (mapEl && el.parentElement !== mapEl) {
@@ -2054,7 +2067,6 @@ function queueMapUiReflow() {
 
 // run initially and on relevant events
 window.addEventListener('load', () => {
-  resetInitialScrollPositions();
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
@@ -3194,6 +3206,37 @@ function reorderCategoricalClasses(fromIdx, toIdx) {
   applyClassification();
 }
 
+function updateCustomBreaks() {
+  const rows = document.querySelectorAll('#classification-table tr');
+  const newBreaks = [];
+  const newColors = [];
+
+  rows.forEach((row, i) => {
+    if (!row.cells[1]) return;
+    const rangeText = row.cells[1].textContent.replace(/[–—]/g, '-').trim();
+    const parts = rangeText.split('-').map(p => parseFloat(p.trim()));
+    if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return;
+    newBreaks.push(roundToOneDecimal(parts[0]));
+    const colorInput = row.querySelector('input[type="color"]');
+    newColors.push(colorInput ? colorInput.value : '#ccc');
+  });
+
+  const lastCell = document.querySelector('#classification-table tr:last-child td:nth-child(2)');
+  if (lastCell) {
+    const lastRange = lastCell.textContent.replace(/[–—]/g, '-').trim();
+    const parts = lastRange.split('-').map(p => parseFloat(p.trim()));
+    if (parts.length === 2 && !isNaN(parts[1])) newBreaks.push(roundToOneDecimal(parts[1]));
+  }
+
+  if (newBreaks.length >= 2) {
+    if (overlayData[currentLayerName]) {
+      overlayData[currentLayerName].vals = newBreaks;
+      overlayData[currentLayerName].cols = newColors;
+      overlayData[currentLayerName].isNumeric = true;
+    }
+    applyClassification();
+  }
+}
 //UI Event Wiring (live updates before/after classification)
 // Wire up control inputs so changes apply before and after classification
 (function wireControls() {
@@ -3413,6 +3456,8 @@ window.addEventListener('DOMContentLoaded', () => {
   resetInitialScrollPositions();
 });
 
+window.addEventListener('load', resetInitialScrollPositions);
+
         // --- Secure Export Helper ---
     function compositeExportElement(cb) {
     leafletImage(map, (err, mapCanvas) => {
@@ -3430,10 +3475,8 @@ window.addEventListener('DOMContentLoaded', () => {
       const cssH = mapEl ? mapEl.clientHeight : mapCanvas.height;
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
-      const expectedW = Math.round(cssW * rawScaleX);
-      const expectedH = Math.round(cssH * rawScaleY);
-      const cropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
-      const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
+      const cropW = Math.max(1, mapCanvas.width);
+      const cropH = Math.max(1, mapCanvas.height);
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
@@ -3447,10 +3490,10 @@ window.addEventListener('DOMContentLoaded', () => {
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
-      // Stable off-screen position for html2canvas raster alignment.
+      // Keep wrapper off-screen without extreme offsets to avoid html2canvas drift.
       wrapper.style.transform = 'none';
-      wrapper.style.position = 'fixed';
-      wrapper.style.left = '-100000px';
+      wrapper.style.position = 'absolute';
+      wrapper.style.left = '-9999px';
       wrapper.style.top = '0';
       wrapper.style.zIndex = '-1';
       document.body.appendChild(wrapper);
@@ -3465,9 +3508,6 @@ window.addEventListener('DOMContentLoaded', () => {
         t.style.fontSize = '20px';
         t.style.fontWeight = '600';
         t.style.margin = '0 0 8px 0';
-        t.style.textAlign = 'center';
-        t.style.width = '100%';
-        t.style.display = 'block';
         wrapper.appendChild(t);
       }
 
@@ -3494,78 +3534,22 @@ window.addEventListener('DOMContentLoaded', () => {
       img.alt = "Exported map image";             // accessibility
       mapWrapper.appendChild(img);
 
-      function copyVisualStyles(sourceNode, targetNode) {
-        if (!sourceNode || !targetNode) return;
-        const cs = window.getComputedStyle(sourceNode);
-        const props = [
-          'display', 'visibility', 'opacity',
-          'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
-          'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
-          'boxShadow', 'outline',
-          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
-          'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
-        ];
-        props.forEach((prop) => {
-          try { targetNode.style[prop] = cs[prop]; } catch (e) {}
-        });
-      }
-
-      function copyVisualStylesRecursive(sourceNode, targetNode) {
-        copyVisualStyles(sourceNode, targetNode);
-        const sourceChildren = Array.from(sourceNode.children || []);
-        const targetChildren = Array.from(targetNode.children || []);
-        const len = Math.min(sourceChildren.length, targetChildren.length);
-        for (let i = 0; i < len; i++) {
-          copyVisualStylesRecursive(sourceChildren[i], targetChildren[i]);
-        }
-      }
-
-      function getElementMapOffset(sourceEl, mapContainerEl) {
-        let x = 0;
-        let y = 0;
-        let node = sourceEl;
-        while (node && node !== mapContainerEl) {
-          x += node.offsetLeft || 0;
-          y += node.offsetTop || 0;
-          node = node.offsetParent;
-        }
-        if (node === mapContainerEl) {
-          return { left: x, top: y };
-        }
-        const mapRect = mapContainerEl.getBoundingClientRect();
-        const srcRect = sourceEl.getBoundingClientRect();
-        return {
-          left: srcRect.left - mapRect.left,
-          top: srcRect.top - mapRect.top
-        };
-      }
-
-      function getControlAnchorPosition(sourceEl, mapContainerEl) {
-        if (sourceEl && sourceEl.classList && sourceEl.classList.contains('draggable-map-control')) {
-          const leftInline = parseFloat(sourceEl.dataset.leftPx || "");
-          const topInline = parseFloat(sourceEl.dataset.topPx || "");
-          if (Number.isFinite(leftInline) && Number.isFinite(topInline)) {
-            return { left: leftInline, top: topInline };
-          }
-        }
-        return getElementMapOffset(sourceEl, mapContainerEl);
-      }
-
       function cloneMapOverlayToExport(selector, className) {
         const source = document.querySelector(selector);
         if (!source || !mapEl) return;
+        const mapRect = mapEl.getBoundingClientRect();
         const srcRect = source.getBoundingClientRect();
         if (!srcRect || srcRect.width <= 0 || srcRect.height <= 0) return;
-        const srcPos = getControlAnchorPosition(source, mapEl);
 
         const clone = source.cloneNode(true);
         if (className) clone.classList.add(className);
-        copyVisualStylesRecursive(source, clone);
 
-        const exportLeft = Math.max(0, srcPos.left * rawScaleX);
-        const exportTop = Math.max(0, srcPos.top * rawScaleY);
-        const exportWidth = Math.max(1, srcRect.width * rawScaleX);
-        const exportHeight = Math.max(1, srcRect.height * rawScaleY);
+        const relLeftCss = srcRect.left - mapRect.left;
+        const relTopCss = srcRect.top - mapRect.top;
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
+        const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
 
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
@@ -3600,8 +3584,8 @@ window.addEventListener('DOMContentLoaded', () => {
         clone.style.bottom = 'auto';
         clone.style.width = 'fit-content';
         clone.style.maxWidth = exportWidth + 'px';
-        clone.style.maxHeight = 'calc(1.25em * 6)';
-        clone.style.overflow = 'hidden';
+        clone.style.maxHeight = 'none';
+        clone.style.overflow = 'visible';
         clone.style.whiteSpace = 'normal';
         clone.style.lineHeight = '1.25';
         clone.style.fontSize = '10px';
