@@ -3475,8 +3475,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cssH = mapEl ? mapEl.clientHeight : mapCanvas.height;
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
-      const cropW = Math.max(1, mapCanvas.width);
-      const cropH = Math.max(1, mapCanvas.height);
+      const expectedW = Math.round(cssW * rawScaleX);
+      const expectedH = Math.round(cssH * rawScaleY);
+      const cropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
+      const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
@@ -3519,8 +3521,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       mapWrapper.className = 'export-map-wrapper';
       mapWrapper.style.width = W + 'px';
       mapWrapper.style.height = H + 'px';
-      mapWrapper.style.position = 'relative';
-      mapWrapper.style.overflow = 'hidden';
       wrapper.appendChild(mapWrapper);
 
       // Add export-specific styles to normalize title/disclaimer for canvas export
@@ -3593,12 +3593,7 @@ window.addEventListener('load', resetInitialScrollPositions);
             return { left: leftInline, top: topInline };
           }
         }
-        const mapRect = mapContainerEl.getBoundingClientRect();
-        const srcRect = sourceEl.getBoundingClientRect();
-        return {
-          left: srcRect.left - mapRect.left,
-          top: srcRect.top - mapRect.top
-        };
+        return getElementMapOffset(sourceEl, mapContainerEl);
       }
 
       function cloneMapOverlayToExport(selector, className) {
@@ -3625,8 +3620,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.width = exportWidth + 'px';
         clone.style.height = exportHeight + 'px';
         clone.style.margin = '0';
-        const sourceTransform = window.getComputedStyle(source).transform;
-        clone.style.transform = sourceTransform && sourceTransform !== 'none' ? sourceTransform : 'none';
+        clone.style.transform = 'none';
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
         mapWrapper.appendChild(clone);
@@ -3669,7 +3663,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (legend) {
         const clone = legend.cloneNode(true);
         clone.className = 'export-legend-clone';
-        clone.style.marginTop = '10px';
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
         cloneSyms.forEach((sym, idx) => {
