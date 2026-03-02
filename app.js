@@ -1737,7 +1737,7 @@ function placeScaleBarOnMapBottom(control) {
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
   setDynamicStyle(el, {
-    left: "calc(50% + 8px)",
+    left: "calc(50% + 11px)",
     right: "auto",
     top: "auto",
     bottom: "5px"
@@ -1755,7 +1755,7 @@ function ensureScaleBarPinnedToMapBottom() {
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
   setDynamicStyle(el, {
-    left: "calc(50% + 8px)",
+    left: "calc(50% + 11px)",
     right: "auto",
     top: "auto",
     bottom: "5px"
