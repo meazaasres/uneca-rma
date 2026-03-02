@@ -1734,6 +1734,28 @@ function placeScaleBarAtPageBottom(control) {
     document.body.appendChild(el);
   }
   el.classList.add("fixed-page-scale-control");
+  setDynamicStyle(el, {
+    left: "50%",
+    right: "auto",
+    top: "auto",
+    bottom: "8px"
+  });
+}
+
+function ensureScaleBarPinnedToPageBottom() {
+  if (!scaleControl || typeof scaleControl.getContainer !== "function") return;
+  const el = scaleControl.getContainer();
+  if (!el) return;
+  if (document.body && el.parentElement !== document.body) {
+    document.body.appendChild(el);
+  }
+  el.classList.add("fixed-page-scale-control");
+  setDynamicStyle(el, {
+    left: "50%",
+    right: "auto",
+    top: "auto",
+    bottom: "8px"
+  });
 }
 
 // North arrow
@@ -1986,6 +2008,7 @@ function runMapUiReflowPasses() {
         if (scaleControl && typeof scaleControl._update === "function") {
           scaleControl._update();
         }
+        ensureScaleBarPinnedToPageBottom();
         positionDisclaimer();
         repositionDraggableControls();
       }, 40);
@@ -2011,6 +2034,7 @@ window.addEventListener('load', () => {
   setTimeout(resetAllMapUiPositions, 300);
   setTimeout(initDisclaimerDrag, 350);
   setTimeout(repositionDraggableControls, 360);
+  setTimeout(ensureScaleBarPinnedToPageBottom, 380);
   queueMapUiReflow();
 });
 window.addEventListener('resize', queueMapUiReflow);
