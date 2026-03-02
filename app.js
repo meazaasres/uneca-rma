@@ -1451,8 +1451,15 @@ L.Icon.Default.mergeOptions({
 });
 
 // --- Initialize Leaflet Map ---
+const mapRenderer = L.canvas({
+  padding: 0.5,
+  // Increase hit tolerance so feature popups remain clickable at lower zoom.
+  tolerance: 10
+});
+
 const map = L.map('map', {
   preferCanvas: true,
+  renderer: mapRenderer,
   attributionControl: true,
   zoomAnimation: false,
   fadeAnimation: false,
