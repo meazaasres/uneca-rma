@@ -1454,7 +1454,7 @@ L.Icon.Default.mergeOptions({
 const mapRenderer = L.canvas({
   padding: 0.5,
   // Increase hit tolerance so feature popups remain clickable at lower zoom.
-  tolerance: 10
+  tolerance: 18
 });
 
 const map = L.map('map', {
@@ -2228,7 +2228,9 @@ function defaultPoint(feature, latlng) {
     fillColor: '#ccc',
     color: '#000',
     weight: 1,
-    fillOpacity: 0.6
+    fillOpacity: 0.6,
+    interactive: true,
+    bubblingMouseEvents: false
   });
 }
 
@@ -2347,6 +2349,8 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
   const safeName = sanitizeName(rawName);
   const fg = L.featureGroup().addTo(map);
   geojsonLayer = L.geoJSON(geojson, {
+    interactive: true,
+    bubblingMouseEvents: false,
     style: defaultStyle,
     pointToLayer: defaultPoint,
     onEachFeature: bindFeaturePopup
@@ -2691,6 +2695,8 @@ function renderDefaultFilteredLayer() {
   }
 
   geojsonLayer = L.geoJSON(filtered, {
+    interactive: true,
+    bubblingMouseEvents: false,
     style: defaultStyle,
     pointToLayer: defaultPoint,
     onEachFeature: bindFeaturePopup
@@ -2875,6 +2881,8 @@ function applyClassification() {
     categoricalUserColors = cols.slice();
 
     L.geoJSON(filteredGeojson, {
+      interactive: true,
+      bubblingMouseEvents: false,
       style: f => {
         const idx = uniques.indexOf(f.properties?.[currentAttribute]);
         const col = cols[idx] || '#ccc';
@@ -2892,7 +2900,8 @@ function applyClassification() {
           color: '#000',
           weight: 1,
           fillOpacity: 0.6,
-
+          interactive: true,
+          bubblingMouseEvents: false
         });
       },
       onEachFeature: bindFeaturePopup
@@ -2951,6 +2960,8 @@ function applyClassification() {
     }
 
     L.geoJSON(filteredGeojson, {
+      interactive: true,
+      bubblingMouseEvents: false,
       style: f => {
         const col = colorForVal(f.properties?.[currentAttribute]);
         const t = f.geometry?.type || "";
@@ -2966,6 +2977,8 @@ function applyClassification() {
           color: '#000',
           weight: 1,
           fillOpacity: 0.6,
+          interactive: true,
+          bubblingMouseEvents: false
         });
       },
     onEachFeature: bindFeaturePopup
