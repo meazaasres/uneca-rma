@@ -3508,6 +3508,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         t.style.fontSize = '20px';
         t.style.fontWeight = '600';
         t.style.margin = '0 0 8px 0';
+        t.style.textAlign = 'center';
+        t.style.width = '100%';
+        t.style.display = 'block';
         wrapper.appendChild(t);
       }
 
@@ -3534,22 +3537,78 @@ window.addEventListener('load', resetInitialScrollPositions);
       img.alt = "Exported map image";             // accessibility
       mapWrapper.appendChild(img);
 
+      function copyVisualStyles(sourceNode, targetNode) {
+        if (!sourceNode || !targetNode) return;
+        const cs = window.getComputedStyle(sourceNode);
+        const props = [
+          'display', 'visibility', 'opacity',
+          'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
+          'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
+          'boxShadow', 'outline',
+          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
+          'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
+        ];
+        props.forEach((prop) => {
+          try { targetNode.style[prop] = cs[prop]; } catch (e) {}
+        });
+      }
+
+      function copyVisualStylesRecursive(sourceNode, targetNode) {
+        copyVisualStyles(sourceNode, targetNode);
+        const sourceChildren = Array.from(sourceNode.children || []);
+        const targetChildren = Array.from(targetNode.children || []);
+        const len = Math.min(sourceChildren.length, targetChildren.length);
+        for (let i = 0; i < len; i++) {
+          copyVisualStylesRecursive(sourceChildren[i], targetChildren[i]);
+        }
+      }
+
+      function getElementMapOffset(sourceEl, mapContainerEl) {
+        let x = 0;
+        let y = 0;
+        let node = sourceEl;
+        while (node && node !== mapContainerEl) {
+          x += node.offsetLeft || 0;
+          y += node.offsetTop || 0;
+          node = node.offsetParent;
+        }
+        if (node === mapContainerEl) {
+          return { left: x, top: y };
+        }
+        const mapRect = mapContainerEl.getBoundingClientRect();
+        const srcRect = sourceEl.getBoundingClientRect();
+        return {
+          left: srcRect.left - mapRect.left,
+          top: srcRect.top - mapRect.top
+        };
+      }
+
+      function getControlAnchorPosition(sourceEl, mapContainerEl) {
+        if (sourceEl && sourceEl.classList && sourceEl.classList.contains('draggable-map-control')) {
+          const leftInline = parseFloat(sourceEl.dataset.leftPx || "");
+          const topInline = parseFloat(sourceEl.dataset.topPx || "");
+          if (Number.isFinite(leftInline) && Number.isFinite(topInline)) {
+            return { left: leftInline, top: topInline };
+          }
+        }
+        return getElementMapOffset(sourceEl, mapContainerEl);
+      }
+
       function cloneMapOverlayToExport(selector, className) {
         const source = document.querySelector(selector);
         if (!source || !mapEl) return;
-        const mapRect = mapEl.getBoundingClientRect();
         const srcRect = source.getBoundingClientRect();
         if (!srcRect || srcRect.width <= 0 || srcRect.height <= 0) return;
+        const srcPos = getControlAnchorPosition(source, mapEl);
 
         const clone = source.cloneNode(true);
         if (className) clone.classList.add(className);
+        copyVisualStylesRecursive(source, clone);
 
-        const relLeftCss = srcRect.left - mapRect.left;
-        const relTopCss = srcRect.top - mapRect.top;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
-        const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
-        const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
+        const exportLeft = Math.max(0, srcPos.left * rawScaleX);
+        const exportTop = Math.max(0, srcPos.top * rawScaleY);
+        const exportWidth = Math.max(1, srcRect.width * rawScaleX);
+        const exportHeight = Math.max(1, srcRect.height * rawScaleY);
 
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
@@ -3584,8 +3643,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.bottom = 'auto';
         clone.style.width = 'fit-content';
         clone.style.maxWidth = exportWidth + 'px';
-        clone.style.maxHeight = 'none';
-        clone.style.overflow = 'visible';
+        clone.style.maxHeight = 'calc(1.25em * 6)';
+        clone.style.overflow = 'hidden';
         clone.style.whiteSpace = 'normal';
         clone.style.lineHeight = '1.25';
         clone.style.fontSize = '10px';
