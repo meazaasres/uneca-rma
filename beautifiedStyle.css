@@ -41,6 +41,21 @@
   font-family: "Segoe UI", sans-serif !important;
 }
 
+/* Classification controls + table font */
+#classification-type-col,
+#classification-type-col *,
+#num-classes-col,
+#num-classes-col *,
+#table-container,
+#table-container *,
+#classification-wrapper,
+#classification-wrapper *,
+#classification-table,
+#classification-table *,
+#btnToggleClassTable {
+  font-family: "Segoe UI", sans-serif !important;
+}
+
 .country-filter-list {
   max-height: 140px;
   overflow-y: auto;
