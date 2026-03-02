@@ -1735,10 +1735,10 @@ function placeScaleBarAtPageBottom(control) {
   }
   el.classList.add("fixed-page-scale-control");
   setDynamicStyle(el, {
-    left: "50%",
+    left: "calc(50% + 5px)",
     right: "auto",
     top: "auto",
-    bottom: "8px"
+    bottom: "5px"
   });
 }
 
@@ -1751,10 +1751,10 @@ function ensureScaleBarPinnedToPageBottom() {
   }
   el.classList.add("fixed-page-scale-control");
   setDynamicStyle(el, {
-    left: "50%",
+    left: "calc(50% + 5px)",
     right: "auto",
     top: "auto",
-    bottom: "8px"
+    bottom: "5px"
   });
 }
 
