@@ -598,6 +598,20 @@ function formatNumber(val, decimals = 2) {
   return num.toFixed(decimals);
 }
 
+function roundToOneDecimal(val) {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return NaN;
+  const rounded = Math.round(num * 10) / 10;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+function formatLegendClassValue(val) {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return String(val);
+  const rounded = roundToOneDecimal(num);
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 function norm(v) {
   return String(v == null ? "" : v).trim().toLowerCase();
 }
@@ -2148,7 +2162,7 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
 
   if (isNumeric) {
     for (let i = 0; i < vals.length - 1; i++) {
-      block.appendChild(makeRow(`${vals[i]} – ${vals[i + 1]}`, cols[i]));
+      block.appendChild(makeRow(`${formatLegendClassValue(vals[i])} – ${formatLegendClassValue(vals[i + 1])}`, cols[i]));
     }
   } else {
     vals.forEach((v, i) => block.appendChild(makeRow(v, cols[i])));
@@ -2905,7 +2919,7 @@ function applyClassification() {
       return;
     }
 
-    breaks = breaks.map(b => Number(formatNumber(b)));
+    breaks = breaks.map(b => roundToOneDecimal(b));
 
     const classCount = Math.max(1, breaks.length - 1);
     // 10-step sequential palette for numeric classes
@@ -2989,12 +3003,12 @@ function updateClassificationTableNumeric(brks, cols) {
 
     const tdR = document.createElement('td');
     tdR.contentEditable = true;
-    tdR.textContent = `${formatNumber(brks[i])} - ${formatNumber(brks[i + 1])}`;
+    tdR.textContent = `${formatLegendClassValue(brks[i])} - ${formatLegendClassValue(brks[i + 1])}`;
     tdR.addEventListener('blur', () => {
       const rangeText = tdR.textContent.replace(/[–—]/g, '-').trim();
       const parts = rangeText.split('-').map(p => parseFloat(p.trim()));
       if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) {
-        tdR.textContent = `${formatNumber(brks[i])} - ${formatNumber(brks[i + 1])}`;
+        tdR.textContent = `${formatLegendClassValue(brks[i])} - ${formatLegendClassValue(brks[i + 1])}`;
         console.warn("Invalid range reset:", rangeText);
       } else {
         updateCustomBreaks();
