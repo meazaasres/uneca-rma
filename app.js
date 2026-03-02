@@ -609,7 +609,9 @@ function formatLegendClassValue(val) {
   const num = Number(val);
   if (!Number.isFinite(num)) return String(val);
   const rounded = roundToOneDecimal(num);
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  const nearestInt = Math.round(rounded);
+  if (Math.abs(rounded - nearestInt) < 1e-9) return String(nearestInt);
+  return rounded.toFixed(1);
 }
 
 function norm(v) {
