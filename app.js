@@ -3346,6 +3346,12 @@ window.addEventListener('load', resetInitialScrollPositions);
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
+      // Prevent transform-based offscreen positioning from shifting raster capture.
+      wrapper.style.transform = 'none';
+      wrapper.style.position = 'fixed';
+      wrapper.style.left = '-100000px';
+      wrapper.style.top = '0';
+      wrapper.style.zIndex = '-1';
       document.body.appendChild(wrapper);
 
       // Title (safe insertion)
