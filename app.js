@@ -1459,10 +1459,9 @@ function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
     map.fitBounds(INITIAL_HOME_BOUNDS, {
       animate: false,
-      // Keep horizontal padding to preserve edge islands, trim vertical
-      // padding to achieve a slightly closer initial view.
-      paddingTopLeft: [20, 10],
-      paddingBottomRight: [20, 10],
+      // Reduce left/right empty margins while keeping top/bottom framing stable.
+      paddingTopLeft: [8, 10],
+      paddingBottomRight: [8, 10],
       maxZoom: 3.6
     });
   } else {
