@@ -2174,7 +2174,13 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
       block.appendChild(makeRow(`${formatLegendClassValue(vals[i])} – ${formatLegendClassValue(vals[i + 1])}`, cols[i]));
     }
   } else {
-    vals.forEach((v, i) => block.appendChild(makeRow(v, cols[i])));
+    const labels = Array.isArray(overlayData[layerName]?.legendLabels)
+      ? overlayData[layerName].legendLabels
+      : null;
+    vals.forEach((v, i) => {
+      const shown = sanitizePlainText(labels && labels[i] != null ? labels[i] : v, String(v));
+      block.appendChild(makeRow(shown, cols[i]));
+    });
   }
 
   reorderLegendBlocks();
@@ -2913,6 +2919,12 @@ function applyClassification() {
       overlayData[currentLayerName].vals = uniques;
       overlayData[currentLayerName].cols = cols;
       overlayData[currentLayerName].isNumeric = false;
+      if (
+        !Array.isArray(overlayData[currentLayerName].legendLabels) ||
+        overlayData[currentLayerName].legendLabels.length !== uniques.length
+      ) {
+        overlayData[currentLayerName].legendLabels = uniques.map((u) => sanitizePlainText(u, "Category"));
+      }
     }
 
     updateLegend(currentLayerName, uniques, cols, false, filteredGeojson);
@@ -3072,7 +3084,9 @@ function updateClassificationTableCategorical(uniques, cols) {
 
     const tdC = document.createElement('td');
     // Categorical labels are editable, but sanitized to plain text.
-    const defaultLabel = sanitizePlainText(u, "Category");
+    const layerState = overlayData[currentLayerName] || null;
+    const existingLabel = Array.isArray(layerState?.legendLabels) ? layerState.legendLabels[i] : null;
+    const defaultLabel = sanitizePlainText(existingLabel != null ? existingLabel : u, "Category");
     tdC.contentEditable = 'true';
     tdC.setAttribute('role', 'textbox');
     tdC.setAttribute('aria-label', `Category label ${i + 1}`);
@@ -3086,6 +3100,13 @@ function updateClassificationTableCategorical(uniques, cols) {
     tdC.addEventListener('blur', () => {
       const next = sanitizePlainText(tdC.textContent, defaultLabel);
       tdC.textContent = next;
+      if (layerState) {
+        if (!Array.isArray(layerState.legendLabels)) {
+          layerState.legendLabels = uniques.map((val) => sanitizePlainText(val, "Category"));
+        }
+        layerState.legendLabels[i] = next;
+        updateLegend(currentLayerName, layerState.vals || uniques, layerState.cols || cols, false, layerState.geojson);
+      }
     });
 
     const tdCol = document.createElement('td');
