@@ -190,24 +190,16 @@ footer {
   max-width: 20%;
 }
     /* Hide selector controls by default (moved from inline attributes) */
-#layer-select-col,
-#attribute-select-col,
-#continent-filter-col,
-#country-filter-col,
-#classification-type-col,
-#num-classes-col,
-#point-size-col,
-#line-width-col {
-  display: none;
-}
-
-.force-show {
-  display: block !important;
-}
-
-.force-hide {
-  display: none !important;
-}
+    #layer-select-col,
+    #attribute-select-col,
+    #continent-filter-col,
+    #country-filter-col,
+    #classification-type-col,
+    #num-classes-col,
+    #point-size-col,
+    #line-width-col {
+      display: none;
+    }
 
 /* Export & popup classes to avoid inline styles set by JS */
 .export-wrapper {
@@ -474,6 +466,24 @@ footer {
   border-bottom: 12px solid #1e3a8a;
 }
 
+#map .leaflet-bottom.leaflet-left {
+  left: auto !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  transform: translate(10px, -5px) !important; /* move right 10px, up 5px */
+}
+#map .leaflet-bottom.leaflet-left .leaflet-control {
+  margin: 0 !important;
+}
+#map .leaflet-control-scale {
+  position: relative !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  margin: 0 !important;
+  transform: translateY(-5px) !important;
+}
+
 .leaflet-control-exact-scale {
   background: #ffffff;
   border: 1px solid #cfd6e4;
@@ -496,20 +506,3 @@ footer {
   font-weight: 400;
 }
 
-.fixed-page-scale-control {
-  position: fixed !important;
-  left: calc(50% + 5px) !important;
-  bottom: 5px !important;
-  transform: translateX(-50%);
-  z-index: 2200;
-  margin: 0 !important;
-}
-
-.map-bottom-scale-control {
-  position: absolute !important;
-  left: calc(50% + 23px) !important;
-  bottom: 7px !important;
-  transform: translateX(-50%);
-  z-index: 1200;
-  margin: 0 !important;
-}
