@@ -3892,7 +3892,9 @@ function exportSVG() {
       const usedCanvasWidth  = cropW;
       const usedCanvasHeight = cropH;
 
-      const totalWidthPx  = usedCanvasWidth;
+      const exportSidePaddingPx = marginPx;
+      const mapOffsetX = exportSidePaddingPx;
+      const totalWidthPx  = usedCanvasWidth + (mapOffsetX * 2);
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
 
       const svg = document.createElementNS(svgNS, "svg");
@@ -3933,7 +3935,7 @@ function exportSVG() {
       const imgDataUrl = cropped.toDataURL("image/png");
       const img = document.createElementNS(svgNS, "image");
       img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
-      img.setAttribute("x", "0");
+      img.setAttribute("x", String(mapOffsetX));
       img.setAttribute("y", String(titleHeightPx));
       img.setAttribute("width", String(usedCanvasWidth));
       img.setAttribute("height", String(usedCanvasHeight));
@@ -3944,7 +3946,7 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * scale) - cropX;
+        const x = (containerPoint.x * scale) - cropX + mapOffsetX;
         const y = (containerPoint.y * scale) - cropY + titleHeightPx;
         return [x, y];
       }
@@ -4034,13 +4036,14 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = discRect && mapRect
+        const discXLocal = discRect && mapRect
           ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX)
           : marginPx;
+        const discX = mapOffsetX + discXLocal;
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * scale);
         let discWidth = Math.max(
           Math.round(120 * scale),
-          Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discX - marginPx))
+          Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discXLocal - marginPx))
         );
         const fontSizeDisc = Math.max(8, Math.round(10 * scale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
@@ -4118,7 +4121,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX);
+        const naX = mapOffsetX + Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX);
         const naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
 
         const naBg = document.createElementNS(svgNS, "rect");
@@ -4161,7 +4164,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        const sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX);
+        const sbX = mapOffsetX + Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX);
         const sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
@@ -4191,7 +4194,7 @@ function exportSVG() {
             // legend below map (render from current legend DOM so all layers/symbol types are included)
       if (legendEl && legendEl.children && legendEl.children.length) {
         const legendGroup = document.createElementNS(svgNS, "g");
-        const legendX = marginPx;
+        const legendX = mapOffsetX + marginPx;
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
         const symSize = Math.max(8, Math.round(12 * scale));
         const fontSize = Math.max(10, Math.round(12 * scale));
