@@ -4,6 +4,8 @@ const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
+const SCALE_BAR_OFFSET_X_PX = 15;
+const SCALE_BAR_OFFSET_Y_PX = 7;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
@@ -1737,10 +1739,10 @@ function placeScaleBarOnMapBottom(control) {
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
   setDynamicStyle(el, {
-    left: "calc(50% + 13px)",
+    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
     right: "auto",
     top: "auto",
-    bottom: "7px"
+    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
   });
 }
 
@@ -1755,10 +1757,10 @@ function ensureScaleBarPinnedToMapBottom() {
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
   setDynamicStyle(el, {
-    left: "calc(50% + 13px)",
+    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
     right: "auto",
     top: "auto",
-    bottom: "7px"
+    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
   });
 }
 
