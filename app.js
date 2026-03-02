@@ -770,14 +770,12 @@ function isAllowedRemoteContentType(ext, contentType) {
     "application/json",
     "application/geo+json",
     "application/vnd.geo+json",
-    "text/json",
-    "text/plain" // common misconfigured static hosting for JSON
+    "text/json"
   ]);
   const CSV_TYPES = new Set([
     "text/csv",
     "application/csv",
-    "application/vnd.ms-excel",
-    "text/plain" // common misconfigured static hosting for CSV
+    "application/vnd.ms-excel"
   ]);
   if (!ct) return false;
   if (ext === ".csv") return CSV_TYPES.has(ct);
