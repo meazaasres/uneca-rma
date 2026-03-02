@@ -1726,6 +1726,16 @@ const ExactScaleControl = L.Control.extend({
 const scaleControl = new ExactScaleControl({ widthPx: 160 });
 map.addControl(scaleControl);
 
+function placeScaleBarAtPageBottom(control) {
+  if (!control || typeof control.getContainer !== "function") return;
+  const el = control.getContainer();
+  if (!el) return;
+  if (document.body && el.parentElement !== document.body) {
+    document.body.appendChild(el);
+  }
+  el.classList.add("fixed-page-scale-control");
+}
+
 // North arrow
 const NorthArrowControl = L.Control.extend({
   options: { position: 'topright' },
@@ -1744,7 +1754,7 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 8, 0));
+placeScaleBarAtPageBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
   const pos = getTopRightPosition(el, mapEl, 12);
   return { left: pos.left, top: pos.top + 30 };

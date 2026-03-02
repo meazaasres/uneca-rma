@@ -488,3 +488,11 @@ footer {
   font-weight: 400;
 }
 
+.fixed-page-scale-control {
+  position: fixed !important;
+  left: 50% !important;
+  bottom: 8px !important;
+  transform: translateX(-50%);
+  z-index: 2200;
+  margin: 0 !important;
+}
