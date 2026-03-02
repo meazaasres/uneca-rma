@@ -34,6 +34,13 @@
   line-height: 1.2;
 }
 
+/* Export buttons font */
+#btnExportImage,
+#btnExportPDF,
+#btnExportSVG {
+  font-family: "Segoe UI", sans-serif !important;
+}
+
 .country-filter-list {
   max-height: 140px;
   overflow-y: auto;
