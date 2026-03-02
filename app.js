@@ -1454,16 +1454,16 @@ const map = L.map('map', {
 // (south/east/west) while still keeping offshore islands in view.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-33.5, -15], [37.8, 47]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-33.5, -14], [37.8, 46]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 
 function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
     map.fitBounds(INITIAL_HOME_BOUNDS, {
       animate: false,
-      // Reduce left/right empty margin without tightening north/south.
-      paddingTopLeft: [2, 10],
-      paddingBottomRight: [2, 10],
+      // Keep north/south framing from the previous stable view.
+      paddingTopLeft: [12, 8],
+      paddingBottomRight: [12, 8],
       maxZoom: 3.6
     });
   } else {
