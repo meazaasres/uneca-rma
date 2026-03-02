@@ -2925,6 +2925,8 @@ function applyClassification() {
     const requestedN = numEl ? (+numEl.value || 5) : 5;
     const n = Math.min(10, Math.max(2, requestedN));
     if (numEl && Number(numEl.value) !== n) numEl.value = String(n);
+    const numericVals = vals.map(v => Number(v)).filter(v => Number.isFinite(v));
+    const sourceIsIntegerOnly = numericVals.length > 0 && numericVals.every(v => Math.abs(v - Math.round(v)) < 1e-9);
 
     let breaks;
     try {
@@ -2937,7 +2939,11 @@ function applyClassification() {
       return;
     }
 
-    breaks = breaks.map(b => roundToOneDecimal(b));
+    breaks = breaks.map((b) => {
+      const num = Number(b);
+      if (!Number.isFinite(num)) return num;
+      return sourceIsIntegerOnly ? Math.round(num) : roundToOneDecimal(num);
+    });
 
     const classCount = Math.max(1, breaks.length - 1);
     // 10-step sequential palette for numeric classes
