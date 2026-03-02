@@ -190,16 +190,24 @@ footer {
   max-width: 20%;
 }
     /* Hide selector controls by default (moved from inline attributes) */
-    #layer-select-col,
-    #attribute-select-col,
-    #continent-filter-col,
-    #country-filter-col,
-    #classification-type-col,
-    #num-classes-col,
-    #point-size-col,
-    #line-width-col {
-      display: none;
-    }
+#layer-select-col,
+#attribute-select-col,
+#continent-filter-col,
+#country-filter-col,
+#classification-type-col,
+#num-classes-col,
+#point-size-col,
+#line-width-col {
+  display: none;
+}
+
+.force-show {
+  display: block !important;
+}
+
+.force-hide {
+  display: none !important;
+}
 
 /* Export & popup classes to avoid inline styles set by JS */
 .export-wrapper {

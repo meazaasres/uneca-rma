@@ -4,11 +4,6 @@ const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
-const SCALE_BAR_OFFSET_X_PX = 23;
-const SCALE_BAR_OFFSET_Y_PX = 7;
-const MAX_ZIP_ENTRIES = 50;
-const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
-const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -53,72 +48,11 @@ if (IS_FRAMED_CONTEXT) {
   try { window.top.location = window.self.location.href; } catch (e) {}
   try {
     document.documentElement.innerHTML = "";
-    document.documentElement.setAttribute("data-ui-hidden", "1");
+    document.documentElement.style.display = "none";
   } catch (e) {}
   throw new Error("Framed execution is blocked.");
 }
 // --- Helpers ---
-let dynamicSheet = null;
-let dynamicStyleSeq = 0;
-
-function initDynamicSheet() {
-  if (dynamicSheet) return dynamicSheet;
-  const sheets = Array.from(document.styleSheets || []);
-  dynamicSheet = sheets.find(s => {
-    try {
-      return s && s.href && /dynamic\.css/i.test(s.href);
-    } catch (e) {
-      return false;
-    }
-  }) || null;
-  if (!dynamicSheet) {
-    // Fallback: no dynamic sheet available
-    console.warn("dynamic.css not found; dynamic styles will be limited.");
-  }
-  return dynamicSheet;
-}
-
-function ensureDynamicRuleId(el) {
-  if (!el) return "";
-  if (el.dataset && el.dataset.dynId) return el.dataset.dynId;
-  const id = "dyn-" + (++dynamicStyleSeq);
-  el.dataset.dynId = id;
-  return id;
-}
-
-function upsertDynamicRule(el, declarations) {
-  const sheet = initDynamicSheet();
-  if (!sheet || !declarations) return;
-  const id = ensureDynamicRuleId(el);
-  const selector = `[data-dyn-id="${id}"]`;
-  const cssText = `${selector}{${declarations}}`;
-  try {
-    if (sheet.cssRules && sheet.cssRules.length) {
-      for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
-        const rule = sheet.cssRules[i];
-        if (rule && rule.selectorText === selector) {
-          sheet.deleteRule(i);
-          break;
-        }
-      }
-    }
-    const idx = sheet.cssRules ? sheet.cssRules.length : 0;
-    sheet.insertRule(cssText, idx);
-  } catch (e) {
-    console.warn("Failed to update dynamic CSS rule:", e);
-  }
-}
-
-function setDynamicStyle(el, styleObj) {
-  if (!el || !styleObj) return;
-  const parts = [];
-  Object.keys(styleObj).forEach(k => {
-    const v = styleObj[k];
-    if (v == null || v === "") return;
-    parts.push(`${k}:${v}`);
-  });
-  if (parts.length) upsertDynamicRule(el, parts.join(";"));
-}
 function sanitizeId(str) {
   return String(str).replace(/[^\w\-]/g, "_");
 }
@@ -390,11 +324,7 @@ async function fetchWithLimits(url) {
     let offset = 0;
     chunks.forEach(c => { merged.set(c, offset); offset += c.length; });
     const text = new TextDecoder("utf-8").decode(merged);
-    return {
-      text,
-      contentType: response.headers.get("Content-Type") || "",
-      finalUrl: response.url || url
-    };
+    return { text, contentType: response.headers.get("Content-Type") || "" };
   } catch (err) {
     if (err && err.name === "AbortError") {
       throw new Error("Remote request timed out.");
@@ -571,10 +501,7 @@ function ensureBaseLayerListedLastInControl() {
 function showRow(id) {
   const el = document.getElementById(id);
   if (el) {
-    el.classList.add("force-show");
-    el.classList.remove("force-hide");
-    el.style.setProperty("display", "block", "important");
-    setDynamicStyle(el, { display: "block" });
+    el.style.display = 'block';
   } else {
     console.warn(`showRow: element not found: ${id}`);
   }
@@ -583,10 +510,7 @@ function showRow(id) {
 function hideRow(id) {
   const el = document.getElementById(id);
   if (el) {
-    el.classList.remove("force-show");
-    el.classList.add("force-hide");
-    el.style.setProperty("display", "none", "important");
-    setDynamicStyle(el, { display: "none" });
+    el.style.display = 'none';
   } else {
     console.warn(`hideRow: element not found: ${id}`);
   }
@@ -731,142 +655,6 @@ function normalizeContinentFromMeta(region, subregion) {
   if (/^oceania$/i.test(r)) return "Oceania";
   if (/^antarctic/i.test(r)) return "Antarctica";
   return r;
-}
-
-function assertFinalImportUrlAllowed(finalUrl) {
-  let parsed;
-  try {
-    parsed = new URL(finalUrl);
-  } catch (e) {
-    throw new Error("Remote import resolved to an invalid URL.");
-  }
-  const host = normalizeHostname(parsed.hostname);
-  if (parsed.protocol !== "https:") {
-    throw new Error("Remote redirect resolved to a non-HTTPS URL.");
-  }
-  if (parsed.username || parsed.password) {
-    throw new Error("Remote redirect URL credentials are not allowed.");
-  }
-  if (parsed.port && parsed.port !== "443") {
-    throw new Error("Remote redirect resolved to a blocked port.");
-  }
-  if (isBlockedPrivateImportHost(host)) {
-    throw new Error("Remote redirect resolved to a private/internal host.");
-  }
-  if (ENFORCE_IMPORT_HOST_ALLOWLIST && !ALLOWED_IMPORT_HOSTS.has(host)) {
-    throw new Error("Remote redirect host is not allowed by security policy.");
-  }
-  return parsed;
-}
-
-function detectContentType(contentType) {
-  const ct = String(contentType || "").toLowerCase().split(";")[0].trim();
-  return ct;
-}
-
-function isAllowedRemoteContentType(ext, contentType) {
-  const ct = detectContentType(contentType);
-  const JSON_TYPES = new Set([
-    "application/json",
-    "application/geo+json",
-    "application/vnd.geo+json",
-    "text/json",
-    "text/plain" // common misconfigured static hosting for JSON
-  ]);
-  const CSV_TYPES = new Set([
-    "text/csv",
-    "application/csv",
-    "application/vnd.ms-excel",
-    "text/plain" // common misconfigured static hosting for CSV
-  ]);
-  if (!ct) return false;
-  if (ext === ".csv") return CSV_TYPES.has(ct);
-  return JSON_TYPES.has(ct);
-}
-
-function getUint16LE(view, offset) {
-  if (offset + 2 > view.byteLength) return null;
-  return view.getUint16(offset, true);
-}
-
-function getUint32LE(view, offset) {
-  if (offset + 4 > view.byteLength) return null;
-  return view.getUint32(offset, true);
-}
-
-function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
-  const view = new DataView(arrayBuffer);
-  const EOCD_SIGNATURE = 0x06054b50;
-  const CD_SIGNATURE = 0x02014b50;
-  const maxCommentLen = 0xffff;
-  const minEocd = 22;
-  if (view.byteLength < minEocd) {
-    throw new Error("ZIP file is too small or invalid.");
-  }
-
-  let eocdOffset = -1;
-  const start = Math.max(0, view.byteLength - minEocd - maxCommentLen);
-  for (let i = view.byteLength - minEocd; i >= start; i--) {
-    if (getUint32LE(view, i) === EOCD_SIGNATURE) {
-      eocdOffset = i;
-      break;
-    }
-  }
-  if (eocdOffset < 0) {
-    throw new Error("ZIP central directory not found.");
-  }
-
-  const totalEntries = getUint16LE(view, eocdOffset + 10);
-  const cdSize = getUint32LE(view, eocdOffset + 12);
-  const cdOffset = getUint32LE(view, eocdOffset + 16);
-  if (totalEntries === null || cdSize === null || cdOffset === null) {
-    throw new Error("ZIP metadata is incomplete.");
-  }
-  if (totalEntries === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) {
-    throw new Error("ZIP64 archives are not supported for security reasons.");
-  }
-  if (totalEntries > MAX_ZIP_ENTRIES) {
-    throw new Error(`ZIP has too many entries (${totalEntries}; max ${MAX_ZIP_ENTRIES}).`);
-  }
-  if (cdOffset + cdSize > view.byteLength) {
-    throw new Error("ZIP central directory exceeds file bounds.");
-  }
-
-  let cursor = cdOffset;
-  let parsedEntries = 0;
-  let totalUncompressed = 0;
-  while (parsedEntries < totalEntries) {
-    if (cursor + 46 > view.byteLength) {
-      throw new Error("ZIP central directory entry is truncated.");
-    }
-    const sig = getUint32LE(view, cursor);
-    if (sig !== CD_SIGNATURE) {
-      throw new Error("Invalid ZIP central directory entry signature.");
-    }
-    const uncompressedSize = getUint32LE(view, cursor + 24);
-    const fileNameLen = getUint16LE(view, cursor + 28);
-    const extraLen = getUint16LE(view, cursor + 30);
-    const commentLen = getUint16LE(view, cursor + 32);
-    if (uncompressedSize === null || fileNameLen === null || extraLen === null || commentLen === null) {
-      throw new Error("ZIP entry metadata is incomplete.");
-    }
-    if (uncompressedSize === 0xffffffff) {
-      throw new Error("ZIP64 entry sizes are not supported for security reasons.");
-    }
-    totalUncompressed += uncompressedSize;
-    if (totalUncompressed > MAX_ZIP_UNCOMPRESSED_BYTES) {
-      const maxMb = Math.round(MAX_ZIP_UNCOMPRESSED_BYTES / (1024 * 1024));
-      throw new Error(`ZIP expands too large (max ${maxMb} MB).`);
-    }
-    cursor += 46 + fileNameLen + extraLen + commentLen;
-    parsedEntries++;
-  }
-
-  const compressed = Math.max(1, Number(compressedSizeBytes) || 1);
-  const expansionRatio = totalUncompressed / compressed;
-  if (expansionRatio > MAX_ZIP_EXPANSION_RATIO) {
-    throw new Error(`ZIP expansion ratio is too high (${expansionRatio.toFixed(1)}x).`);
-  }
 }
 
 async function fetchTextWithFallback(localUrl, remoteUrl, label) {
@@ -1398,7 +1186,7 @@ function bindFeaturePopup(feature, layer) {
 
     // Use textContent inside a <pre> for safety
     const div = document.createElement("div");
-    div.className = "popup-prewrap";
+    div.style.whiteSpace = "pre-wrap";
     div.textContent = content;
 
     layer.bindPopup(div);
@@ -1479,7 +1267,7 @@ function syncLayoutWithHeaderHeight() {
   if (!header || !document.documentElement) return;
   const headerHeight = Math.max(0, Math.ceil(header.getBoundingClientRect().height));
   if (!headerHeight) return;
-  setDynamicStyle(document.documentElement, { "--app-header-height": `${headerHeight}px` });
+  document.documentElement.style.setProperty('--app-header-height', `${headerHeight}px`);
   if (map && typeof map.invalidateSize === "function") {
     setTimeout(() => map.invalidateSize({ pan: false }), 0);
   }
@@ -1491,7 +1279,6 @@ map.options.maxBoundsViscosity = 1.0;
 
 function goHomeView() {
   applyHomeView();
-  resetAllMapUiPositions();
 }
 
 function fitToLayerExtent(layer) {
@@ -1516,7 +1303,17 @@ const HomeControl = L.Control.extend({
     link.title = 'Home view';
     link.setAttribute('aria-label', 'Home view');
     link.textContent = '⌂';
-    // styles moved to CSS (CSP-safe)
+    // Inline style to avoid stylesheet caching issues.
+    link.style.display = 'block';
+    link.style.width = '30px';
+    link.style.height = '30px';
+    link.style.lineHeight = '30px';
+    link.style.textAlign = 'center';
+    link.style.fontSize = '18px';
+    link.style.fontWeight = '700';
+    link.style.background = '#ffffff';
+    link.style.color = '#1E90FF';
+    link.style.textDecoration = 'none';
     L.DomEvent.on(link, 'click', L.DomEvent.stop)
       .on(link, 'click', () => goHomeView());
     return container;
@@ -1529,90 +1326,9 @@ setTimeout(() => {
   const zoomControl = map.zoomControl && map.zoomControl.getContainer ? map.zoomControl.getContainer() : null;
   const homeContainer = homeControl && homeControl.getContainer ? homeControl.getContainer() : null;
   if (!zoomControl || !homeContainer || !zoomControl.parentNode) return;
-  setDynamicStyle(homeContainer, { "margin-top": "8px" });
+  homeContainer.style.marginTop = '8px';
   zoomControl.parentNode.insertBefore(homeContainer, zoomControl.nextSibling);
 }, 0);
-
-const draggableMapControls = new Set();
-const draggableControlInitialResolvers = new WeakMap();
-
-function clampDraggableControl(el, mapEl) {
-  const rect = mapEl.getBoundingClientRect();
-  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
-  const maxTop = Math.max(0, rect.height - el.offsetHeight);
-  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.dataset.leftPx) || 0));
-  const top = Math.max(0, Math.min(maxTop, parseFloat(el.dataset.topPx) || 0));
-  el.dataset.leftPx = String(left);
-  el.dataset.topPx = String(top);
-  setDynamicStyle(el, { left: `${left}px`, top: `${top}px` });
-  return { left, top, maxLeft, maxTop };
-}
-
-function updateDraggableControlNorm(el, mapEl) {
-  const rect = mapEl.getBoundingClientRect();
-  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
-  const maxTop = Math.max(0, rect.height - el.offsetHeight);
-  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.dataset.leftPx) || 0));
-  const top = Math.max(0, Math.min(maxTop, parseFloat(el.dataset.topPx) || 0));
-  el.dataset.normX = maxLeft > 0 ? String(left / maxLeft) : "0";
-  el.dataset.normY = maxTop > 0 ? String(top / maxTop) : "0";
-}
-
-function applyDraggableControlNorm(el, mapEl) {
-  const rect = mapEl.getBoundingClientRect();
-  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
-  const maxTop = Math.max(0, rect.height - el.offsetHeight);
-  const nx = Number(el.dataset.normX);
-  const ny = Number(el.dataset.normY);
-  const left = isFinite(nx) ? Math.max(0, Math.min(maxLeft, Math.round(nx * maxLeft))) : 0;
-  const top = isFinite(ny) ? Math.max(0, Math.min(maxTop, Math.round(ny * maxTop))) : 0;
-  el.dataset.leftPx = String(left);
-  el.dataset.topPx = String(top);
-  setDynamicStyle(el, { left: `${left}px`, top: `${top}px` });
-}
-
-function repositionDraggableControls() {
-  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
-  if (!mapEl) return;
-  draggableMapControls.forEach((el) => {
-    if (!el || !el.isConnected) return;
-    const userMoved = el.dataset && el.dataset.userMoved === "1";
-    if (!userMoved && draggableControlInitialResolvers.has(el)) {
-      applyDraggableControlInitialPosition(el, mapEl, false);
-      clampDraggableControl(el, mapEl);
-      return;
-    }
-    if (el.dataset && (el.dataset.normX || el.dataset.normY)) {
-      applyDraggableControlNorm(el, mapEl);
-      clampDraggableControl(el, mapEl);
-    } else {
-      clampDraggableControl(el, mapEl);
-      updateDraggableControlNorm(el, mapEl);
-    }
-  });
-}
-
-function applyDraggableControlInitialPosition(el, mapEl, refreshInit = true) {
-  const resolver = draggableControlInitialResolvers.get(el);
-  if (!resolver) return false;
-  const pos = resolver(el, mapEl) || {};
-  const initLeft = Math.max(0, Math.round(Number(pos.left) || 0));
-  const initTop = Math.max(0, Math.round(Number(pos.top) || 0));
-  el.dataset.leftPx = String(initLeft);
-  el.dataset.topPx = String(initTop);
-  setDynamicStyle(el, {
-    left: `${initLeft}px`,
-    top: `${initTop}px`,
-    right: "auto",
-    bottom: "auto"
-  });
-  if (refreshInit) {
-    el.dataset.initLeft = String(initLeft);
-    el.dataset.initTop = String(initTop);
-  }
-  updateDraggableControlNorm(el, mapEl);
-  return true;
-}
 
 function makeControlDraggable(control, initial) {
   if (!control || typeof control.getContainer !== "function") return;
@@ -1623,12 +1339,11 @@ function makeControlDraggable(control, initial) {
   // Move to map root so the control can be freely positioned.
   mapEl.appendChild(el);
   el.classList.add("draggable-map-control");
-  const initialResolver = typeof initial === "function"
-    ? initial
-    : () => (initial || { left: 0, top: 0 });
-  draggableControlInitialResolvers.set(el, initialResolver);
-  applyDraggableControlInitialPosition(el, mapEl, true);
-  draggableMapControls.add(el);
+  const initialPos = typeof initial === "function" ? initial(el, mapEl) : initial;
+  el.style.left = `${Math.max(0, Math.round(initialPos.left || 0))}px`;
+  el.style.top = `${Math.max(0, Math.round(initialPos.top || 0))}px`;
+  el.style.right = "auto";
+  el.style.bottom = "auto";
 
   let dragging = false;
   let startX = 0;
@@ -1645,16 +1360,12 @@ function makeControlDraggable(control, initial) {
     const maxTop = Math.max(0, rect.height - el.offsetHeight);
     const nextLeft = Math.max(0, Math.min(maxLeft, baseLeft + dx));
     const nextTop = Math.max(0, Math.min(maxTop, baseTop + dy));
-    el.dataset.leftPx = String(nextLeft);
-    el.dataset.topPx = String(nextTop);
-    setDynamicStyle(el, { left: `${nextLeft}px`, top: `${nextTop}px` });
+    el.style.left = `${nextLeft}px`;
+    el.style.top = `${nextTop}px`;
   };
 
   const stopDrag = () => {
     dragging = false;
-    el.dataset.userMoved = "1";
-    clampDraggableControl(el, mapEl);
-    updateDraggableControlNorm(el, mapEl);
     map.dragging.enable();
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", stopDrag);
@@ -1666,8 +1377,8 @@ function makeControlDraggable(control, initial) {
     dragging = true;
     startX = evt.clientX;
     startY = evt.clientY;
-    baseLeft = parseFloat(el.dataset.leftPx) || 0;
-    baseTop = parseFloat(el.dataset.topPx) || 0;
+    baseLeft = parseFloat(el.style.left) || 0;
+    baseTop = parseFloat(el.style.top) || 0;
     map.dragging.disable();
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", stopDrag);
@@ -1737,42 +1448,6 @@ const ExactScaleControl = L.Control.extend({
 const scaleControl = new ExactScaleControl({ widthPx: 160 });
 map.addControl(scaleControl);
 
-function placeScaleBarOnMapBottom(control) {
-  if (!control || typeof control.getContainer !== "function") return;
-  const el = control.getContainer();
-  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
-  if (!el) return;
-  if (mapEl && el.parentElement !== mapEl) {
-    mapEl.appendChild(el);
-  }
-  el.classList.remove("fixed-page-scale-control");
-  el.classList.add("map-bottom-scale-control");
-  setDynamicStyle(el, {
-    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
-    right: "auto",
-    top: "auto",
-    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
-  });
-}
-
-function ensureScaleBarPinnedToMapBottom() {
-  if (!scaleControl || typeof scaleControl.getContainer !== "function") return;
-  const el = scaleControl.getContainer();
-  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
-  if (!el) return;
-  if (mapEl && el.parentElement !== mapEl) {
-    mapEl.appendChild(el);
-  }
-  el.classList.remove("fixed-page-scale-control");
-  el.classList.add("map-bottom-scale-control");
-  setDynamicStyle(el, {
-    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
-    right: "auto",
-    top: "auto",
-    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
-  });
-}
-
 // North arrow
 const NorthArrowControl = L.Control.extend({
   options: { position: 'topright' },
@@ -1791,7 +1466,7 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
-placeScaleBarOnMapBottom(scaleControl);
+makeControlDraggable(scaleControl, (el, mapEl) => getBottomCenterPosition(el, mapEl, 5, 20));
 makeControlDraggable(northArrowControl, (el, mapEl) => {
   const pos = getTopRightPosition(el, mapEl, 12);
   return { left: pos.left, top: pos.top + 30 };
@@ -1859,9 +1534,9 @@ function positionDisclaimer() {
     const mapEl = map.getContainer();
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
-  const left = 12;
-  const bottom = 30;
-    const preferredFixedWidth = 360;
+    const left = 12;
+    const bottom = 30;
+    const preferredFixedWidth = 240;
     const margin = 12;
     const maxAvailableWidth = mapRect
       ? Math.max(120, Math.round(mapRect.width - left - margin))
@@ -1869,14 +1544,12 @@ function positionDisclaimer() {
     const desiredWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
 
     disc.classList.add('clamp-5-lines');
-    setDynamicStyle(disc, {
-      top: "auto",
-      left: left + "px",
-      right: "auto",
-      bottom: bottom + "px",
-      width: desiredWidth + "px",
-      "max-width": desiredWidth + "px"
-    });
+    disc.style.top = 'auto';
+    disc.style.left = left + 'px';
+    disc.style.right = 'auto';
+    disc.style.bottom = bottom + 'px';
+    disc.style.width = desiredWidth + 'px';
+    disc.style.maxWidth = desiredWidth + 'px';
 
     // Keep user-dragged position across resize/move while clamping to map bounds.
     if (disclaimerUserPos) {
@@ -1889,53 +1562,14 @@ function positionDisclaimer() {
       const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
       const leftPx = Math.min(maxLeft, Math.max(marginClamp, disclaimerUserPos.left));
       const topPx = Math.min(maxTop, Math.max(marginClamp, disclaimerUserPos.top));
-      setDynamicStyle(disc, {
-        top: topPx + "px",
-        left: leftPx + "px",
-        bottom: "auto"
-      });
+      disc.style.top = topPx + 'px';
+      disc.style.left = leftPx + 'px';
+      disc.style.bottom = 'auto';
       disclaimerUserPos = { left: leftPx, top: topPx };
     }
   } catch (e) {
     console.warn('positionDisclaimer failed', e);
   }
-}
-
-function resetDisclaimerPosition() {
-  disclaimerUserPos = null;
-  positionDisclaimer();
-}
-
-function resetDraggableControlsToInitial() {
-  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
-  if (!mapEl) return;
-  draggableMapControls.forEach((el) => {
-    if (!el || !el.isConnected) return;
-    const applied = applyDraggableControlInitialPosition(el, mapEl, true);
-    if (!applied) {
-      const initLeft = Number(el.dataset.initLeft);
-      const initTop = Number(el.dataset.initTop);
-      if (isFinite(initLeft) && isFinite(initTop)) {
-        el.dataset.leftPx = String(initLeft);
-        el.dataset.topPx = String(initTop);
-        setDynamicStyle(el, { left: `${initLeft}px`, top: `${initTop}px` });
-      } else {
-        clampDraggableControl(el, mapEl);
-      }
-      updateDraggableControlNorm(el, mapEl);
-    } else {
-      clampDraggableControl(el, mapEl);
-    }
-    el.dataset.userMoved = "";
-    el.dataset.normX = "";
-    el.dataset.normY = "";
-    updateDraggableControlNorm(el, mapEl);
-  });
-}
-
-function resetAllMapUiPositions() {
-  resetDisclaimerPosition();
-  resetDraggableControlsToInitial();
 }
 
 function initDisclaimerDrag() {
@@ -1962,11 +1596,9 @@ function initDisclaimerDrag() {
     const clampedLeft = Math.min(maxLeft, Math.max(marginClamp, left));
     const clampedTop = Math.min(maxTop, Math.max(marginClamp, top));
 
-    setDynamicStyle(disc, {
-      top: clampedTop + "px",
-      left: clampedLeft + "px",
-      bottom: "auto"
-    });
+    disc.style.top = clampedTop + 'px';
+    disc.style.left = clampedLeft + 'px';
+    disc.style.bottom = 'auto';
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
   };
 
@@ -2010,56 +1642,23 @@ function initDisclaimerDrag() {
   window.addEventListener('pointercancel', onPointerUp);
 }
 
-function runMapUiReflowPasses() {
-  // Browser zoom updates element metrics asynchronously; run multiple passes.
-  [20, 110, 240].forEach((delayMs) => {
-    setTimeout(() => {
-      syncLayoutWithHeaderHeight();
-      // Reflow after Leaflet has processed the new container size.
-      setTimeout(() => {
-        if (map && typeof map.invalidateSize === "function") {
-          map.invalidateSize({ pan: false });
-        }
-        if (scaleControl && typeof scaleControl._update === "function") {
-          scaleControl._update();
-        }
-        ensureScaleBarPinnedToMapBottom();
-        positionDisclaimer();
-        repositionDraggableControls();
-      }, 40);
-    }, delayMs);
-  });
-}
-
-let mapUiReflowRaf = 0;
-function queueMapUiReflow() {
-  if (mapUiReflowRaf) cancelAnimationFrame(mapUiReflowRaf);
-  mapUiReflowRaf = requestAnimationFrame(() => {
-    mapUiReflowRaf = 0;
-    runMapUiReflowPasses();
-  });
-}
-
 // run initially and on relevant events
 window.addEventListener('load', () => {
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
   setTimeout(syncLayoutWithHeaderHeight, 80);
-  setTimeout(resetAllMapUiPositions, 300);
+  setTimeout(positionDisclaimer, 300);
   setTimeout(initDisclaimerDrag, 350);
-  setTimeout(repositionDraggableControls, 360);
-  setTimeout(ensureScaleBarPinnedToMapBottom, 380);
-  queueMapUiReflow();
 });
-window.addEventListener('resize', queueMapUiReflow);
-window.addEventListener('orientationchange', queueMapUiReflow);
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', queueMapUiReflow);
-  window.visualViewport.addEventListener('scroll', queueMapUiReflow);
-}
-map.on && map.on('resize', queueMapUiReflow);
-map.on && map.on('zoomend', queueMapUiReflow);
+window.addEventListener('resize', () => {
+  setTimeout(syncLayoutWithHeaderHeight, 20);
+  setTimeout(positionDisclaimer, 50);
+});
+map.on && map.on('resize', () => {
+  setTimeout(syncLayoutWithHeaderHeight, 20);
+  setTimeout(positionDisclaimer, 50);
+});
 map.on && map.on('moveend', () => setTimeout(positionDisclaimer, 50));
 
 // --- Layers control (moved into sidebar if present) ---
@@ -2135,9 +1734,9 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
     if (/Polygon/.test(geom)) sym.classList.add('legend-sym-polygon');
 
     if (/^#[0-9A-Fa-f]{3,6}$/.test(color) || /^[a-zA-Z]+$/.test(color)) {
-      setDynamicStyle(sym, { "background-color": color });
+      sym.style.backgroundColor = color;
     } else {
-      setDynamicStyle(sym, { "background-color": "#ccc" });
+      sym.style.backgroundColor = "#ccc";
       console.warn("Invalid color blocked:", color);
     }
 
@@ -2341,7 +1940,7 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
   reorderLayersControlUI();
   applyLayerStackOrder();
   refreshLayerSelector();
-  await setActiveLayer(safeName);
+  setActiveLayer(safeName);
   initializeMapTitleFromLayer(safeName);
 
   return safeName;
@@ -2378,12 +1977,10 @@ async function importFile(file) {
   }
 
   showLoading("Loading data from file...");
-  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
     let geojson;
     if (ext === ".zip") {
       const bytes = await readFileAsArrayBuffer(file);
-      inspectZipSafety(bytes, file.size);
       geojson = await shp(bytes);
     } else {
       const text = await readFileAsText(file);
@@ -2404,14 +2001,9 @@ async function importUrl(rawUrl) {
   if (!rawUrl) throw new Error("Enter a valid URL");
 
   showLoading("Loading data from URL...");
-  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
     const { parsed, ext } = validateImportUrl(rawUrl);
     const fetched = await fetchWithLimits(parsed.href);
-    assertFinalImportUrlAllowed(fetched.finalUrl);
-    if (!isAllowedRemoteContentType(ext, fetched.contentType)) {
-      throw new Error(`Remote content type is not allowed for ${ext} import.`);
-    }
     const geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
     const safeName = await addImportedLayer(geojson, fallbackName, "Imported URL data");
@@ -2647,15 +2239,15 @@ async function populateFilterControls(data) {
     selectedContinentValues = new Set();
     updateContinentFilterButtonLabel();
     showRow(contCol);
-    if (africaBtn) setDynamicStyle(africaBtn, { display: "" });
-    if (contBtnAll) setDynamicStyle(contBtnAll, { display: "" });
-    if (contBtnClear) setDynamicStyle(contBtnClear, { display: "" });
+    if (africaBtn) africaBtn.style.display = '';
+    if (contBtnAll) contBtnAll.style.display = '';
+    if (contBtnClear) contBtnClear.style.display = '';
   } else {
     updateContinentFilterButtonLabel();
     hideRow(contCol);
-    if (africaBtn) setDynamicStyle(africaBtn, { display: "none" });
-    if (contBtnAll) setDynamicStyle(contBtnAll, { display: "none" });
-    if (contBtnClear) setDynamicStyle(contBtnClear, { display: "none" });
+    if (africaBtn) africaBtn.style.display = 'none';
+    if (contBtnAll) contBtnAll.style.display = 'none';
+    if (contBtnClear) contBtnClear.style.display = 'none';
   }
 
   populateCountryFilterOptions(data);
@@ -2695,36 +2287,20 @@ async function setActiveLayer(name) {
   layerGroup  = obj.layerGroup;
   currentAttribute = null;
 
-  try {
-    if (geojsonData && geojsonData.type === "FeatureCollection") {
-      await populateFilterControls(geojsonData);
-      if (currentLayerName !== targetLayerName) return;
-      populateAttributeList(geojsonData);
-      updatePointSizeControl();
-      updateLineWidthControl();
-      updateClassificationOptions();
-      // Do not force classification; apply only if attribute already selected
-      if (currentAttribute) applyClassification();
-      else renderDefaultFilteredLayer();
-    }
-  } catch (e) {
-    console.error("Layer activation UI failed; applying safe fallback.", e);
-    try {
-      populateAttributeList(geojsonData || { type: "FeatureCollection", features: [] });
-      updatePointSizeControl();
-      updateLineWidthControl();
-      updateClassificationOptions();
-      renderDefaultFilteredLayer();
-    } catch (inner) {
-      console.error("Layer activation fallback also failed.", inner);
-    }
+  if (geojsonData && geojsonData.type === "FeatureCollection") {
+    await populateFilterControls(geojsonData);
+    if (currentLayerName !== targetLayerName) return;
+    populateAttributeList(geojsonData);
+    updatePointSizeControl();
+    updateLineWidthControl();
+    updateClassificationOptions();
+    // Do not force classification; apply only if attribute already selected
+    if (currentAttribute) applyClassification();
+    else renderDefaultFilteredLayer();
   }
 
   const sel = document.getElementById('layer-select');
-  if (sel) {
-    sel.value = name;
-    showRow('layer-select-col');
-  }
+  if (sel) sel.value = name;
 }
 //Attribute Population, Controls, and Classification Options
 // --- Populate attribute dropdown ---
@@ -2963,7 +2539,7 @@ function applyClassification() {
   }
 
   const tbl = document.getElementById('table-container');
-  if (tbl) setDynamicStyle(tbl, { display: "block" });
+  if (tbl) tbl.style.display = 'block';
   applyLayerStackOrder();
 }
 //Classification Tables and Helpers
@@ -3266,9 +2842,9 @@ function showPopup(msg, type = "error") {
   popup.classList.remove('popup-error', 'popup-success');
   popup.classList.add(type === 'error' ? 'popup-error' : 'popup-success');
   popup.textContent = msg;
-  setDynamicStyle(popup, { display: "block" });
+  popup.style.display = 'block';
 
-  setTimeout(() => { setDynamicStyle(popup, { display: "none" }); }, 6000);
+  setTimeout(() => { popup.style.display = 'none'; }, 6000);
 }
 
 // --- Sidebar toggle helpers (buttons cached) ---
@@ -3277,7 +2853,7 @@ function toggleClassTable() {
   const wrap = document.getElementById('classification-wrapper');
   if (!wrap || !btnClassTable) return;
   const hidden = window.getComputedStyle(wrap).display === 'none';
-  setDynamicStyle(wrap, { display: hidden ? "block" : "none" });
+  wrap.style.display = hidden ? 'block' : 'none';
   btnClassTable.classList.toggle('active', hidden);
 }
 
@@ -3302,7 +2878,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const wrap = document.getElementById('classification-wrapper');
 
   if (wrap && btnClassTable) {
-    setDynamicStyle(wrap, { display: "block" });
+    wrap.style.display = 'block';
     btnClassTable.classList.add('active');
   }
 
@@ -3347,15 +2923,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
-      setDynamicStyle(wrapper, {
-        width: W + "px",
-        // Avoid transform-based offscreen positioning for Firefox/html2canvas.
-        transform: "none",
-        position: "fixed",
-        left: "-100000px",
-        top: "0",
-        "z-index": "-1"
-      });
+      wrapper.style.width = W + 'px';
       document.body.appendChild(wrapper);
 
       // Title (safe insertion)
@@ -3365,30 +2933,28 @@ window.addEventListener('load', resetInitialScrollPositions);
         t.className = 'export-title';
         t.textContent = titleEl.textContent || "Map Export"; // safe fallback
         // enforce a reasonable export title size to avoid oversized fonts
-        setDynamicStyle(t, {
-          "font-size": "20px",
-          "font-weight": "600",
-          margin: "0 0 8px 0",
-          "text-align": "center",
-          width: "100%",
-          display: "block"
-        });
+        t.style.fontSize = '20px';
+        t.style.fontWeight = '600';
+        t.style.margin = '0 0 8px 0';
         wrapper.appendChild(t);
       }
 
       // Map image container
       const mapWrapper = document.createElement('div');
       mapWrapper.className = 'export-map-wrapper';
-      setDynamicStyle(mapWrapper, {
-        width: W + "px",
-        height: H + "px",
-        position: "relative",
-        overflow: "hidden"
-      });
+      mapWrapper.style.width = W + 'px';
+      mapWrapper.style.height = H + 'px';
       wrapper.appendChild(mapWrapper);
 
       // Add export-specific styles to normalize title/disclaimer for canvas export
-      // Export styles should live in CSS (CSP-safe); keep wrapper clean.
+      const styleEl = document.createElement('style');
+      styleEl.type = 'text/css';
+      styleEl.textContent = `
+        .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1}
+        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;width:fit-content !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-img{width:100%;height:auto;display:block}
+      `;
+      wrapper.appendChild(styleEl);
 
       const img = document.createElement('img');
       img.className = 'export-img';
@@ -3396,98 +2962,34 @@ window.addEventListener('load', resetInitialScrollPositions);
       img.alt = "Exported map image";             // accessibility
       mapWrapper.appendChild(img);
 
-      function copyVisualStyles(sourceNode, targetNode) {
-        if (!sourceNode || !targetNode) return;
-        const cs = window.getComputedStyle(sourceNode);
-        const props = [
-          'display', 'visibility', 'opacity',
-          'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
-          'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
-          'boxShadow', 'outline',
-          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'textTransform',
-          'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-          'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
-          'overflow', 'overflowX', 'overflowY',
-          'alignItems', 'justifyContent', 'gap', 'flexDirection',
-          'filter', 'backdropFilter'
-        ];
-        props.forEach((prop) => {
-          try { targetNode.style[prop] = cs[prop]; } catch (e) {}
-        });
-      }
-
-      function copyVisualStylesRecursive(sourceNode, targetNode) {
-        copyVisualStyles(sourceNode, targetNode);
-        const sourceChildren = Array.from(sourceNode.children || []);
-        const targetChildren = Array.from(targetNode.children || []);
-        const len = Math.min(sourceChildren.length, targetChildren.length);
-        for (let i = 0; i < len; i++) {
-          copyVisualStylesRecursive(sourceChildren[i], targetChildren[i]);
-        }
-      }
-
-      function getElementMapOffset(sourceEl, mapContainerEl) {
-        let x = 0;
-        let y = 0;
-        let node = sourceEl;
-        while (node && node !== mapContainerEl) {
-          x += node.offsetLeft || 0;
-          y += node.offsetTop || 0;
-          node = node.offsetParent;
-        }
-        if (node === mapContainerEl) {
-          return { left: x, top: y };
-        }
-        const mapRect = mapContainerEl.getBoundingClientRect();
-        const srcRect = sourceEl.getBoundingClientRect();
-        return {
-          left: srcRect.left - mapRect.left,
-          top: srcRect.top - mapRect.top
-        };
-      }
-
-      function getControlAnchorPosition(sourceEl, mapContainerEl) {
-        // Draggable controls store canonical map-local position in inline left/top.
-        if (sourceEl && sourceEl.classList && sourceEl.classList.contains('draggable-map-control')) {
-    const leftInline = parseFloat(sourceEl.dataset.leftPx || "");
-    const topInline = parseFloat(sourceEl.dataset.topPx || "");
-          if (Number.isFinite(leftInline) && Number.isFinite(topInline)) {
-            return { left: leftInline, top: topInline };
-          }
-        }
-        return getElementMapOffset(sourceEl, mapContainerEl);
-      }
-
       function cloneMapOverlayToExport(selector, className) {
         const source = document.querySelector(selector);
         if (!source || !mapEl) return;
+        const mapRect = mapEl.getBoundingClientRect();
         const srcRect = source.getBoundingClientRect();
         if (!srcRect || srcRect.width <= 0 || srcRect.height <= 0) return;
-        const srcPos = getControlAnchorPosition(source, mapEl);
 
         const clone = source.cloneNode(true);
         if (className) clone.classList.add(className);
-        copyVisualStylesRecursive(source, clone);
 
-        // Keep sub-pixel precision so Firefox export matches on-screen control position.
-        const exportLeft = Math.max(0, srcPos.left * rawScaleX);
-        const exportTop = Math.max(0, srcPos.top * rawScaleY);
-        const exportWidth = Math.max(1, srcRect.width * rawScaleX);
-        const exportHeight = Math.max(1, srcRect.height * rawScaleY);
+        const relLeftCss = srcRect.left - mapRect.left;
+        const relTopCss = srcRect.top - mapRect.top;
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
+        const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
 
-        setDynamicStyle(clone, {
-          position: "absolute",
-          left: exportLeft + "px",
-          top: exportTop + "px",
-          right: "auto",
-          bottom: "auto",
-          width: exportWidth + "px",
-          height: exportHeight + "px",
-          margin: "0",
-          transform: "none",
-          cursor: "default",
-          "pointer-events": "none"
-        });
+        clone.style.position = 'absolute';
+        clone.style.left = exportLeft + 'px';
+        clone.style.top = exportTop + 'px';
+        clone.style.right = 'auto';
+        clone.style.bottom = 'auto';
+        clone.style.width = exportWidth + 'px';
+        clone.style.height = exportHeight + 'px';
+        clone.style.margin = '0';
+        clone.style.transform = 'none';
+        clone.style.cursor = 'default';
+        clone.style.pointerEvents = 'none';
         mapWrapper.appendChild(clone);
       }
 
@@ -3495,39 +2997,27 @@ window.addEventListener('load', resetInitialScrollPositions);
       const disclaimer = document.querySelector('#disclaimer');
       if (disclaimer) {
         const clone = disclaimer.cloneNode(true);
-        clone.removeAttribute('id');
-        clone.classList.add('export-disclaimer-clone');
-        const discStyles = window.getComputedStyle(disclaimer);
+        clone.className = 'export-disclaimer-clone';
         // Preserve user-dragged disclaimer position in exports.
+        const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const discRect = disclaimer.getBoundingClientRect();
-        const discPos = getElementMapOffset(disclaimer, mapEl);
-        const exportLeft = Math.max(0, discPos.left * rawScaleX);
-        const exportTop = Math.max(0, discPos.top * rawScaleY);
-        const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX));
-        setDynamicStyle(clone, {
-          left: exportLeft + "px",
-          top: exportTop + "px",
-          right: "auto",
-          bottom: "auto",
-          position: "absolute",
-          display: "inline-block",
-          width: "auto",
-          "max-width": exportWidth + "px",
-          background: discStyles.background,
-          border: discStyles.border,
-          "border-radius": discStyles.borderRadius,
-          "box-shadow": discStyles.boxShadow,
-          color: discStyles.color,
-          "font-size": discStyles.fontSize,
-          "font-style": discStyles.fontStyle,
-          "font-weight": discStyles.fontWeight,
-          "line-height": discStyles.lineHeight,
-          padding: discStyles.padding,
-          "text-align": discStyles.textAlign,
-          "white-space": discStyles.whiteSpace,
-          "max-height": discStyles.maxHeight,
-          overflow: discStyles.overflow
-        });
+        const relLeftCss = mapRect ? (discRect.left - mapRect.left) : 10;
+        const relTopCss = mapRect ? (discRect.top - mapRect.top) : 10;
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 10);
+        const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
+        clone.style.left = exportLeft + 'px';
+        clone.style.top = exportTop + 'px';
+        clone.style.right = 'auto';
+        clone.style.bottom = 'auto';
+        clone.style.width = 'fit-content';
+        clone.style.maxWidth = exportWidth + 'px';
+        clone.style.maxHeight = 'none';
+        clone.style.overflow = 'visible';
+        clone.style.whiteSpace = 'normal';
+        clone.style.lineHeight = '1.25';
+        clone.style.fontSize = '10px';
+        clone.style.padding = '6px';
         mapWrapper.appendChild(clone);
       }
 
@@ -3539,60 +3029,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       const legend = document.querySelector('#legend-items');
       if (legend) {
         const clone = legend.cloneNode(true);
-        clone.removeAttribute('id');
-        clone.classList.add('export-legend-clone');
-        setDynamicStyle(clone, { "margin-left": "5px" });
-        // Firefox/html2canvas: normalize legend symbol geometry to avoid clipping.
-        const rows = Array.from(clone.querySelectorAll('.legend-row'));
-        rows.forEach((row) => {
-          setDynamicStyle(row, {
-            display: "flex",
-            "align-items": "center",
-            gap: "6px",
-            "min-height": "18px",
-            padding: "1px 0",
-            overflow: "visible"
-          });
-        });
-        const syms = Array.from(clone.querySelectorAll('.legend-sym'));
-        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
-        syms.forEach((sym, idx) => {
-          const sourceSym = sourceSyms[idx] || null;
-          const sourceCs = sourceSym ? window.getComputedStyle(sourceSym) : null;
-          const fillColor = (sourceCs ? sourceCs.backgroundColor : "") || "#ccc";
-          const borderValue = (sourceCs && sourceCs.border && sourceCs.border !== "0px none rgb(0, 0, 0)")
-            ? sourceCs.border
-            : "1px solid #333";
-          setDynamicStyle(sym, {
-            display: "inline-block",
-            "box-sizing": "border-box",
-            flex: "0 0 16px",
-            width: "16px",
-            "min-width": "16px",
-            "max-width": "16px",
-            height: "16px",
-            "min-height": "16px",
-            "max-height": "16px",
-            margin: "0",
-            padding: "0",
-            overflow: "visible",
-            "background-color": fillColor,
-            border: borderValue
-          });
-          if (sym.classList.contains('legend-sym-line')) {
-            const lineColor = fillColor && fillColor !== 'rgba(0, 0, 0, 0)' ? fillColor : '#333';
-            setDynamicStyle(sym, {
-              height: "0",
-              "min-height": "0",
-              "max-height": "0",
-              border: "0",
-              "border-top": `3px solid ${lineColor}`,
-              background: "transparent"
-            });
-          } else if (sym.classList.contains('legend-sym-point')) {
-            setDynamicStyle(sym, { "border-radius": "50%" });
-          }
-        });
+        clone.className = 'export-legend-clone';
         wrapper.appendChild(clone);
       }
 
@@ -3632,35 +3069,28 @@ window.addEventListener('load', resetInitialScrollPositions);
     loader.appendChild(spinner);
     loader.appendChild(text);
     document.body.appendChild(loader);
+    } else {
+    loader.querySelector("div:last-child").textContent = msg;
+    loader.style.display = "flex";
     }
-    const label = loader.querySelector("div:last-child");
-    if (label) label.textContent = msg;
-    setDynamicStyle(loader, { display: "flex" });
     }
 
     function hideLoading() {
     const loader = document.getElementById("export-loader");
-    if (loader) setDynamicStyle(loader, { display: "none" });
+    if (loader) loader.style.display = "none";
     }
     function exportMap() {
       showLoading("Exporting map as PNG...");
       compositeExportElement(wrapper => {
-        const rect = wrapper.getBoundingClientRect();
-        const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
-        const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
         const canvasScale = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
         html2canvas(wrapper, {
           scale: canvasScale,
           useCORS: true,
-          foreignObjectRendering: false,
-          logging: false,
           backgroundColor: "#ffffff",
-          width: exportWidth,
-          height: exportHeight,
-          windowWidth: exportWidth,
-          windowHeight: exportHeight,
-          scrollX: 0,
-          scrollY: 0
+          width: wrapper.scrollWidth,
+          height: wrapper.scrollHeight,
+          windowWidth: wrapper.scrollWidth,
+          windowHeight: wrapper.scrollHeight
         })
           .then(canvas => {
             const a = document.createElement('a');
@@ -3682,22 +3112,15 @@ window.addEventListener('load', resetInitialScrollPositions);
       function exportPDF() {
         showLoading("Exporting map as PDF...");
         compositeExportElement(wrapper => {
-            const rect = wrapper.getBoundingClientRect();
-            const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
-            const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
             const canvasScale = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
             html2canvas(wrapper, {
               scale: canvasScale,
               useCORS: true,
-              foreignObjectRendering: false,
-              logging: false,
               backgroundColor: "#ffffff",
-              width: exportWidth,
-              height: exportHeight,
-              windowWidth: exportWidth,
-              windowHeight: exportHeight,
-              scrollX: 0,
-              scrollY: 0
+              width: wrapper.scrollWidth,
+              height: wrapper.scrollHeight,
+              windowWidth: wrapper.scrollWidth,
+              windowHeight: wrapper.scrollHeight
             })
             .then(canvas => {
               const imgData = canvas.toDataURL('image/png');
@@ -4195,8 +3618,7 @@ function exportSVG() {
           rows.forEach(row => {
             const symEl = row.querySelector('.legend-sym');
             const lblEl = row.querySelector('span');
-            const symCs = symEl ? window.getComputedStyle(symEl) : null;
-            const fillColor = (symCs ? symCs.backgroundColor : "") || "#ccc";
+            const fillColor = (symEl && symEl.style && symEl.style.backgroundColor) || '#ccc';
 
             if (symEl && symEl.classList.contains('legend-sym-line')) {
               const line = document.createElementNS(svgNS, "line");
