@@ -3458,6 +3458,18 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (legend) {
         const clone = legend.cloneNode(true);
         clone.className = 'export-legend-clone';
+        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
+        const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
+        cloneSyms.forEach((sym, idx) => {
+          const src = sourceSyms[idx];
+          if (!src) return;
+          const cs = window.getComputedStyle(src);
+          if (cs && cs.backgroundColor) sym.style.backgroundColor = cs.backgroundColor;
+          if (cs && cs.border) sym.style.border = cs.border;
+          if (sym.classList.contains('legend-sym-point')) {
+            sym.style.borderRadius = '50%';
+          }
+        });
         wrapper.appendChild(clone);
       }
 
