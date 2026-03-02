@@ -3970,13 +3970,15 @@ function exportSVG() {
         : 0;
       const legendHeightPx = Math.max(Math.round(legendHeightCss * scale), computedLegendHeightPx);
 
-      // Use full captured canvas to avoid browser-dependent crop offsets.
-      const expectedCanvasW = canvasPixelWidth;
-      const expectedCanvasH = canvasPixelHeight;
-      const cropW = canvasPixelWidth;
-      const cropH = canvasPixelHeight;
-      const cropX = 0;
-      const cropY = 0;
+      // expected canvas pixels for visible map area
+      const expectedCanvasW = Math.round(containerWidth * rawScaleX);
+      const expectedCanvasH = Math.round(containerHeight * rawScaleY);
+
+      // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
+      const cropW = Math.min(expectedCanvasW, canvasPixelWidth);
+      const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
+      const cropX = 0; // left-align crop
+      const cropY = 0; // top-align crop
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
