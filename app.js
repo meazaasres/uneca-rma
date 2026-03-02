@@ -3871,10 +3871,10 @@ function exportSVG() {
       const expectedCanvasW = Math.round(containerWidth * rawScaleX);
       const expectedCanvasH = Math.round(containerHeight * rawScaleY);
 
-      // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
+      // Center crop horizontally so exported SVG matches on-screen centering.
       const cropW = Math.min(expectedCanvasW, canvasPixelWidth);
       const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
-      const cropX = 0; // left-align crop
+      const cropX = Math.max(0, Math.round((canvasPixelWidth - cropW) / 2));
       const cropY = 0; // top-align crop
 
       // Debug logging to help tune if needed
