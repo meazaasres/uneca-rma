@@ -1454,7 +1454,7 @@ const map = L.map('map', {
 // (south/east/west) while still keeping offshore islands in view.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-33.5, -15], [37.8, 45]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-33.5, -15], [37.8, 47]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 
 function applyHomeView() {
