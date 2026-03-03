@@ -1,6 +1,11 @@
     :root {
       --app-header-height: 80px;
     }
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
     html[data-ui-hidden="1"] {
       display: none !important;
     }
