@@ -1,7 +1,5 @@
     :root {
       --app-header-height: 80px;
-      --sidebar-width: 250px;
-      --map-side-overlap: 28px;
     }
     html,
     body {
@@ -17,7 +15,7 @@
       position: absolute;
       top: var(--app-header-height);
       left: 0;
-      width: var(--sidebar-width);
+      width: 250px;
       height: calc(100vh - var(--app-header-height));
       padding-top: 5px;
       overflow-y: auto;
@@ -32,14 +30,14 @@
       position: relative;
     }
     #table-container {
-      margin-left: var(--sidebar-width);
-      margin-right: var(--sidebar-width);
+      margin-left: 250px;
+      margin-right: 250px;
     }
     #right-sidebar {
       position: absolute;
       top: var(--app-header-height);
       right: 0;
-      width: var(--sidebar-width);
+      width: 250px;
       height: calc(100vh - var(--app-header-height));
       padding-top: 5px;
       overflow-y: auto;
@@ -49,8 +47,8 @@
     }
          /* Map container now has margins for both sidebars */
     #map-container {
-      margin-left: calc(var(--sidebar-width) - var(--map-side-overlap));
-      margin-right: calc(var(--sidebar-width) - var(--map-side-overlap));
+      margin-left: 250px;   /* left sidebar width */
+      margin-right: 250px;  /* right sidebar width */
       margin-top: calc(var(--app-header-height) - 5px);     /* push map down by 5px */
       height: calc(100vh - var(--app-header-height) + 5px);
       position: relative;
