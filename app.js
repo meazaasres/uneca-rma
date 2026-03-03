@@ -1481,14 +1481,18 @@ const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
 const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -30], [38.5, 66]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
+// Horizontal-only tightening so edge islands sit closer to sidebars.
+// Negative X padding intentionally over-zooms east/west without changing Y padding.
+const HOME_PAD_X = -90;
+const LAYER_PAD_X = -60;
 
 function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
     map.fitBounds(INITIAL_HOME_BOUNDS, {
       animate: false,
       // Keep north/south padding fixed; tighten only west/east spacing.
-      paddingTopLeft: [0, 10],
-      paddingBottomRight: [0, 10],
+      paddingTopLeft: [HOME_PAD_X, 10],
+      paddingBottomRight: [HOME_PAD_X, 10],
       maxZoom: 3.6
     });
   } else {
@@ -1523,8 +1527,8 @@ function fitToLayerExtent(layer) {
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
   map.fitBounds(bounds, {
-    paddingTopLeft: [0, 16],
-    paddingBottomRight: [0, 35]
+    paddingTopLeft: [LAYER_PAD_X, 16],
+    paddingBottomRight: [LAYER_PAD_X, 35]
   });
   map.panBy([0, 10], { animate: false });
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
