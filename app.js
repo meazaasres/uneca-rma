@@ -1498,10 +1498,13 @@ function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
 
 function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
+    const sideInset = getMapSideInsetPx();
     map.fitBounds(trimBoundsHorizontally(INITIAL_HOME_BOUNDS), {
       animate: false,
-      paddingTopLeft: [0, 10],
-      paddingBottomRight: [0, 10]
+      // Account for map area hidden under sidebars so west/east bounds align
+      // with the visible map window, not the overlapped edges.
+      paddingTopLeft: [Math.round(sideInset), 10],
+      paddingBottomRight: [Math.round(sideInset), 10]
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
