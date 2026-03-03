@@ -1475,37 +1475,20 @@ const map = L.map('map', {
 });
 
 // Deterministic startup/home view centered on Africa.
-// Keep north/south unchanged, but tighten west/east so Cape Verde and
-// Mauritius sit closer to the sidebars.
+// Keep north/south unchanged, while keeping west/east tight enough so
+// Cape Verde and Mauritius stay close to sidebars in home view.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -30], [38.5, 66]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -26.5], [38.5, 64.8]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
-// Horizontal-only trim so edge islands sit closer to sidebars without
-// changing north/south bounds.
-const HORIZONTAL_TRIM_RATIO = 0.14;
-
-function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
-  if (!bounds || typeof bounds.getSouthWest !== "function" || typeof bounds.getNorthEast !== "function") {
-    return bounds;
-  }
-  const sw = bounds.getSouthWest();
-  const ne = bounds.getNorthEast();
-  const spanLng = ne.lng - sw.lng;
-  if (!(spanLng > 0) || !(ratio > 0)) return bounds;
-  const maxTrim = Math.max(0, (spanLng / 2) - 1e-6);
-  const trim = Math.min(spanLng * ratio, maxTrim);
-  return L.latLngBounds([sw.lat, sw.lng + trim], [ne.lat, ne.lng - trim]);
-}
 
 function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
-    map.fitBounds(trimBoundsHorizontally(INITIAL_HOME_BOUNDS), {
+    map.fitBounds(INITIAL_HOME_BOUNDS, {
       animate: false,
-      // Keep north/south padding fixed; tighten only west/east spacing.
+      // Keep north/south padding unchanged; tighten only left/right spacing.
       paddingTopLeft: [0, 10],
-      paddingBottomRight: [0, 10],
-      maxZoom: 3.6
+      paddingBottomRight: [0, 10]
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
@@ -1538,9 +1521,9 @@ function fitToLayerExtent(layer) {
   if (!layer || typeof layer.getBounds !== "function") return false;
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
-  map.fitBounds(trimBoundsHorizontally(bounds), {
-    paddingTopLeft: [0, 16],
-    paddingBottomRight: [0, 35]
+  map.fitBounds(bounds, {
+    paddingTopLeft: [20, 16],
+    paddingBottomRight: [20, 35]
   });
   map.panBy([0, 10], { animate: false });
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
@@ -3411,6 +3394,8 @@ function updateCustomBreaks() {
       checkActiveLayerInControl();
       if (currentAttribute) applyClassification();
       else renderDefaultFilteredLayer();
+      // Ensure Africa-only action always snaps to the intended Africa framing.
+      applyHomeView();
     });
   }
 })();
