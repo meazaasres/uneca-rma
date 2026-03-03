@@ -31,12 +31,6 @@
       width: 100%;
       position: relative;
     }
-    #map .leaflet-left {
-      left: var(--map-side-overlap);
-    }
-    #map .leaflet-right {
-      right: var(--map-side-overlap);
-    }
     #table-container {
       margin-left: var(--sidebar-width);
       margin-right: var(--sidebar-width);
