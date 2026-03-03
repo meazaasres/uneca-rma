@@ -1912,8 +1912,7 @@ function positionDisclaimer() {
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
   const sideInset = getMapSideInsetPx();
-  const disclaimerInsetExtra = 24;
-  const left = 12 + Math.round(sideInset) + disclaimerInsetExtra;
+  const left = 12 + Math.round(sideInset);
   const bottom = 30;
   const preferredFixedWidth = 360;
   const margin = 12;
@@ -1939,7 +1938,7 @@ function positionDisclaimer() {
       const dW = disc.offsetWidth || desiredWidth;
       const dH = disc.offsetHeight || 0;
       const marginClamp = 6;
-      const minLeft = Math.max(marginClamp, Math.round(sideInset + disclaimerInsetExtra + marginClamp));
+      const minLeft = Math.max(marginClamp, Math.round(sideInset + marginClamp));
       const maxLeft = Math.max(minLeft, mW - Math.round(sideInset) - dW - marginClamp);
       const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
       const leftPx = Math.min(maxLeft, Math.max(minLeft, disclaimerUserPos.left));
@@ -2012,9 +2011,8 @@ function initDisclaimerDrag() {
     const dW = disc.offsetWidth || 0;
     const dH = disc.offsetHeight || 0;
     const sideInset = getMapSideInsetPx();
-    const disclaimerInsetExtra = 24;
     const marginClamp = 6;
-    const minLeft = Math.max(marginClamp, Math.round(sideInset + disclaimerInsetExtra + marginClamp));
+    const minLeft = Math.max(marginClamp, Math.round(sideInset + marginClamp));
     const maxLeft = Math.max(minLeft, mW - Math.round(sideInset) - dW - marginClamp);
     const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
     const clampedLeft = Math.min(maxLeft, Math.max(minLeft, left));
