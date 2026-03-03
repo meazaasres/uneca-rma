@@ -1480,7 +1480,9 @@ const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
 const INITIAL_HOME_BOUNDS = L.latLngBounds([[-34.85, -25.5], [37.35, 58.5]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
-const MAP_SIDE_VISIBLE_INSET_PX = 50;
+const SIDEBAR_WIDTH_PX = 250;
+const MAP_OVERLAP_PX = 80;
+const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
 
@@ -1518,8 +1520,27 @@ function syncLayoutWithHeaderHeight() {
   const headerHeight = Math.max(0, Math.ceil(header.getBoundingClientRect().height));
   if (!headerHeight) return;
   setDynamicStyle(document.documentElement, { "--app-header-height": `${headerHeight}px` });
+  applyMapHorizontalLayout();
   if (map && typeof map.invalidateSize === "function") {
     setTimeout(() => map.invalidateSize({ pan: false }), 0);
+  }
+}
+
+function applyMapHorizontalLayout() {
+  const mapContainer = document.getElementById('map-container');
+  const mapEl = document.getElementById('map');
+  if (mapContainer) {
+    const sideMargin = Math.max(0, SIDEBAR_WIDTH_PX - MAP_OVERLAP_PX);
+    setDynamicStyle(mapContainer, {
+      "margin-left": `${sideMargin}px`,
+      "margin-right": `${sideMargin}px`
+    });
+  }
+  if (mapEl) {
+    const leftCtl = mapEl.querySelector('.leaflet-left');
+    const rightCtl = mapEl.querySelector('.leaflet-right');
+    if (leftCtl) setDynamicStyle(leftCtl, { left: `${MAP_SIDE_VISIBLE_INSET_PX}px` });
+    if (rightCtl) setDynamicStyle(rightCtl, { right: `${MAP_SIDE_VISIBLE_INSET_PX}px` });
   }
 }
 
@@ -1900,7 +1921,7 @@ function positionDisclaimer() {
     const mapEl = map.getContainer();
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
-  const disclaimerInsetExtra = 24;
+  const disclaimerInsetExtra = 40;
   const left = 12 + MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra;
   const bottom = 30;
     const preferredFixedWidth = 360;
@@ -1999,7 +2020,7 @@ function initDisclaimerDrag() {
     const mH = mapEl.clientHeight || 0;
     const dW = disc.offsetWidth || 0;
     const dH = disc.offsetHeight || 0;
-    const disclaimerInsetExtra = 24;
+    const disclaimerInsetExtra = 40;
     const marginClamp = 6;
     const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra + marginClamp);
     const maxLeft = Math.max(minLeft, mW - MAP_SIDE_VISIBLE_INSET_PX - dW - marginClamp);
