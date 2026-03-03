@@ -1475,15 +1475,13 @@ const map = L.map('map', {
 });
 
 // Deterministic startup/home view centered on Africa.
-// Keep north/south unchanged, but tighten west/east so Cape Verde and
-// Mauritius sit closer to the sidebars.
+// Keep north/south unchanged, while widening east/west default framing.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -30], [38.5, 66]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -34], [38.5, 70]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
-// Horizontal-only trim so edge islands sit closer to sidebars without
-// changing north/south bounds.
-const HORIZONTAL_TRIM_RATIO = 0.14;
+// Keep horizontal trim disabled so east/west view is not tightened.
+const HORIZONTAL_TRIM_RATIO = 0;
 
 function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   if (!bounds || typeof bounds.getSouthWest !== "function" || typeof bounds.getNorthEast !== "function") {
