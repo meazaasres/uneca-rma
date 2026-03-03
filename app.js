@@ -3551,10 +3551,36 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       const W = cropW;
       const H = cropH;
+      const mapRectLive = mapEl ? mapEl.getBoundingClientRect() : null;
+      const legendLive = document.querySelector('#legend-items');
+      const legendRectLive = legendLive ? legendLive.getBoundingClientRect() : null;
+      const hasLegendRect = !!(legendRectLive && legendRectLive.width > 0 && legendRectLive.height > 0);
+
+      let extraLeftCss = 0;
+      let extraTopCss = 0;
+      let extraRightCss = 0;
+      let extraBottomCss = 0;
+      if (mapRectLive && hasLegendRect) {
+        const relLegendLeft = legendRectLive.left - mapRectLive.left;
+        const relLegendTop = legendRectLive.top - mapRectLive.top;
+        const mapWcss = mapRectLive.width;
+        const mapHcss = mapRectLive.height;
+        extraLeftCss = Math.max(0, -relLegendLeft);
+        extraTopCss = Math.max(0, -relLegendTop);
+        extraRightCss = Math.max(0, relLegendLeft + legendRectLive.width - mapWcss);
+        extraBottomCss = Math.max(0, relLegendTop + legendRectLive.height - mapHcss);
+      }
+
+      const scenePadLeft = Math.max(0, Math.round(extraLeftCss * rawScaleX));
+      const scenePadTop = Math.max(0, Math.round(extraTopCss * rawScaleY));
+      const scenePadRight = Math.max(0, Math.round(extraRightCss * rawScaleX));
+      const scenePadBottom = Math.max(0, Math.round(extraBottomCss * rawScaleY));
+      const sceneW = Math.max(1, W + scenePadLeft + scenePadRight);
+      const sceneH = Math.max(1, H + scenePadTop + scenePadBottom);
 
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
-      wrapper.style.width = W + 'px';
+      wrapper.style.width = sceneW + 'px';
       // Stable off-screen position for html2canvas raster alignment.
       wrapper.style.transform = 'none';
       wrapper.style.position = 'fixed';
@@ -3574,26 +3600,36 @@ window.addEventListener('load', resetInitialScrollPositions);
         t.style.fontWeight = '600';
         t.style.margin = '0 0 8px 0';
         t.style.textAlign = 'center';
-        t.style.width = '100%';
+        t.style.width = sceneW + 'px';
         t.style.display = 'block';
         wrapper.appendChild(t);
       }
+
+      const scene = document.createElement('div');
+      scene.className = 'export-scene';
+      scene.style.width = sceneW + 'px';
+      scene.style.height = sceneH + 'px';
+      scene.style.position = 'relative';
+      scene.style.overflow = 'hidden';
+      wrapper.appendChild(scene);
 
       // Map image container
       const mapWrapper = document.createElement('div');
       mapWrapper.className = 'export-map-wrapper';
       mapWrapper.style.width = W + 'px';
       mapWrapper.style.height = H + 'px';
-      mapWrapper.style.position = 'relative';
+      mapWrapper.style.position = 'absolute';
+      mapWrapper.style.left = scenePadLeft + 'px';
+      mapWrapper.style.top = scenePadTop + 'px';
       mapWrapper.style.overflow = 'hidden';
-      wrapper.appendChild(mapWrapper);
+      scene.appendChild(mapWrapper);
 
       // Add export-specific styles to normalize title/disclaimer for canvas export
       const styleEl = document.createElement('style');
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;width:fit-content !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;text-align:justify !important;text-justify:inter-word !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-img{width:100%;height:auto;display:block}
       `;
       wrapper.appendChild(styleEl);
@@ -3602,6 +3638,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       img.className = 'export-img';
       img.src = cropped.toDataURL("image/png"); // explicit MIME type
       img.alt = "Exported map image";             // accessibility
+      img.style.width = W + 'px';
+      img.style.height = H + 'px';
       mapWrapper.appendChild(img);
 
       function copyVisualStyles(sourceNode, targetNode) {
@@ -3630,58 +3668,34 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
       }
 
-      function getElementMapOffset(sourceEl, mapContainerEl) {
-        let x = 0;
-        let y = 0;
-        let node = sourceEl;
-        while (node && node !== mapContainerEl) {
-          x += node.offsetLeft || 0;
-          y += node.offsetTop || 0;
-          node = node.offsetParent;
-        }
-        if (node === mapContainerEl) {
-          return { left: x, top: y };
-        }
-        const mapRect = mapContainerEl.getBoundingClientRect();
+      function getElementRectRelativeToMap(sourceEl, mapContainerEl) {
         const srcRect = sourceEl.getBoundingClientRect();
-        return {
-          left: srcRect.left - mapRect.left,
-          top: srcRect.top - mapRect.top
-        };
-      }
-
-      function getControlAnchorPosition(sourceEl, mapContainerEl) {
+        const mapRect = mapContainerEl.getBoundingClientRect();
         if (sourceEl && sourceEl.classList && sourceEl.classList.contains('draggable-map-control')) {
           const leftInline = parseFloat(sourceEl.dataset.leftPx || "");
           const topInline = parseFloat(sourceEl.dataset.topPx || "");
           if (Number.isFinite(leftInline) && Number.isFinite(topInline)) {
-            return { left: leftInline, top: topInline };
+            return {
+              left: leftInline,
+              top: topInline,
+              width: srcRect.width || sourceEl.offsetWidth || 0,
+              height: srcRect.height || sourceEl.offsetHeight || 0
+            };
           }
         }
-        const mapRect = mapContainerEl.getBoundingClientRect();
-        const srcRect = sourceEl.getBoundingClientRect();
         return {
           left: srcRect.left - mapRect.left,
-          top: srcRect.top - mapRect.top
+          top: srcRect.top - mapRect.top,
+          width: srcRect.width || sourceEl.offsetWidth || 0,
+          height: srcRect.height || sourceEl.offsetHeight || 0
         };
       }
 
-      function cloneMapOverlayToExport(selector, className) {
-        const source = document.querySelector(selector);
-        if (!source || !mapEl) return;
-        const srcRect = source.getBoundingClientRect();
-        if (!srcRect || srcRect.width <= 0 || srcRect.height <= 0) return;
-        const srcPos = getControlAnchorPosition(source, mapEl);
-
-        const clone = source.cloneNode(true);
-        if (className) clone.classList.add(className);
-        copyVisualStylesRecursive(source, clone);
-
-        const exportLeft = Math.max(0, srcPos.left * rawScaleX);
-        const exportTop = Math.max(0, srcPos.top * rawScaleY);
-        const exportWidth = Math.max(1, srcRect.width * rawScaleX);
-        const exportHeight = Math.max(1, srcRect.height * rawScaleY);
-
+      function placeCloneInMap(clone, relRect) {
+        const exportLeft = Math.max(0, Math.round(relRect.left * rawScaleX));
+        const exportTop = Math.max(0, Math.round(relRect.top * rawScaleY));
+        const exportWidth = Math.max(1, Math.round(relRect.width * rawScaleX));
+        const exportHeight = Math.max(1, Math.round(relRect.height * rawScaleY));
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
@@ -3689,12 +3703,25 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.bottom = 'auto';
         clone.style.width = exportWidth + 'px';
         clone.style.height = exportHeight + 'px';
+        clone.style.maxWidth = exportWidth + 'px';
+        clone.style.maxHeight = exportHeight + 'px';
         clone.style.margin = '0';
-        // Position is already rect-based; keeping source transform can double-shift controls.
         clone.style.transform = 'none';
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
         mapWrapper.appendChild(clone);
+      }
+
+      function cloneMapOverlayToExport(selector, className) {
+        const source = document.querySelector(selector);
+        if (!source || !mapEl) return;
+        const relRect = getElementRectRelativeToMap(source, mapEl);
+        if (!relRect || relRect.width <= 0 || relRect.height <= 0) return;
+
+        const clone = source.cloneNode(true);
+        if (className) clone.classList.add(className);
+        copyVisualStylesRecursive(source, clone);
+        placeCloneInMap(clone, relRect);
       }
 
       // Disclaimer inside map (cloned safely)
@@ -3702,48 +3729,39 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (disclaimer) {
         const clone = disclaimer.cloneNode(true);
         clone.className = 'export-disclaimer-clone';
-        // Preserve user-dragged disclaimer position in exports.
-        const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discRect = disclaimer.getBoundingClientRect();
-        const relLeftCss = mapRect ? (discRect.left - mapRect.left) : 10;
-        const relTopCss = mapRect ? (discRect.top - mapRect.top) : 10;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 10);
-        const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
-        clone.style.position = 'absolute';
-        clone.style.left = exportLeft + 'px';
-        clone.style.top = exportTop + 'px';
-        clone.style.right = 'auto';
-        clone.style.bottom = 'auto';
-        clone.style.width = 'fit-content';
-        clone.style.maxWidth = exportWidth + 'px';
-        clone.style.maxHeight = 'calc(1.25em * 6)';
-        clone.style.overflow = 'hidden';
-        clone.style.whiteSpace = 'normal';
-        clone.style.lineHeight = '1.25';
-        clone.style.fontSize = '10px';
-        clone.style.padding = '6px';
-        mapWrapper.appendChild(clone);
+        copyVisualStylesRecursive(disclaimer, clone);
+        const discRect = getElementRectRelativeToMap(disclaimer, mapEl);
+        if (discRect && discRect.width > 0 && discRect.height > 0) {
+          placeCloneInMap(clone, discRect);
+        }
       }
 
       // Export map overlays: north arrow + scale label
       cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
       cloneMapOverlayToExport('.leaflet-control-exact-scale', 'export-scale-clone');
 
-      // Legend stacked below (cloned safely)
-      const legend = document.querySelector('#legend-items');
-      if (legend) {
-        const clone = legend.cloneNode(true);
+      // Legend cloned at on-screen location relative to map.
+      if (legendLive && hasLegendRect && mapRectLive) {
+        const clone = legendLive.cloneNode(true);
         clone.className = 'export-legend-clone';
-        const legendRect = legend.getBoundingClientRect();
-        const legendWidth = Math.max(140, Math.round((legendRect.width || 0) * rawScaleX));
-        clone.style.width = legendWidth + 'px';
-        clone.style.maxWidth = Math.max(140, W - 20) + 'px';
-        clone.style.marginTop = '10px';
-        clone.style.marginLeft = 'auto';
-        clone.style.marginRight = 'auto';
-        clone.style.display = 'block';
-        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
+        copyVisualStylesRecursive(legendLive, clone);
+        const relLeftCss = extraLeftCss + (legendRectLive.left - mapRectLive.left);
+        const relTopCss = extraTopCss + (legendRectLive.top - mapRectLive.top);
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportWidth = Math.max(1, Math.round(legendRectLive.width * rawScaleX));
+        const exportHeight = Math.max(1, Math.round(legendRectLive.height * rawScaleY));
+        clone.style.position = 'absolute';
+        clone.style.left = exportLeft + 'px';
+        clone.style.top = exportTop + 'px';
+        clone.style.width = exportWidth + 'px';
+        clone.style.height = exportHeight + 'px';
+        clone.style.maxWidth = exportWidth + 'px';
+        clone.style.maxHeight = exportHeight + 'px';
+        clone.style.margin = '0';
+        clone.style.overflow = 'hidden';
+        clone.style.pointerEvents = 'none';
+        const sourceSyms = Array.from(legendLive.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
         cloneSyms.forEach((sym, idx) => {
           const src = sourceSyms[idx];
@@ -3782,7 +3800,7 @@ window.addEventListener('load', resetInitialScrollPositions);
             sym.style.borderRadius = '50%';
           }
         });
-        wrapper.appendChild(clone);
+        scene.appendChild(clone);
       }
 
       const runCb = () => {
