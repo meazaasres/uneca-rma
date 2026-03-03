@@ -1479,17 +1479,16 @@ const map = L.map('map', {
 // Mauritius sit closer to the sidebars.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -25], [38.5, 58.5]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -24.5], [38.5, 58]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 
 function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
     map.fitBounds(INITIAL_HOME_BOUNDS, {
       animate: false,
-      // Keep horizontal padding to preserve edge islands, trim vertical
-      // padding to achieve a slightly closer initial view.
-      paddingTopLeft: [20, 10],
-      paddingBottomRight: [20, 10],
+      // Keep north/south padding fixed; tighten only west/east spacing.
+      paddingTopLeft: [2, 10],
+      paddingBottomRight: [2, 10],
       maxZoom: 3.6
     });
   } else {
