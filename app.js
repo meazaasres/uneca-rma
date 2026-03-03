@@ -1481,6 +1481,7 @@ const INITIAL_HOME_ZOOM = 3;
 const INITIAL_HOME_BOUNDS = L.latLngBounds([[-34.85, -2.52], [37.35, 31.40]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 const MAP_SIDE_VISIBLE_INSET_PX = 50;
+const APP_BUILD_ID = "20260303-bounds-debug-1";
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
 
@@ -2088,6 +2089,17 @@ window.addEventListener('load', () => {
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
+  // Runtime marker: confirms the actual app.js build + bounds currently executing.
+  setTimeout(() => {
+    try {
+      const sw = INITIAL_HOME_BOUNDS.getSouthWest();
+      const ne = INITIAL_HOME_BOUNDS.getNorthEast();
+      showPopup(
+        `Build ${APP_BUILD_ID} | Bounds S:${sw.lat} W:${sw.lng} N:${ne.lat} E:${ne.lng}`,
+        "success"
+      );
+    } catch (e) {}
+  }, 120);
   setTimeout(syncLayoutWithHeaderHeight, 80);
   setTimeout(resetAllMapUiPositions, 300);
   setTimeout(initDisclaimerDrag, 350);
