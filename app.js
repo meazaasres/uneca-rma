@@ -1559,35 +1559,53 @@ setTimeout(() => {
 const draggableMapControls = new Set();
 const draggableControlInitialResolvers = new WeakMap();
 
+function getMapSideInsetPx(extraPx = 0) {
+  const root = document.documentElement;
+  if (!root || !window.getComputedStyle) return Math.max(0, extraPx);
+  const raw = window.getComputedStyle(root).getPropertyValue("--map-side-overlap");
+  const base = Number.parseFloat(raw);
+  return Math.max(0, (Number.isFinite(base) ? base : 0) + extraPx);
+}
+
 function clampDraggableControl(el, mapEl) {
   const rect = mapEl.getBoundingClientRect();
-  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
+  const sideInset = getMapSideInsetPx(6);
+  const minLeft = Math.max(0, Math.round(sideInset));
+  const maxLeft = Math.max(minLeft, Math.round(rect.width - sideInset - el.offsetWidth));
   const maxTop = Math.max(0, rect.height - el.offsetHeight);
-  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.dataset.leftPx) || 0));
+  const left = Math.max(minLeft, Math.min(maxLeft, parseFloat(el.dataset.leftPx) || minLeft));
   const top = Math.max(0, Math.min(maxTop, parseFloat(el.dataset.topPx) || 0));
   el.dataset.leftPx = String(left);
   el.dataset.topPx = String(top);
   setDynamicStyle(el, { left: `${left}px`, top: `${top}px` });
-  return { left, top, maxLeft, maxTop };
+  return { left, top, minLeft, maxLeft, maxTop };
 }
 
 function updateDraggableControlNorm(el, mapEl) {
   const rect = mapEl.getBoundingClientRect();
-  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
+  const sideInset = getMapSideInsetPx(6);
+  const minLeft = Math.max(0, Math.round(sideInset));
+  const maxLeft = Math.max(minLeft, Math.round(rect.width - sideInset - el.offsetWidth));
   const maxTop = Math.max(0, rect.height - el.offsetHeight);
-  const left = Math.max(0, Math.min(maxLeft, parseFloat(el.dataset.leftPx) || 0));
+  const left = Math.max(minLeft, Math.min(maxLeft, parseFloat(el.dataset.leftPx) || minLeft));
   const top = Math.max(0, Math.min(maxTop, parseFloat(el.dataset.topPx) || 0));
-  el.dataset.normX = maxLeft > 0 ? String(left / maxLeft) : "0";
+  const spanX = Math.max(0, maxLeft - minLeft);
+  el.dataset.normX = spanX > 0 ? String((left - minLeft) / spanX) : "0";
   el.dataset.normY = maxTop > 0 ? String(top / maxTop) : "0";
 }
 
 function applyDraggableControlNorm(el, mapEl) {
   const rect = mapEl.getBoundingClientRect();
-  const maxLeft = Math.max(0, rect.width - el.offsetWidth);
+  const sideInset = getMapSideInsetPx(6);
+  const minLeft = Math.max(0, Math.round(sideInset));
+  const maxLeft = Math.max(minLeft, Math.round(rect.width - sideInset - el.offsetWidth));
   const maxTop = Math.max(0, rect.height - el.offsetHeight);
   const nx = Number(el.dataset.normX);
   const ny = Number(el.dataset.normY);
-  const left = isFinite(nx) ? Math.max(0, Math.min(maxLeft, Math.round(nx * maxLeft))) : 0;
+  const spanX = Math.max(0, maxLeft - minLeft);
+  const left = Number.isFinite(nx)
+    ? Math.max(minLeft, Math.min(maxLeft, Math.round(minLeft + (nx * spanX))))
+    : minLeft;
   const top = isFinite(ny) ? Math.max(0, Math.min(maxTop, Math.round(ny * maxTop))) : 0;
   el.dataset.leftPx = String(left);
   el.dataset.topPx = String(top);
@@ -1619,7 +1637,15 @@ function applyDraggableControlInitialPosition(el, mapEl, refreshInit = true) {
   const resolver = draggableControlInitialResolvers.get(el);
   if (!resolver) return false;
   const pos = resolver(el, mapEl) || {};
-  const initLeft = Math.max(0, Math.round(Number(pos.left) || 0));
+  const sideInset = getMapSideInsetPx(6);
+  const maxLeft = Math.max(
+    Math.round(sideInset),
+    Math.round((mapEl.clientWidth || 0) - sideInset - el.offsetWidth)
+  );
+  const initLeft = Math.max(
+    Math.round(sideInset),
+    Math.min(maxLeft, Math.round(Number(pos.left) || sideInset))
+  );
   const initTop = Math.max(0, Math.round(Number(pos.top) || 0));
   el.dataset.leftPx = String(initLeft);
   el.dataset.topPx = String(initTop);
@@ -1662,11 +1688,13 @@ function makeControlDraggable(control, initial) {
   const onPointerMove = (evt) => {
     if (!dragging) return;
     const rect = mapEl.getBoundingClientRect();
+    const sideInset = getMapSideInsetPx(6);
+    const minLeft = Math.max(0, Math.round(sideInset));
     const dx = evt.clientX - startX;
     const dy = evt.clientY - startY;
-    const maxLeft = Math.max(0, rect.width - el.offsetWidth);
+    const maxLeft = Math.max(minLeft, Math.round(rect.width - sideInset - el.offsetWidth));
     const maxTop = Math.max(0, rect.height - el.offsetHeight);
-    const nextLeft = Math.max(0, Math.min(maxLeft, baseLeft + dx));
+    const nextLeft = Math.max(minLeft, Math.min(maxLeft, baseLeft + dx));
     const nextTop = Math.max(0, Math.min(maxTop, baseTop + dy));
     el.dataset.leftPx = String(nextLeft);
     el.dataset.topPx = String(nextTop);
@@ -1707,7 +1735,8 @@ function getBottomCenterPosition(el, mapEl, bottomPx = 14, offsetXPx = 0) {
 
 function getTopRightPosition(el, mapEl, marginPx = 12) {
   const mapW = mapEl.clientWidth || 0;
-  const left = Math.max(0, Math.round(mapW - el.offsetWidth - marginPx));
+  const sideInset = getMapSideInsetPx();
+  const left = Math.max(0, Math.round(mapW - sideInset - el.offsetWidth - marginPx));
   const top = Math.max(0, marginPx);
   return { left, top };
 }
@@ -1882,12 +1911,13 @@ function positionDisclaimer() {
     const mapEl = map.getContainer();
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
-  const left = 12;
+  const sideInset = getMapSideInsetPx();
+  const left = 12 + Math.round(sideInset);
   const bottom = 30;
-    const preferredFixedWidth = 360;
-    const margin = 12;
-    const maxAvailableWidth = mapRect
-      ? Math.max(120, Math.round(mapRect.width - left - margin))
+  const preferredFixedWidth = 360;
+  const margin = 12;
+  const maxAvailableWidth = mapRect
+      ? Math.max(120, Math.round(mapRect.width - left - margin - sideInset))
       : preferredFixedWidth;
     const desiredWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
 
@@ -1908,9 +1938,10 @@ function positionDisclaimer() {
       const dW = disc.offsetWidth || desiredWidth;
       const dH = disc.offsetHeight || 0;
       const marginClamp = 6;
-      const maxLeft = Math.max(marginClamp, mW - dW - marginClamp);
+      const minLeft = Math.max(marginClamp, Math.round(sideInset + marginClamp));
+      const maxLeft = Math.max(minLeft, mW - Math.round(sideInset) - dW - marginClamp);
       const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
-      const leftPx = Math.min(maxLeft, Math.max(marginClamp, disclaimerUserPos.left));
+      const leftPx = Math.min(maxLeft, Math.max(minLeft, disclaimerUserPos.left));
       const topPx = Math.min(maxTop, Math.max(marginClamp, disclaimerUserPos.top));
       setDynamicStyle(disc, {
         top: topPx + "px",
@@ -1979,10 +2010,12 @@ function initDisclaimerDrag() {
     const mH = mapEl.clientHeight || 0;
     const dW = disc.offsetWidth || 0;
     const dH = disc.offsetHeight || 0;
+    const sideInset = getMapSideInsetPx();
     const marginClamp = 6;
-    const maxLeft = Math.max(marginClamp, mW - dW - marginClamp);
+    const minLeft = Math.max(marginClamp, Math.round(sideInset + marginClamp));
+    const maxLeft = Math.max(minLeft, mW - Math.round(sideInset) - dW - marginClamp);
     const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
-    const clampedLeft = Math.min(maxLeft, Math.max(marginClamp, left));
+    const clampedLeft = Math.min(maxLeft, Math.max(minLeft, left));
     const clampedTop = Math.min(maxTop, Math.max(marginClamp, top));
 
     setDynamicStyle(disc, {
