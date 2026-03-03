@@ -3490,10 +3490,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
-      // Keep wrapper off-screen without extreme offsets to avoid html2canvas drift.
+      // Stable off-screen position for html2canvas raster alignment.
       wrapper.style.transform = 'none';
-      wrapper.style.position = 'absolute';
-      wrapper.style.left = '-9999px';
+      wrapper.style.position = 'fixed';
+      wrapper.style.left = '-100000px';
       wrapper.style.top = '0';
       wrapper.style.zIndex = '-1';
       document.body.appendChild(wrapper);
@@ -3508,6 +3508,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         t.style.fontSize = '20px';
         t.style.fontWeight = '600';
         t.style.margin = '0 0 8px 0';
+        t.style.textAlign = 'center';
+        t.style.width = '100%';
+        t.style.display = 'block';
         wrapper.appendChild(t);
       }
 
@@ -3516,6 +3519,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       mapWrapper.className = 'export-map-wrapper';
       mapWrapper.style.width = W + 'px';
       mapWrapper.style.height = H + 'px';
+      mapWrapper.style.position = 'relative';
+      mapWrapper.style.overflow = 'hidden';
       wrapper.appendChild(mapWrapper);
 
       // Add export-specific styles to normalize title/disclaimer for canvas export
@@ -3534,22 +3539,83 @@ window.addEventListener('load', resetInitialScrollPositions);
       img.alt = "Exported map image";             // accessibility
       mapWrapper.appendChild(img);
 
+      function copyVisualStyles(sourceNode, targetNode) {
+        if (!sourceNode || !targetNode) return;
+        const cs = window.getComputedStyle(sourceNode);
+        const props = [
+          'display', 'visibility', 'opacity',
+          'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
+          'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
+          'boxShadow', 'outline',
+          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
+          'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
+        ];
+        props.forEach((prop) => {
+          try { targetNode.style[prop] = cs[prop]; } catch (e) {}
+        });
+      }
+
+      function copyVisualStylesRecursive(sourceNode, targetNode) {
+        copyVisualStyles(sourceNode, targetNode);
+        const sourceChildren = Array.from(sourceNode.children || []);
+        const targetChildren = Array.from(targetNode.children || []);
+        const len = Math.min(sourceChildren.length, targetChildren.length);
+        for (let i = 0; i < len; i++) {
+          copyVisualStylesRecursive(sourceChildren[i], targetChildren[i]);
+        }
+      }
+
+      function getElementMapOffset(sourceEl, mapContainerEl) {
+        let x = 0;
+        let y = 0;
+        let node = sourceEl;
+        while (node && node !== mapContainerEl) {
+          x += node.offsetLeft || 0;
+          y += node.offsetTop || 0;
+          node = node.offsetParent;
+        }
+        if (node === mapContainerEl) {
+          return { left: x, top: y };
+        }
+        const mapRect = mapContainerEl.getBoundingClientRect();
+        const srcRect = sourceEl.getBoundingClientRect();
+        return {
+          left: srcRect.left - mapRect.left,
+          top: srcRect.top - mapRect.top
+        };
+      }
+
+      function getControlAnchorPosition(sourceEl, mapContainerEl) {
+        if (sourceEl && sourceEl.classList && sourceEl.classList.contains('draggable-map-control')) {
+          const leftInline = parseFloat(sourceEl.dataset.leftPx || "");
+          const topInline = parseFloat(sourceEl.dataset.topPx || "");
+          if (Number.isFinite(leftInline) && Number.isFinite(topInline)) {
+            return { left: leftInline, top: topInline };
+          }
+        }
+        const mapRect = mapContainerEl.getBoundingClientRect();
+        const srcRect = sourceEl.getBoundingClientRect();
+        return {
+          left: srcRect.left - mapRect.left,
+          top: srcRect.top - mapRect.top
+        };
+      }
+
       function cloneMapOverlayToExport(selector, className) {
         const source = document.querySelector(selector);
         if (!source || !mapEl) return;
-        const mapRect = mapEl.getBoundingClientRect();
         const srcRect = source.getBoundingClientRect();
         if (!srcRect || srcRect.width <= 0 || srcRect.height <= 0) return;
+        const srcPos = getControlAnchorPosition(source, mapEl);
 
         const clone = source.cloneNode(true);
         if (className) clone.classList.add(className);
+        copyVisualStylesRecursive(source, clone);
 
-        const relLeftCss = srcRect.left - mapRect.left;
-        const relTopCss = srcRect.top - mapRect.top;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
-        const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
-        const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
+        const exportLeft = Math.max(0, srcPos.left * rawScaleX);
+        const exportTop = Math.max(0, srcPos.top * rawScaleY);
+        const exportWidth = Math.max(1, srcRect.width * rawScaleX);
+        const exportHeight = Math.max(1, srcRect.height * rawScaleY);
 
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
@@ -3559,6 +3625,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.width = exportWidth + 'px';
         clone.style.height = exportHeight + 'px';
         clone.style.margin = '0';
+        // Position is already rect-based; keeping source transform can double-shift controls.
         clone.style.transform = 'none';
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
@@ -3578,14 +3645,15 @@ window.addEventListener('load', resetInitialScrollPositions);
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
         const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 10);
         const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
+        clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
         clone.style.right = 'auto';
         clone.style.bottom = 'auto';
         clone.style.width = 'fit-content';
         clone.style.maxWidth = exportWidth + 'px';
-        clone.style.maxHeight = 'none';
-        clone.style.overflow = 'visible';
+        clone.style.maxHeight = 'calc(1.25em * 6)';
+        clone.style.overflow = 'hidden';
         clone.style.whiteSpace = 'normal';
         clone.style.lineHeight = '1.25';
         clone.style.fontSize = '10px';
@@ -3602,15 +3670,50 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (legend) {
         const clone = legend.cloneNode(true);
         clone.className = 'export-legend-clone';
+        const legendRect = legend.getBoundingClientRect();
+        const legendWidth = Math.max(140, Math.round((legendRect.width || 0) * rawScaleX));
+        clone.style.width = legendWidth + 'px';
+        clone.style.maxWidth = Math.max(140, W - 20) + 'px';
+        clone.style.marginTop = '10px';
+        clone.style.marginLeft = 'auto';
+        clone.style.marginRight = 'auto';
+        clone.style.display = 'block';
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
         cloneSyms.forEach((sym, idx) => {
           const src = sourceSyms[idx];
           if (!src) return;
           const cs = window.getComputedStyle(src);
-          if (cs && cs.backgroundColor) sym.style.backgroundColor = cs.backgroundColor;
-          if (cs && cs.border) sym.style.border = cs.border;
-          if (sym.classList.contains('legend-sym-point')) {
+          const fillColor = (cs && cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)')
+            ? cs.backgroundColor
+            : '#ccc';
+          const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
+            ? cs.border
+            : '1px solid #333';
+          sym.style.display = 'inline-block';
+          sym.style.boxSizing = 'border-box';
+          sym.style.width = '16px';
+          sym.style.minWidth = '16px';
+          sym.style.maxWidth = '16px';
+          sym.style.height = '16px';
+          sym.style.minHeight = '16px';
+          sym.style.maxHeight = '16px';
+          sym.style.margin = '0';
+          sym.style.padding = '0';
+          sym.style.overflow = 'visible';
+          sym.style.backgroundColor = fillColor;
+          sym.style.border = borderValue;
+          if (sym.classList.contains('legend-sym-line')) {
+            const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
+              ? cs.borderTopColor
+              : fillColor;
+            sym.style.height = '0';
+            sym.style.minHeight = '0';
+            sym.style.maxHeight = '0';
+            sym.style.border = '0';
+            sym.style.borderTop = `3px solid ${lineColor}`;
+            sym.style.background = 'transparent';
+          } else if (sym.classList.contains('legend-sym-point')) {
             sym.style.borderRadius = '50%';
           }
         });
@@ -3867,15 +3970,13 @@ function exportSVG() {
         : 0;
       const legendHeightPx = Math.max(Math.round(legendHeightCss * scale), computedLegendHeightPx);
 
-      // expected canvas pixels for visible map area
-      const expectedCanvasW = Math.round(containerWidth * rawScaleX);
-      const expectedCanvasH = Math.round(containerHeight * rawScaleY);
-
-      // Center crop horizontally so exported SVG matches on-screen centering.
-      const cropW = Math.min(expectedCanvasW, canvasPixelWidth);
-      const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
-      const cropX = Math.max(0, Math.round((canvasPixelWidth - cropW) / 2));
-      const cropY = 0; // top-align crop
+      // Use full captured canvas to avoid browser-dependent crop offsets.
+      const expectedCanvasW = canvasPixelWidth;
+      const expectedCanvasH = canvasPixelHeight;
+      const cropW = canvasPixelWidth;
+      const cropH = canvasPixelHeight;
+      const cropX = 0;
+      const cropY = 0;
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
@@ -3892,9 +3993,8 @@ function exportSVG() {
       const usedCanvasWidth  = cropW;
       const usedCanvasHeight = cropH;
 
-      const exportSidePaddingPx = marginPx;
-      const mapOffsetX = exportSidePaddingPx;
-      const totalWidthPx  = usedCanvasWidth + (mapOffsetX * 2);
+      const contentOffsetXPx = 0;
+      const totalWidthPx  = usedCanvasWidth;
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
 
       const svg = document.createElementNS(svgNS, "svg");
@@ -3935,115 +4035,27 @@ function exportSVG() {
       const imgDataUrl = cropped.toDataURL("image/png");
       const img = document.createElementNS(svgNS, "image");
       img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
-      img.setAttribute("x", String(mapOffsetX));
+      img.setAttribute("x", String(contentOffsetXPx));
       img.setAttribute("y", String(titleHeightPx));
       img.setAttribute("width", String(usedCanvasWidth));
       img.setAttribute("height", String(usedCanvasHeight));
       svg.appendChild(img);
 
-      // project coords into cropped canvas pixel space (subtract crop offsets)
-      function projectCoordToCanvas(coord) {
-        const latlng = L.latLng(coord[1], coord[0]);
-        const layerPoint = map.latLngToLayerPoint(latlng);
-        const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * scale) - cropX + mapOffsetX;
-        const y = (containerPoint.y * scale) - cropY + titleHeightPx;
-        return [x, y];
-      }
-
-      // style helper
-      function styleForFeature(f) {
-        const ds = defaultStyle(f);
-        const style = {
-          fill: ds.fillColor || "none",
-          stroke: ds.color || "#000",
-          strokeWidth: ds.weight != null ? ds.weight : getLineWidth(),
-          fillOpacity: ds.fillOpacity != null ? ds.fillOpacity : 0.6
-        };
-        if (overlay.vals && overlay.cols && currentAttribute) {
-          if (overlay.isNumeric && Array.isArray(overlay.vals) && overlay.vals.length > 1) {
-            const v = Number(f.properties?.[currentAttribute]);
-            for (let i = 0; i < overlay.vals.length - 1; i++) {
-              if (v >= overlay.vals[i] && v <= overlay.vals[i + 1]) {
-                style.fill = overlay.cols[i] || style.fill;
-                break;
-              }
-            }
-          } else if (!overlay.isNumeric) {
-            const idx = (overlay.vals || []).indexOf(f.properties?.[currentAttribute]);
-            if (idx >= 0) style.fill = overlay.cols[idx] || style.fill;
-          }
-        }
-        return style;
-      }
-
-      // draw features
-      data.features.forEach(feature => {
-        const geom = feature.geometry;
-        if (!geom) return;
-        const style = styleForFeature(feature);
-
-        if (geom.type === "Polygon" || geom.type === "MultiPolygon") {
-          const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
-          polys.forEach(polygon => {
-            polygon.forEach((ring, rIdx) => {
-              const path = document.createElementNS(svgNS, "path");
-              const d = ring.map((coord, i) => {
-                const [x, y] = projectCoordToCanvas(coord);
-                return (i === 0 ? "M" : "L") + x + " " + y;
-              }).join(" ") + " Z";
-              path.setAttribute("d", d);
-              path.setAttribute("fill", rIdx === 0 ? (style.fill || "none") : "#ffffff");
-              path.setAttribute("stroke", style.stroke || "#000");
-              path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
-              path.setAttribute("fill-opacity", String(style.fillOpacity));
-              svg.appendChild(path);
-            });
-          });
-        } else if (geom.type === "LineString" || geom.type === "MultiLineString") {
-          const lines = geom.type === "LineString" ? [geom.coordinates] : geom.coordinates;
-          lines.forEach(line => {
-            const path = document.createElementNS(svgNS, "path");
-            const d = line.map((coord, i) => {
-              const [x, y] = projectCoordToCanvas(coord);
-              return (i === 0 ? "M" : "L") + x + " " + y;
-            }).join(" ");
-            path.setAttribute("d", d);
-            path.setAttribute("fill", "none");
-            path.setAttribute("stroke", style.stroke || "#000");
-            path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
-            svg.appendChild(path);
-          });
-        } else if (geom.type === "Point" || geom.type === "MultiPoint") {
-          const pts = geom.type === "Point" ? [geom.coordinates] : geom.coordinates;
-          pts.forEach(coord => {
-            const [x, y] = projectCoordToCanvas(coord);
-            const circle = document.createElementNS(svgNS, "circle");
-            const r = Math.max(1, Math.round(getPointRadius() * scale));
-            circle.setAttribute("cx", String(x));
-            circle.setAttribute("cy", String(y));
-            circle.setAttribute("r", String(r));
-            circle.setAttribute("fill", style.fill || "#ccc");
-            circle.setAttribute("stroke", style.stroke || "#000");
-            circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
-            svg.appendChild(circle);
-          });
-        }
-      });
+      // Keep SVG map content as the exact captured raster (base map + drawn layers)
+      // to avoid cross-browser vector reprojection drift (notably Edge/Firefox).
 
       // disclaimer rendered as pure SVG to avoid foreignObject inconsistencies
       const safeDisclaimer = safeText(disclaimerEl);
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discXLocal = discRect && mapRect
-          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX)
-          : marginPx;
-        const discX = mapOffsetX + discXLocal;
+        const discX = discRect && mapRect
+          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX) + contentOffsetXPx
+          : contentOffsetXPx + marginPx;
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * scale);
         let discWidth = Math.max(
           Math.round(120 * scale),
-          Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discXLocal - marginPx))
+          Math.min(desiredWidth, Math.max(120, totalWidthPx - discX - marginPx))
         );
         const fontSizeDisc = Math.max(8, Math.round(10 * scale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
@@ -4121,7 +4133,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = mapOffsetX + Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX);
+        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX) + contentOffsetXPx;
         const naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
 
         const naBg = document.createElementNS(svgNS, "rect");
@@ -4164,7 +4176,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        const sbX = mapOffsetX + Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX);
+        const sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX) + contentOffsetXPx;
         const sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
@@ -4191,13 +4203,50 @@ function exportSVG() {
         svg.appendChild(sbTextEl);
       }
 
-            // legend below map (render from current legend DOM so all layers/symbol types are included)
+      // legend below map (render from current legend DOM so all layers/symbol types are included)
       if (legendEl && legendEl.children && legendEl.children.length) {
+        const measureCanvas = document.createElement('canvas');
+        const measureCtx = measureCanvas.getContext('2d');
         const legendGroup = document.createElementNS(svgNS, "g");
-        const legendX = mapOffsetX + marginPx;
-        let yOff = titleHeightPx + usedCanvasHeight + marginPx;
+        const legendRect = legendEl.getBoundingClientRect();
+        const blocksForMeasure = Array.from(legendEl.querySelectorAll('.legend-block'));
         const symSize = Math.max(8, Math.round(12 * scale));
+        const labelOffset = symSize + Math.round(6 * scale);
+        const pad = Math.round(8 * scale);
         const fontSize = Math.max(10, Math.round(12 * scale));
+        const headerFont = `600 ${fontSize}px Segoe UI, sans-serif`;
+        const rowFont = `${fontSize}px Segoe UI, sans-serif`;
+        let measuredLegendWidth = 0;
+        blocksForMeasure.forEach((block) => {
+          const blockHeader = block.querySelector('.legend-header');
+          if (blockHeader) {
+            const txt = safeText(blockHeader) || "Legend";
+            const w = measureCtx ? Math.ceil((measureCtx.font = headerFont, measureCtx.measureText(txt).width)) : Math.round(txt.length * fontSize * 0.6);
+            measuredLegendWidth = Math.max(measuredLegendWidth, w + (pad * 2));
+          }
+          const rowsM = Array.from(block.querySelectorAll('.legend-row'));
+          rowsM.forEach((row) => {
+            const lblEl = row.querySelector('span');
+            const lbl = safeText(lblEl);
+            const w = measureCtx ? Math.ceil((measureCtx.font = rowFont, measureCtx.measureText(lbl).width)) : Math.round(lbl.length * fontSize * 0.58);
+            measuredLegendWidth = Math.max(measuredLegendWidth, labelOffset + w + (pad * 2));
+          });
+        });
+        const estimatedLegendWidth = Math.max(
+          Math.round(180 * scale),
+          Math.min(
+            usedCanvasWidth,
+            Math.max(
+              Math.round((legendRect.width || 260) * scale),
+              measuredLegendWidth
+            )
+          )
+        );
+        const legendX = Math.max(
+          marginPx,
+          Math.round((totalWidthPx - estimatedLegendWidth) / 2)
+        );
+        let yOff = titleHeightPx + usedCanvasHeight + marginPx;
         const rowGap = Math.max(3, Math.round(5 * scale));
         const blockGap = Math.max(6, Math.round(8 * scale));
 
