@@ -1480,7 +1480,7 @@ const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
 const INITIAL_HOME_BOUNDS = L.latLngBounds([[-34.85, -17.52], [37.35, 51.40]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
-const MAP_SIDE_VISIBLE_INSET_PX = 30;
+const MAP_SIDE_VISIBLE_INSET_PX = 50;
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
 
