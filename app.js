@@ -3904,11 +3904,6 @@ function exportSVG() {
     return;
   }
 
-  const titleEl = document.getElementById('map-title');
-  const legendEl = document.getElementById('legend-items');
-  const disclaimerEl = document.getElementById('disclaimer');
-  const northArrowEl = document.querySelector('.leaflet-control-north-arrow');
-  const scaleBarEl = document.querySelector('.leaflet-control-exact-scale');
   const mapEl = document.getElementById('map');
   if (!mapEl) {
     console.error("Map element not found");
@@ -3916,430 +3911,83 @@ function exportSVG() {
     return;
   }
 
-  leafletImage(map, (err, mapCanvas) => {
-    if (err || !mapCanvas) {
-      showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
-      hideLoading();
-      return exportMap();
-    }
+  compositeExportElement(wrapper => {
+    const rect = wrapper.getBoundingClientRect();
+    const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
+    const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
+    const canvasScale = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    html2canvas(wrapper, {
+      scale: canvasScale,
+      useCORS: true,
+      foreignObjectRendering: false,
+      logging: false,
+      backgroundColor: "#ffffff",
+      width: exportWidth,
+      height: exportHeight,
+      windowWidth: exportWidth,
+      windowHeight: exportHeight,
+      scrollX: 0,
+      scrollY: 0
+    })
+      .then(canvas => {
+        try {
+          const svgNS = "http://www.w3.org/2000/svg";
+          const XLINK = "http://www.w3.org/1999/xlink";
+          const svgWidth = Math.max(1, canvas.width);
+          const svgHeight = Math.max(1, canvas.height);
 
-    // detect tainted canvas
-    const canvasDataUrlCheck = tryCanvasToDataURL(mapCanvas);
-    if (!canvasDataUrlCheck) {
-      showPopup("Export blocked by cross-origin tiles. Enable CORS or use PNG fallback.", "error");
-      hideLoading();
-      return exportMap();
-    }
+          const svg = document.createElementNS(svgNS, "svg");
+          svg.setAttribute("xmlns", svgNS);
+          svg.setAttribute("xmlns:xlink", XLINK);
+          svg.setAttribute("width", String(svgWidth));
+          svg.setAttribute("height", String(svgHeight));
+          svg.setAttribute("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
+          svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-    try {
-      const svgNS = "http://www.w3.org/2000/svg";
-      const XLINK = "http://www.w3.org/1999/xlink";
+          const bg = document.createElementNS(svgNS, "rect");
+          bg.setAttribute("x", "0");
+          bg.setAttribute("y", "0");
+          bg.setAttribute("width", String(svgWidth));
+          bg.setAttribute("height", String(svgHeight));
+          bg.setAttribute("fill", "#ffffff");
+          svg.appendChild(bg);
 
-      // authoritative canvas pixels from leafletImage
-      const canvasPixelWidth  = mapCanvas.width;
-      const canvasPixelHeight = mapCanvas.height;
+          const img = document.createElementNS(svgNS, "image");
+          img.setAttributeNS(XLINK, "xlink:href", canvas.toDataURL("image/png"));
+          img.setAttribute("x", "0");
+          img.setAttribute("y", "0");
+          img.setAttribute("width", String(svgWidth));
+          img.setAttribute("height", String(svgHeight));
+          svg.appendChild(img);
 
-      // container CSS size and scale factor
-      const holderEl = document.getElementById('map-container');
-      const containerWidth  = mapEl.clientWidth || canvasPixelWidth;
-      const containerHeight = holderEl
-        ? Math.min(holderEl.clientHeight || canvasPixelHeight, mapEl.clientHeight || canvasPixelHeight)
-        : (mapEl.clientHeight || canvasPixelHeight);
-      // clamp scale to avoid excessively large exported font sizes when
-      // device or canvas ratios are large. Keep within [1,2] for stability.
-      const rawScaleX = containerWidth > 0 ? (canvasPixelWidth / containerWidth) : 1;
-      const rawScaleY = containerHeight > 0 ? (canvasPixelHeight / containerHeight) : rawScaleX;
-      const scale = Math.min(Math.max(rawScaleX, 1), 2);
+          const serializer = new XMLSerializer();
+          const svgString = serializer.serializeToString(svg);
+          const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
 
-      // title/legend heights (CSS -> canvas px)
-      const marginCss = 10;
-      const titleHeightCss = titleEl ? (titleEl.getBoundingClientRect().height + marginCss) : 0;
-      const legendHeightCss = legendEl ? (legendEl.getBoundingClientRect().height + marginCss) : 0;
-      const titleHeightPx  = Math.round(titleHeightCss * scale);
-      const marginPx = Math.round(marginCss * scale);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = (currentLayerName ? sanitizeName(currentLayerName) : "map") + ".svg";
+          a.rel = "noopener";
+          document.body.appendChild(a);
+          a.click();
 
-      const overlay = overlayData[currentLayerName] || {};
-      const legendRows = (overlay.vals && overlay.cols)
-        ? (overlay.isNumeric ? Math.max(0, overlay.vals.length - 1) : overlay.vals.length)
-        : 0;
-      const legendBoxSize = Math.max(8, Math.round(12 * scale));
-      const legendRowGap = Math.round(6 * scale);
-      const legendHeaderGap = Math.round(18 * scale);
-      const computedLegendHeightPx = legendRows
-        ? (marginPx + legendHeaderGap + (legendRows * (legendBoxSize + legendRowGap)))
-        : 0;
-      const legendHeightPx = Math.max(Math.round(legendHeightCss * scale), computedLegendHeightPx);
-
-      // Use full captured canvas to avoid browser-dependent crop offsets.
-      const expectedCanvasW = canvasPixelWidth;
-      const expectedCanvasH = canvasPixelHeight;
-      const cropW = canvasPixelWidth;
-      const cropH = canvasPixelHeight;
-      const cropX = 0;
-      const cropY = 0;
-
-      // Debug logging to help tune if needed
-      console.info("SVG export debug:",
-        { canvasPixelWidth, canvasPixelHeight, containerWidth, containerHeight, scale,
-          expectedCanvasW, expectedCanvasH, cropW, cropH, cropX, cropY, titleHeightPx, legendHeightPx });
-
-      // draw cropped region to offscreen canvas
-      const cropped = document.createElement('canvas');
-      cropped.width = cropW;
-      cropped.height = cropH;
-      const cctx = cropped.getContext('2d');
-      cctx.drawImage(mapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-      const usedCanvasWidth  = cropW;
-      const usedCanvasHeight = cropH;
-
-      const contentOffsetXPx = 0;
-      const totalWidthPx  = usedCanvasWidth;
-      const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
-
-      const svg = document.createElementNS(svgNS, "svg");
-      svg.setAttribute("xmlns", svgNS);
-      svg.setAttribute("xmlns:xlink", XLINK);
-      svg.setAttribute("width", String(totalWidthPx));
-      svg.setAttribute("height", String(totalHeightPx));
-      svg.setAttribute("style", "display:block;margin:0 auto;");
-      svg.setAttribute("viewBox", `0 0 ${totalWidthPx} ${totalHeightPx}`);
-      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
-      // background
-      const bg = document.createElementNS(svgNS, "rect");
-      bg.setAttribute("x", "0");
-      bg.setAttribute("y", "0");
-      bg.setAttribute("width", String(totalWidthPx));
-      bg.setAttribute("height", String(totalHeightPx));
-      bg.setAttribute("fill", "#ffffff");
-      svg.appendChild(bg);
-
-      // title (clamped font size for consistency)
-      const safeTitle = safeText(titleEl);
-      if (safeTitle) {
-        const title = document.createElementNS(svgNS, "text");
-        title.setAttribute("x", String(totalWidthPx / 2));
-        title.setAttribute("y", String(Math.max(Math.round(18 * scale), titleHeightPx - Math.round(marginPx / 2))));
-        title.setAttribute("text-anchor", "middle");
-        title.setAttribute("font-family", "Segoe UI, sans-serif");
-        // clamp font size between 12px and 24px to avoid oversized headings
-        const fs = Math.round(Math.max(12, Math.min(24, 18 * scale)));
-        title.setAttribute("font-size", String(fs));
-        title.setAttribute("font-weight", "600");
-        title.textContent = safeTitle;
-        svg.appendChild(title);
-      }
-
-      // embed cropped image
-      const imgDataUrl = cropped.toDataURL("image/png");
-      const img = document.createElementNS(svgNS, "image");
-      img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
-      img.setAttribute("x", String(contentOffsetXPx));
-      img.setAttribute("y", String(titleHeightPx));
-      img.setAttribute("width", String(usedCanvasWidth));
-      img.setAttribute("height", String(usedCanvasHeight));
-      svg.appendChild(img);
-
-      // Keep SVG map content as the exact captured raster (base map + drawn layers)
-      // to avoid cross-browser vector reprojection drift (notably Edge/Firefox).
-
-      // disclaimer rendered as pure SVG to avoid foreignObject inconsistencies
-      const safeDisclaimer = safeText(disclaimerEl);
-      if (safeDisclaimer) {
-        const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
-        const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = discRect && mapRect
-          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX) + contentOffsetXPx
-          : contentOffsetXPx + marginPx;
-        const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * scale);
-        let discWidth = Math.max(
-          Math.round(120 * scale),
-          Math.min(desiredWidth, Math.max(120, totalWidthPx - discX - marginPx))
-        );
-        const fontSizeDisc = Math.max(8, Math.round(10 * scale));
-        const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
-        const padding = Math.max(4, Math.round(5 * scale));
-        const maxLines = 6;
-        const avgCharWidth = Math.max(5, Math.round(fontSizeDisc * 0.5));
-        const maxCharsPerLine = Math.max(16, Math.floor((discWidth - (padding * 2)) / avgCharWidth));
-
-        const words = safeDisclaimer.split(/\s+/).filter(Boolean);
-        const lines = [];
-        let line = "";
-        for (let i = 0; i < words.length; i++) {
-          const candidate = line ? (line + " " + words[i]) : words[i];
-          if (candidate.length > maxCharsPerLine && line) {
-            lines.push(line);
-            line = words[i];
-            if (lines.length >= maxLines) break;
-          } else {
-            line = candidate;
-          }
+          setTimeout(() => {
+            try { URL.revokeObjectURL(url); } catch (e) {}
+            a.remove();
+          }, 1000);
+        } finally {
+          if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+          hideLoading();
         }
-        if (lines.length < maxLines && line) lines.push(line);
-        const truncated = lines.length >= maxLines && words.join(" ").length > lines.join(" ").length;
-        if (truncated && lines.length) {
-          lines[lines.length - 1] = lines[lines.length - 1].replace(/[.,;:!? ]+$/, "") + "...";
-        }
-
-        // Tighten SVG disclaimer box width using measured rendered text width.
-        const mCanvas = document.createElement('canvas');
-        const mCtx = mCanvas.getContext('2d');
-        if (mCtx) mCtx.font = `${fontSizeDisc}px Segoe UI, sans-serif`;
-        const measuredTextWidth = lines.reduce((m, ln) => {
-          const w = mCtx ? Math.ceil(mCtx.measureText(ln).width) : Math.round(ln.length * avgCharWidth);
-          return Math.max(m, w);
-        }, 0);
-        const tightWidth = Math.max(Math.round(120 * scale), measuredTextWidth + (padding * 2));
-        discWidth = Math.min(discWidth, tightWidth);
-
-        const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
-        const discY = discRect && mapRect
-          ? titleHeightPx + Math.max(0, Math.round((discRect.top - mapRect.top) * rawScaleY) - cropY - 10)
-          : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
-
-        const discBg = document.createElementNS(svgNS, "rect");
-        discBg.setAttribute("x", String(discX));
-        discBg.setAttribute("y", String(discY));
-        discBg.setAttribute("width", String(discWidth));
-        discBg.setAttribute("height", String(discHeight));
-        discBg.setAttribute("fill", "#ffffff");
-        discBg.setAttribute("fill-opacity", "0.95");
-        svg.appendChild(discBg);
-
-        const discText = document.createElementNS(svgNS, "text");
-        discText.setAttribute("x", String(discX + padding));
-        discText.setAttribute("y", String(discY + padding + fontSizeDisc));
-        discText.setAttribute("font-size", String(fontSizeDisc));
-        discText.setAttribute("font-family", "Segoe UI, sans-serif");
-        discText.setAttribute("fill", "#000");
-        discText.setAttribute("text-anchor", "start");
-
-        lines.forEach((ln, idx) => {
-          const tspan = document.createElementNS(svgNS, "tspan");
-          tspan.setAttribute("x", String(discX + padding));
-          tspan.setAttribute("dy", idx === 0 ? "0" : String(lineHeightDisc));
-          tspan.textContent = ln;
-          discText.appendChild(tspan);
-        });
-
-        svg.appendChild(discText);
-      }
-
-      // north arrow (render from live control position)
-      if (northArrowEl && mapEl) {
-        const naRect = northArrowEl.getBoundingClientRect();
-        const mapRect = mapEl.getBoundingClientRect();
-        const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
-        const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX) + contentOffsetXPx;
-        const naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
-
-        const naBg = document.createElementNS(svgNS, "rect");
-        naBg.setAttribute("x", String(naX));
-        naBg.setAttribute("y", String(naY));
-        naBg.setAttribute("width", String(naW));
-        naBg.setAttribute("height", String(naH));
-        naBg.setAttribute("rx", String(Math.max(2, Math.round(3 * scale))));
-        naBg.setAttribute("fill", "#ffffff");
-        naBg.setAttribute("stroke", "#cfd6e4");
-        svg.appendChild(naBg);
-
-        const naText = document.createElementNS(svgNS, "text");
-        naText.setAttribute("x", String(naX + Math.round(naW / 2)));
-        naText.setAttribute("y", String(naY + Math.max(10, Math.round(12 * scale))));
-        naText.setAttribute("text-anchor", "middle");
-        naText.setAttribute("font-size", String(Math.max(9, Math.round(12 * scale))));
-        naText.setAttribute("font-family", "Segoe UI, sans-serif");
-        naText.setAttribute("font-weight", "700");
-        naText.setAttribute("fill", "#1e3a8a");
-        naText.textContent = "N";
-        svg.appendChild(naText);
-
-        const triW = Math.max(8, Math.round(12 * scale));
-        const triH = Math.max(8, Math.round(12 * scale));
-        const triCX = naX + Math.round(naW / 2);
-        const triTop = naY + Math.max(14, Math.round(18 * scale));
-        const tri = document.createElementNS(svgNS, "path");
-        tri.setAttribute(
-          "d",
-          `M ${triCX} ${triTop} L ${triCX - Math.round(triW / 2)} ${triTop + triH} L ${triCX + Math.round(triW / 2)} ${triTop + triH} Z`
-        );
-        tri.setAttribute("fill", "#1e3a8a");
-        svg.appendChild(tri);
-      }
-
-      // scale bar label (render from live control position/text)
-      if (scaleBarEl && mapEl) {
-        const sbRect = scaleBarEl.getBoundingClientRect();
-        const mapRect = mapEl.getBoundingClientRect();
-        const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
-        const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        const sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX) + contentOffsetXPx;
-        const sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
-        const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
-        const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
-
-        const sbBg = document.createElementNS(svgNS, "rect");
-        sbBg.setAttribute("x", String(sbX));
-        sbBg.setAttribute("y", String(sbY));
-        sbBg.setAttribute("width", String(sbW));
-        sbBg.setAttribute("height", String(sbH));
-        sbBg.setAttribute("rx", String(Math.max(2, Math.round(3 * scale))));
-        sbBg.setAttribute("fill", "#ffffff");
-        sbBg.setAttribute("stroke", "#cfd6e4");
-        svg.appendChild(sbBg);
-
-        const sbTextEl = document.createElementNS(svgNS, "text");
-        sbTextEl.setAttribute("x", String(sbX + Math.round(sbW / 2)));
-        sbTextEl.setAttribute("y", String(sbY + Math.round(sbH / 2) + Math.round(3 * scale)));
-        sbTextEl.setAttribute("text-anchor", "middle");
-        sbTextEl.setAttribute("font-size", String(Math.max(8, Math.round(8 * scale))));
-        sbTextEl.setAttribute("font-family", "Segoe UI, sans-serif");
-        sbTextEl.setAttribute("font-weight", "400");
-        sbTextEl.setAttribute("fill", "#102a43");
-        sbTextEl.textContent = sbText;
-        svg.appendChild(sbTextEl);
-      }
-
-      // legend below map (render from current legend DOM so all layers/symbol types are included)
-      if (legendEl && legendEl.children && legendEl.children.length) {
-        const measureCanvas = document.createElement('canvas');
-        const measureCtx = measureCanvas.getContext('2d');
-        const legendGroup = document.createElementNS(svgNS, "g");
-        const legendRect = legendEl.getBoundingClientRect();
-        const blocksForMeasure = Array.from(legendEl.querySelectorAll('.legend-block'));
-        const symSize = Math.max(8, Math.round(12 * scale));
-        const labelOffset = symSize + Math.round(6 * scale);
-        const pad = Math.round(8 * scale);
-        const fontSize = Math.max(10, Math.round(12 * scale));
-        const headerFont = `600 ${fontSize}px Segoe UI, sans-serif`;
-        const rowFont = `${fontSize}px Segoe UI, sans-serif`;
-        let measuredLegendWidth = 0;
-        blocksForMeasure.forEach((block) => {
-          const blockHeader = block.querySelector('.legend-header');
-          if (blockHeader) {
-            const txt = safeText(blockHeader) || "Legend";
-            const w = measureCtx ? Math.ceil((measureCtx.font = headerFont, measureCtx.measureText(txt).width)) : Math.round(txt.length * fontSize * 0.6);
-            measuredLegendWidth = Math.max(measuredLegendWidth, w + (pad * 2));
-          }
-          const rowsM = Array.from(block.querySelectorAll('.legend-row'));
-          rowsM.forEach((row) => {
-            const lblEl = row.querySelector('span');
-            const lbl = safeText(lblEl);
-            const w = measureCtx ? Math.ceil((measureCtx.font = rowFont, measureCtx.measureText(lbl).width)) : Math.round(lbl.length * fontSize * 0.58);
-            measuredLegendWidth = Math.max(measuredLegendWidth, labelOffset + w + (pad * 2));
-          });
-        });
-        const estimatedLegendWidth = Math.max(
-          Math.round(180 * scale),
-          Math.min(
-            usedCanvasWidth,
-            Math.max(
-              Math.round((legendRect.width || 260) * scale),
-              measuredLegendWidth
-            )
-          )
-        );
-        const legendX = Math.max(
-          marginPx,
-          Math.round((totalWidthPx - estimatedLegendWidth) / 2)
-        );
-        let yOff = titleHeightPx + usedCanvasHeight + marginPx;
-        const rowGap = Math.max(3, Math.round(5 * scale));
-        const blockGap = Math.max(6, Math.round(8 * scale));
-
-        const blocks = Array.from(legendEl.querySelectorAll('.legend-block'));
-        blocks.forEach(block => {
-          const blockHeader = block.querySelector('.legend-header');
-          if (blockHeader) {
-            const h = document.createElementNS(svgNS, "text");
-            h.setAttribute("x", String(legendX));
-            h.setAttribute("y", String(yOff + fontSize));
-            h.setAttribute("font-size", String(fontSize));
-            h.setAttribute("font-weight", "600");
-            h.textContent = safeText(blockHeader) || "Legend";
-            legendGroup.appendChild(h);
-            yOff += Math.round(fontSize + rowGap + 2);
-          }
-
-          const rows = Array.from(block.querySelectorAll('.legend-row'));
-          rows.forEach(row => {
-            const symEl = row.querySelector('.legend-sym');
-            const lblEl = row.querySelector('span');
-            const symCs = symEl ? window.getComputedStyle(symEl) : null;
-            const fillColor = (symCs ? symCs.backgroundColor : "") || "#ccc";
-
-            if (symEl && symEl.classList.contains('legend-sym-line')) {
-              const line = document.createElementNS(svgNS, "line");
-              line.setAttribute("x1", String(legendX));
-              line.setAttribute("y1", String(yOff + Math.round(symSize / 2)));
-              line.setAttribute("x2", String(legendX + symSize));
-              line.setAttribute("y2", String(yOff + Math.round(symSize / 2)));
-              line.setAttribute("stroke", fillColor);
-              line.setAttribute("stroke-width", String(Math.max(2, Math.round(2 * scale))));
-              legendGroup.appendChild(line);
-            } else if (symEl && symEl.classList.contains('legend-sym-point')) {
-              const c = document.createElementNS(svgNS, "circle");
-              c.setAttribute("cx", String(legendX + Math.round(symSize / 2)));
-              c.setAttribute("cy", String(yOff + Math.round(symSize / 2)));
-              c.setAttribute("r", String(Math.max(3, Math.round(symSize / 3))));
-              c.setAttribute("fill", fillColor);
-              c.setAttribute("stroke", "#333");
-              c.setAttribute("stroke-width", "1");
-              legendGroup.appendChild(c);
-            } else {
-              const rect = document.createElementNS(svgNS, "rect");
-              rect.setAttribute("x", String(legendX));
-              rect.setAttribute("y", String(yOff));
-              rect.setAttribute("width", String(symSize));
-              rect.setAttribute("height", String(symSize));
-              rect.setAttribute("fill", fillColor);
-              rect.setAttribute("stroke", "#333");
-              legendGroup.appendChild(rect);
-            }
-
-            const t = document.createElementNS(svgNS, "text");
-            t.setAttribute("x", String(legendX + symSize + Math.round(6 * scale)));
-            t.setAttribute("y", String(yOff + symSize - Math.round(2 * scale)));
-            t.setAttribute("font-size", String(fontSize));
-            t.textContent = safeText(lblEl);
-            legendGroup.appendChild(t);
-
-            yOff += symSize + rowGap;
-          });
-
-          yOff += blockGap;
-        });
-
-        svg.appendChild(legendGroup);
-      }
-// serialize and download
-      const serializer = new XMLSerializer();
-      const svgString = serializer.serializeToString(svg);
-      const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = (currentLayerName ? sanitizeName(currentLayerName) : "map") + ".svg";
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-
-      setTimeout(() => {
-        try { URL.revokeObjectURL(url); } catch (e) {}
-        a.remove();
-      }, 1000);
-
-      hideLoading();
-    } catch (ex) {
-      console.error("SVG export failed:", ex);
-      showPopup("SVG export failed. Falling back to PNG.", "error");
-      hideLoading();
-      exportMap();
-    }
+      })
+      .catch(ex => {
+        console.error("SVG export failed:", ex);
+        if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+        showPopup("SVG export failed. Falling back to PNG.", "error");
+        hideLoading();
+        exportMap();
+      });
   });
 }
 
