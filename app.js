@@ -1478,10 +1478,9 @@ const map = L.map('map', {
 // Keep north/south unchanged, while widening east/west default framing.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-34.85, -2.52], [37.35, 31.40]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-34.85, -25.5], [37.35, 58.5]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 const MAP_SIDE_VISIBLE_INSET_PX = 50;
-const APP_BUILD_ID = "20260303-bounds-debug-1";
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
 
@@ -1502,9 +1501,9 @@ function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
     map.fitBounds(trimBoundsHorizontally(INITIAL_HOME_BOUNDS), {
       animate: false,
-      // Keep north/south padding fixed; tighten only west/east spacing.
-      paddingTopLeft: [0, 10],
-      paddingBottomRight: [0, 10]
+      // Keep north/south stable, align east/west to visible map area.
+      paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, 10],
+      paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, 10]
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
@@ -1901,7 +1900,8 @@ function positionDisclaimer() {
     const mapEl = map.getContainer();
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
-  const left = 12 + MAP_SIDE_VISIBLE_INSET_PX;
+  const disclaimerInsetExtra = 24;
+  const left = 12 + MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra;
   const bottom = 30;
     const preferredFixedWidth = 360;
     const margin = 12;
@@ -1927,7 +1927,7 @@ function positionDisclaimer() {
       const dW = disc.offsetWidth || desiredWidth;
       const dH = disc.offsetHeight || 0;
       const marginClamp = 6;
-      const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + marginClamp);
+      const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra + marginClamp);
       const maxLeft = Math.max(minLeft, mW - MAP_SIDE_VISIBLE_INSET_PX - dW - marginClamp);
       const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
       const leftPx = Math.min(maxLeft, Math.max(minLeft, disclaimerUserPos.left));
@@ -1999,8 +1999,9 @@ function initDisclaimerDrag() {
     const mH = mapEl.clientHeight || 0;
     const dW = disc.offsetWidth || 0;
     const dH = disc.offsetHeight || 0;
+    const disclaimerInsetExtra = 24;
     const marginClamp = 6;
-    const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + marginClamp);
+    const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra + marginClamp);
     const maxLeft = Math.max(minLeft, mW - MAP_SIDE_VISIBLE_INSET_PX - dW - marginClamp);
     const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
     const clampedLeft = Math.min(maxLeft, Math.max(minLeft, left));
@@ -2089,17 +2090,6 @@ window.addEventListener('load', () => {
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
-  // Runtime marker: confirms the actual app.js build + bounds currently executing.
-  setTimeout(() => {
-    try {
-      const sw = INITIAL_HOME_BOUNDS.getSouthWest();
-      const ne = INITIAL_HOME_BOUNDS.getNorthEast();
-      showPopup(
-        `Build ${APP_BUILD_ID} | Bounds S:${sw.lat} W:${sw.lng} N:${ne.lat} E:${ne.lng}`,
-        "success"
-      );
-    } catch (e) {}
-  }, 120);
   setTimeout(syncLayoutWithHeaderHeight, 80);
   setTimeout(resetAllMapUiPositions, 300);
   setTimeout(initDisclaimerDrag, 350);
