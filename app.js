@@ -1475,11 +1475,11 @@ const map = L.map('map', {
 });
 
 // Deterministic startup/home view centered on Africa.
-// Keep west/east span wide enough for Cape Verde and Mauritius, while
-// tightening vertical fit a bit so the map starts slightly more zoomed in.
+// Keep north/south unchanged, but tighten west/east so Cape Verde and
+// Mauritius sit closer to the sidebars.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -26], [38.5, 60]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -25], [38.5, 58.5]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 
 function applyHomeView() {
