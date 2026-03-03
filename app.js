@@ -1924,7 +1924,7 @@ function positionDisclaimer() {
   const disclaimerInsetExtra = 40;
   const left = 12 + MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra;
   const bottom = 30;
-    const preferredFixedWidth = 360;
+    const preferredFixedWidth = 252;
     const margin = 12;
     const maxAvailableWidth = mapRect
       ? Math.max(120, Math.round(mapRect.width - left - margin))
