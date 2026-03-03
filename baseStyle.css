@@ -93,7 +93,8 @@
       background: rgba(255,255,255,0.90);
       padding: 5px 7px;
       font-size: 0.72em;
-      text-align: left;
+      text-align: justify;
+      text-justify: inter-word;
       max-height: 15vh; /* cap height so it doesn't cover map */
       overflow: hidden;
       z-index: 1060;
@@ -455,11 +456,15 @@ footer {
   position: absolute !important;
   z-index: 1200;
   margin: 0 !important;
+  transform: none !important;
   cursor: grab;
   user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
-.draggable-map-control:active {
+.draggable-map-control:active,
+.draggable-map-control.is-dragging {
   cursor: grabbing;
 }
 
@@ -516,9 +521,6 @@ footer {
 
 .map-bottom-scale-control {
   position: absolute !important;
-  left: calc(50% + 23px) !important;
-  bottom: 7px !important;
-  transform: translateX(-50%);
   z-index: 1200;
   margin: 0 !important;
 }

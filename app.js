@@ -1710,26 +1710,38 @@ function makeControlDraggable(control, initial) {
   };
 
   const stopDrag = () => {
+    if (!dragging) return;
     dragging = false;
+    el.classList.remove("is-dragging");
     el.dataset.userMoved = "1";
     clampDraggableControl(el, mapEl);
     updateDraggableControlNorm(el, mapEl);
-    map.dragging.enable();
+    if (map.dragging && map.dragging.enabled && !map.dragging.enabled()) {
+      map.dragging.enable();
+    }
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", stopDrag);
+    window.removeEventListener("pointercancel", stopDrag);
   };
 
   el.addEventListener("pointerdown", (evt) => {
     if (evt.button !== 0) return;
     evt.preventDefault();
     dragging = true;
+    el.classList.add("is-dragging");
     startX = evt.clientX;
     startY = evt.clientY;
     baseLeft = parseFloat(el.dataset.leftPx) || 0;
     baseTop = parseFloat(el.dataset.topPx) || 0;
-    map.dragging.disable();
+    if (el.setPointerCapture) {
+      try { el.setPointerCapture(evt.pointerId); } catch (err) {}
+    }
+    if (map.dragging && map.dragging.enabled && map.dragging.enabled()) {
+      map.dragging.disable();
+    }
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", stopDrag);
+    window.addEventListener("pointercancel", stopDrag);
   });
 }
 
@@ -1803,36 +1815,42 @@ function placeScaleBarOnMapBottom(control) {
   if (!control || typeof control.getContainer !== "function") return;
   const el = control.getContainer();
   const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
-  if (!el) return;
+  if (!el || !mapEl) return;
   if (mapEl && el.parentElement !== mapEl) {
     mapEl.appendChild(el);
   }
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
-  setDynamicStyle(el, {
-    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
-    right: "auto",
-    top: "auto",
-    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
-  });
+  const userMoved = el.dataset && el.dataset.userMoved === "1";
+  if (userMoved) {
+    clampDraggableControl(el, mapEl);
+    updateDraggableControlNorm(el, mapEl);
+    return;
+  }
+  applyDraggableControlInitialPosition(el, mapEl, true);
+  clampDraggableControl(el, mapEl);
+  updateDraggableControlNorm(el, mapEl);
 }
 
 function ensureScaleBarPinnedToMapBottom() {
   if (!scaleControl || typeof scaleControl.getContainer !== "function") return;
   const el = scaleControl.getContainer();
   const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
-  if (!el) return;
+  if (!el || !mapEl) return;
   if (mapEl && el.parentElement !== mapEl) {
     mapEl.appendChild(el);
   }
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
-  setDynamicStyle(el, {
-    left: `calc(50% + ${SCALE_BAR_OFFSET_X_PX}px)`,
-    right: "auto",
-    top: "auto",
-    bottom: `${SCALE_BAR_OFFSET_Y_PX}px`
-  });
+  const userMoved = el.dataset && el.dataset.userMoved === "1";
+  if (userMoved) {
+    clampDraggableControl(el, mapEl);
+    updateDraggableControlNorm(el, mapEl);
+    return;
+  }
+  applyDraggableControlInitialPosition(el, mapEl, true);
+  clampDraggableControl(el, mapEl);
+  updateDraggableControlNorm(el, mapEl);
 }
 
 // North arrow
@@ -1853,6 +1871,10 @@ const northArrowControl = new NorthArrowControl();
 map.addControl(northArrowControl);
 
 // Make both controls draggable.
+makeControlDraggable(scaleControl, (el, mapEl) => {
+  const pos = getBottomCenterPosition(el, mapEl, SCALE_BAR_OFFSET_Y_PX, SCALE_BAR_OFFSET_X_PX);
+  return { left: pos.left, top: pos.top };
+});
 placeScaleBarOnMapBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
   const pos = getTopRightPosition(el, mapEl, 12);
