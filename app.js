@@ -1502,8 +1502,7 @@ function applyHomeView() {
       animate: false,
       // Keep north/south padding fixed; tighten only west/east spacing.
       paddingTopLeft: [0, 10],
-      paddingBottomRight: [0, 10],
-      maxZoom: 3.6
+      paddingBottomRight: [0, 10]
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
