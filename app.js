@@ -1481,18 +1481,30 @@ const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
 const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -30], [38.5, 66]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
-// Horizontal-only tightening so edge islands sit closer to sidebars.
-// Negative X padding intentionally over-zooms east/west without changing Y padding.
-const HOME_PAD_X = -90;
-const LAYER_PAD_X = -60;
+// Horizontal-only trim so edge islands sit closer to sidebars without
+// changing north/south bounds.
+const HORIZONTAL_TRIM_RATIO = 0.14;
+
+function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
+  if (!bounds || typeof bounds.getSouthWest !== "function" || typeof bounds.getNorthEast !== "function") {
+    return bounds;
+  }
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  const spanLng = ne.lng - sw.lng;
+  if (!(spanLng > 0) || !(ratio > 0)) return bounds;
+  const maxTrim = Math.max(0, (spanLng / 2) - 1e-6);
+  const trim = Math.min(spanLng * ratio, maxTrim);
+  return L.latLngBounds([sw.lat, sw.lng + trim], [ne.lat, ne.lng - trim]);
+}
 
 function applyHomeView() {
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
-    map.fitBounds(INITIAL_HOME_BOUNDS, {
+    map.fitBounds(trimBoundsHorizontally(INITIAL_HOME_BOUNDS), {
       animate: false,
       // Keep north/south padding fixed; tighten only west/east spacing.
-      paddingTopLeft: [HOME_PAD_X, 10],
-      paddingBottomRight: [HOME_PAD_X, 10],
+      paddingTopLeft: [0, 10],
+      paddingBottomRight: [0, 10],
       maxZoom: 3.6
     });
   } else {
@@ -1526,9 +1538,9 @@ function fitToLayerExtent(layer) {
   if (!layer || typeof layer.getBounds !== "function") return false;
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
-  map.fitBounds(bounds, {
-    paddingTopLeft: [LAYER_PAD_X, 16],
-    paddingBottomRight: [LAYER_PAD_X, 35]
+  map.fitBounds(trimBoundsHorizontally(bounds), {
+    paddingTopLeft: [0, 16],
+    paddingBottomRight: [0, 35]
   });
   map.panBy([0, 10], { animate: false });
   map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
