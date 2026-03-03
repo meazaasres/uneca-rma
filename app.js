@@ -3525,7 +3525,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         // --- Secure Export Helper ---
     function compositeExportElement(cb) {
-    leafletImage(map, (err, mapCanvas) => {
+    const runLeafletSnapshot = () => leafletImage(map, (err, mapCanvas) => {
       if (err) {
         console.error("Leaflet image export failed:", err);
         return;
@@ -3536,8 +3536,9 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       const mapEl = document.getElementById('map');
-      const cssW = mapEl ? mapEl.clientWidth : mapCanvas.width;
-      const cssH = mapEl ? mapEl.clientHeight : mapCanvas.height;
+      const mapRectForScale = mapEl ? mapEl.getBoundingClientRect() : null;
+      const cssW = (mapRectForScale && mapRectForScale.width > 0) ? mapRectForScale.width : (mapEl ? mapEl.clientWidth : mapCanvas.width);
+      const cssH = (mapRectForScale && mapRectForScale.height > 0) ? mapRectForScale.height : (mapEl ? mapEl.clientHeight : mapCanvas.height);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
       const cropW = Math.max(1, mapCanvas.width);
@@ -3694,19 +3695,14 @@ window.addEventListener('load', resetInitialScrollPositions);
       function placeCloneInMap(clone, relRect) {
         const exportLeft = Math.max(0, Math.round(relRect.left * rawScaleX));
         const exportTop = Math.max(0, Math.round(relRect.top * rawScaleY));
-        const exportWidth = Math.max(1, Math.round(relRect.width * rawScaleX));
-        const exportHeight = Math.max(1, Math.round(relRect.height * rawScaleY));
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
         clone.style.right = 'auto';
         clone.style.bottom = 'auto';
-        clone.style.width = exportWidth + 'px';
-        clone.style.height = exportHeight + 'px';
-        clone.style.maxWidth = exportWidth + 'px';
-        clone.style.maxHeight = exportHeight + 'px';
         clone.style.margin = '0';
-        clone.style.transform = 'none';
+        clone.style.transformOrigin = 'top left';
+        clone.style.transform = `scale(${rawScaleX}, ${rawScaleY})`;
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
         mapWrapper.appendChild(clone);
@@ -3749,17 +3745,13 @@ window.addEventListener('load', resetInitialScrollPositions);
         const relTopCss = extraTopCss + (legendRectLive.top - mapRectLive.top);
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
         const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
-        const exportWidth = Math.max(1, Math.round(legendRectLive.width * rawScaleX));
-        const exportHeight = Math.max(1, Math.round(legendRectLive.height * rawScaleY));
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
-        clone.style.width = exportWidth + 'px';
-        clone.style.height = exportHeight + 'px';
-        clone.style.maxWidth = exportWidth + 'px';
-        clone.style.maxHeight = exportHeight + 'px';
         clone.style.margin = '0';
-        clone.style.overflow = 'hidden';
+        clone.style.transformOrigin = 'top left';
+        clone.style.transform = `scale(${rawScaleX}, ${rawScaleY})`;
+        clone.style.overflow = 'visible';
         clone.style.pointerEvents = 'none';
         const sourceSyms = Array.from(legendLive.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
@@ -3819,6 +3811,18 @@ window.addEventListener('load', resetInitialScrollPositions);
         img.onload = runCb;
         img.onerror = runCb;
       }
+    });
+
+    if (map && typeof map.stop === "function") {
+      try { map.stop(); } catch (e) {}
+    }
+    if (map && typeof map.invalidateSize === "function") {
+      try { map.invalidateSize({ pan: false }); } catch (e) {}
+    }
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        runLeafletSnapshot();
+      });
     });
     }
 
