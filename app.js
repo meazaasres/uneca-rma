@@ -1480,6 +1480,7 @@ const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
 const INITIAL_HOME_BOUNDS = L.latLngBounds([[-34.85, -17.52], [37.35, 51.40]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
+const MAP_SIDE_VISIBLE_INSET_PX = 30;
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
 
@@ -1721,7 +1722,10 @@ function getBottomCenterPosition(el, mapEl, bottomPx = 14, offsetXPx = 0) {
 
 function getTopRightPosition(el, mapEl, marginPx = 12) {
   const mapW = mapEl.clientWidth || 0;
-  const left = Math.max(0, Math.round(mapW - el.offsetWidth - marginPx));
+  const left = Math.max(
+    MAP_SIDE_VISIBLE_INSET_PX,
+    Math.round(mapW - MAP_SIDE_VISIBLE_INSET_PX - el.offsetWidth - marginPx)
+  );
   const top = Math.max(0, marginPx);
   return { left, top };
 }
@@ -1896,7 +1900,7 @@ function positionDisclaimer() {
     const mapEl = map.getContainer();
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
-  const left = 12;
+  const left = 12 + MAP_SIDE_VISIBLE_INSET_PX;
   const bottom = 30;
     const preferredFixedWidth = 360;
     const margin = 12;
@@ -1922,9 +1926,10 @@ function positionDisclaimer() {
       const dW = disc.offsetWidth || desiredWidth;
       const dH = disc.offsetHeight || 0;
       const marginClamp = 6;
-      const maxLeft = Math.max(marginClamp, mW - dW - marginClamp);
+      const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + marginClamp);
+      const maxLeft = Math.max(minLeft, mW - MAP_SIDE_VISIBLE_INSET_PX - dW - marginClamp);
       const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
-      const leftPx = Math.min(maxLeft, Math.max(marginClamp, disclaimerUserPos.left));
+      const leftPx = Math.min(maxLeft, Math.max(minLeft, disclaimerUserPos.left));
       const topPx = Math.min(maxTop, Math.max(marginClamp, disclaimerUserPos.top));
       setDynamicStyle(disc, {
         top: topPx + "px",
@@ -1994,9 +1999,10 @@ function initDisclaimerDrag() {
     const dW = disc.offsetWidth || 0;
     const dH = disc.offsetHeight || 0;
     const marginClamp = 6;
-    const maxLeft = Math.max(marginClamp, mW - dW - marginClamp);
+    const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + marginClamp);
+    const maxLeft = Math.max(minLeft, mW - MAP_SIDE_VISIBLE_INSET_PX - dW - marginClamp);
     const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
-    const clampedLeft = Math.min(maxLeft, Math.max(marginClamp, left));
+    const clampedLeft = Math.min(maxLeft, Math.max(minLeft, left));
     const clampedTop = Math.min(maxTop, Math.max(marginClamp, top));
 
     setDynamicStyle(disc, {

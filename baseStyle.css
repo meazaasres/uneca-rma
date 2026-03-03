@@ -47,8 +47,8 @@
     }
          /* Map container now has margins for both sidebars */
     #map-container {
-      margin-left: 250px;   /* left sidebar width */
-      margin-right: 250px;  /* right sidebar width */
+      margin-left: 220px;   /* 30px overlap under left sidebar */
+      margin-right: 220px;  /* 30px overlap under right sidebar */
       margin-top: calc(var(--app-header-height) - 5px);     /* push map down by 5px */
       height: calc(100vh - var(--app-header-height) + 5px);
       position: relative;
@@ -56,6 +56,9 @@
       clip-path: inset(0);
       isolation: isolate;
     }
+    /* Keep map controls inside the visible map window after horizontal overlap */
+    #map .leaflet-left { left: 30px; }
+    #map .leaflet-right { right: 30px; }
     #map-container,
     #map {
       overflow: hidden;
