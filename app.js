@@ -1478,7 +1478,7 @@ const map = L.map('map', {
 // Keep north/south unchanged, while widening east/west default framing.
 const INITIAL_HOME_CENTER = [0, 17];
 const INITIAL_HOME_ZOOM = 3;
-const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -24], [38.5, 58]]);
+const INITIAL_HOME_BOUNDS = L.latLngBounds([[-36, -20], [38.5, 54]]);
 const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
