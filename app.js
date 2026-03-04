@@ -3599,6 +3599,15 @@ window.addEventListener('load', resetInitialScrollPositions);
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
+      if (isFirefoxBrowser()) {
+        // Firefox: keep export node on-screen for reliable html2canvas capture.
+        wrapper.style.transform = 'none';
+        wrapper.style.position = 'fixed';
+        wrapper.style.left = '0';
+        wrapper.style.top = '0';
+        wrapper.style.zIndex = '-1';
+        wrapper.style.pointerEvents = 'none';
+      }
       document.body.appendChild(wrapper);
 
       const titleEl = document.getElementById('map-title');
@@ -3846,6 +3855,98 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       ensureNorthArrowFallback();
       ensureScaleBarFallback();
+
+      function ensureFirefoxGuaranteedOverlays() {
+        if (!isFirefoxBrowser()) return;
+
+        const existingDisc = mapWrapper.querySelector('.export-disclaimer-clone');
+        if (!existingDisc) {
+          const srcDisc = document.getElementById('disclaimer');
+          const fallbackDisc = document.createElement('div');
+          fallbackDisc.className = 'export-disclaimer-clone';
+          fallbackDisc.style.position = 'absolute';
+          fallbackDisc.style.left = '8px';
+          fallbackDisc.style.bottom = '8px';
+          fallbackDisc.style.maxWidth = Math.max(140, Math.round(W * 0.45)) + 'px';
+          fallbackDisc.style.background = 'rgba(255,255,255,0.95)';
+          fallbackDisc.style.padding = '6px';
+          fallbackDisc.style.fontSize = '10px';
+          fallbackDisc.style.lineHeight = '1.25';
+          fallbackDisc.style.color = '#000';
+          fallbackDisc.style.textAlign = 'left';
+          fallbackDisc.style.zIndex = '6';
+          fallbackDisc.textContent = (srcDisc && srcDisc.textContent ? String(srcDisc.textContent).trim() : 'Disclaimer');
+          mapWrapper.appendChild(fallbackDisc);
+        }
+
+        const existingNorth = mapWrapper.querySelector('.export-north-arrow-clone');
+        if (!existingNorth) {
+          const na = document.createElement('div');
+          na.className = 'export-north-arrow-clone';
+          na.style.position = 'absolute';
+          na.style.right = '12px';
+          na.style.top = '12px';
+          na.style.width = '34px';
+          na.style.height = '44px';
+          na.style.background = '#fff';
+          na.style.border = '1px solid #cfd6e4';
+          na.style.borderRadius = '4px';
+          na.style.display = 'flex';
+          na.style.flexDirection = 'column';
+          na.style.alignItems = 'center';
+          na.style.justifyContent = 'center';
+          na.style.boxSizing = 'border-box';
+          na.style.zIndex = '6';
+          const nText = document.createElement('div');
+          nText.textContent = 'N';
+          nText.style.fontSize = '12px';
+          nText.style.fontWeight = '700';
+          nText.style.color = '#1e3a8a';
+          nText.style.lineHeight = '1';
+          const tri = document.createElement('div');
+          tri.style.width = '0';
+          tri.style.height = '0';
+          tri.style.borderLeft = '6px solid transparent';
+          tri.style.borderRight = '6px solid transparent';
+          tri.style.borderBottom = '12px solid #1e3a8a';
+          tri.style.marginTop = '3px';
+          na.appendChild(nText);
+          na.appendChild(tri);
+          mapWrapper.appendChild(na);
+        }
+
+        const existingScale = mapWrapper.querySelector('.export-scale-clone');
+        if (!existingScale) {
+          const srcScale = (scaleControl && typeof scaleControl.getContainer === "function")
+            ? scaleControl.getContainer()
+            : null;
+          const scaleTxt = srcScale
+            ? (srcScale.querySelector('.exact-scale-label')?.textContent || srcScale.textContent || 'Scale: --')
+            : 'Scale: --';
+          const sb = document.createElement('div');
+          sb.className = 'export-scale-clone';
+          sb.style.position = 'absolute';
+          sb.style.left = Math.max(8, Math.round((W - 140) / 2)) + 'px';
+          sb.style.bottom = '8px';
+          sb.style.width = '140px';
+          sb.style.minHeight = '22px';
+          sb.style.background = '#fff';
+          sb.style.border = '1px solid #cfd6e4';
+          sb.style.borderRadius = '4px';
+          sb.style.padding = '3px 6px';
+          sb.style.boxSizing = 'border-box';
+          sb.style.fontSize = '8px';
+          sb.style.lineHeight = '1.2';
+          sb.style.fontWeight = '400';
+          sb.style.color = '#102a43';
+          sb.style.textAlign = 'center';
+          sb.style.zIndex = '6';
+          sb.textContent = String(scaleTxt || 'Scale: --').trim();
+          mapWrapper.appendChild(sb);
+        }
+      }
+
+      ensureFirefoxGuaranteedOverlays();
 
       const legend = document.querySelector('#legend-items');
       if (legend) {
