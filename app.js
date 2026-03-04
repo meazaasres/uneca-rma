@@ -3701,6 +3701,15 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.transform = 'none';
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
+        if (source.id === 'disclaimer') {
+          clone.style.width = 'auto';
+          clone.style.height = 'auto';
+          clone.style.display = 'inline-block';
+          clone.style.maxWidth = exportWidth + 'px';
+          clone.style.textAlign = 'left';
+          clone.style.textJustify = 'auto';
+          clone.style.whiteSpace = 'normal';
+        }
         mapWrapper.appendChild(clone);
       }
 
