@@ -3704,38 +3704,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         mapWrapper.appendChild(clone);
       }
 
-      const disclaimer = document.querySelector('#disclaimer');
-      if (disclaimer) {
-        const clone = disclaimer.cloneNode(true);
-        clone.className = 'export-disclaimer-clone';
-        copyVisualStylesRecursive(disclaimer, clone);
-        const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discRect = disclaimer.getBoundingClientRect();
-        const relLeftCss = mapRect ? (discRect.left - mapRect.left) : 10;
-        const relTopCss = mapRect ? (discRect.top - mapRect.top) : 10;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX - 4);
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
-        const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
-        clone.textContent = String(disclaimer.textContent || "").trim();
-        clone.style.position = 'absolute';
-        clone.style.left = exportLeft + 'px';
-        clone.style.top = exportTop + 'px';
-        clone.style.right = 'auto';
-        clone.style.bottom = 'auto';
-        clone.style.width = 'auto';
-        clone.style.display = 'inline-block';
-        clone.style.maxWidth = exportWidth + 'px';
-        clone.style.maxHeight = 'none';
-        clone.style.overflow = 'visible';
-        clone.style.whiteSpace = 'normal';
-        clone.style.lineHeight = '1.25';
-        clone.style.fontSize = '10px';
-        clone.style.padding = '6px';
-        clone.style.background = 'rgba(255,255,255,0.95)';
-        clone.style.color = '#000';
-        clone.style.zIndex = '5';
-        mapWrapper.appendChild(clone);
-      }
+      // Export disclaimer exactly as currently displayed on map.
+      cloneMapOverlayToExport('#disclaimer', 'export-disclaimer-clone');
 
       // Keep clone attempt for Chrome/Edge fidelity.
       cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
@@ -3757,7 +3727,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const src = findMapControlElement('.leaflet-control-north-arrow');
         if (!src || !mapEl) return;
         const existing = mapWrapper.querySelector('.export-north-arrow-clone');
-        if (existing) existing.remove();
+        if (existing) return;
         const mapRect = mapEl.getBoundingClientRect();
         const srcRect = src.getBoundingClientRect();
         const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
@@ -3806,7 +3776,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           || (scaleControl && typeof scaleControl.getContainer === "function" ? scaleControl.getContainer() : null);
         if (!mapEl) return;
         const existing = mapWrapper.querySelector('.export-scale-clone');
-        if (existing) existing.remove();
+        if (existing) return;
         const mapRect = mapEl.getBoundingClientRect();
         const srcRect = src ? src.getBoundingClientRect() : null;
         const srcWidthCss = (srcRect && srcRect.width > 0) ? srcRect.width : (src ? (src.offsetWidth || 120) : 120);
@@ -3824,7 +3794,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           topCss = Math.max(0, mapRect.height - srcHeightCss - 8);
         }
         const left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
-        const top = Math.max(0, Math.round(topCss * rawScaleY) + 10);
+        const top = Math.max(0, Math.round(topCss * rawScaleY));
         const w = Math.max(70, Math.round(srcWidthCss * rawScaleX));
         const h = Math.max(20, Math.round(srcHeightCss * rawScaleY));
         const labelText = src
@@ -3857,7 +3827,9 @@ window.addEventListener('load', resetInitialScrollPositions);
       ensureScaleBarFallback();
 
       function ensureFirefoxGuaranteedOverlays() {
+        // Keep Firefox behavior aligned with Chrome by relying on exact clones.
         if (!isFirefoxBrowser()) return;
+        return;
 
         const existingDisc = mapWrapper.querySelector('.export-disclaimer-clone');
         if (!existingDisc) {
