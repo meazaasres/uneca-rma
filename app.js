@@ -4265,7 +4265,13 @@ function exportSVG() {
           rows.forEach(row => {
             const symEl = row.querySelector('.legend-sym');
             const lblEl = row.querySelector('span');
-            const fillColor = (symEl && symEl.style && symEl.style.backgroundColor) || '#ccc';
+            const symCs = symEl ? window.getComputedStyle(symEl) : null;
+            const fillColor = (symCs && symCs.backgroundColor && symCs.backgroundColor !== 'rgba(0, 0, 0, 0)')
+              ? symCs.backgroundColor
+              : ((symEl && symEl.style && symEl.style.backgroundColor) || '#ccc');
+            const lineColor = (symCs && symCs.borderTopColor && symCs.borderTopColor !== 'rgba(0, 0, 0, 0)')
+              ? symCs.borderTopColor
+              : fillColor;
 
             if (symEl && symEl.classList.contains('legend-sym-line')) {
               const line = document.createElementNS(svgNS, "line");
@@ -4273,7 +4279,7 @@ function exportSVG() {
               line.setAttribute("y1", String(yOff + Math.round(symSize / 2)));
               line.setAttribute("x2", String(legendX + symSize));
               line.setAttribute("y2", String(yOff + Math.round(symSize / 2)));
-              line.setAttribute("stroke", fillColor);
+              line.setAttribute("stroke", lineColor);
               line.setAttribute("stroke-width", String(Math.max(2, Math.round(2 * scale))));
               legendGroup.appendChild(line);
             } else if (symEl && symEl.classList.contains('legend-sym-point')) {
