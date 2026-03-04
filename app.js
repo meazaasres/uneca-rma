@@ -3609,6 +3609,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         t.style.fontSize = '20px';
         t.style.fontWeight = '600';
         t.style.margin = '0 0 8px 0';
+        t.style.textAlign = 'center';
+        t.style.width = '100%';
+        t.style.display = 'block';
         wrapper.appendChild(t);
       }
 
@@ -3616,12 +3619,13 @@ window.addEventListener('load', resetInitialScrollPositions);
       mapWrapper.className = 'export-map-wrapper';
       mapWrapper.style.width = W + 'px';
       mapWrapper.style.height = H + 'px';
+      mapWrapper.style.overflow = 'hidden';
       wrapper.appendChild(mapWrapper);
 
       const styleEl = document.createElement('style');
       styleEl.type = 'text/css';
       styleEl.textContent = `
-        .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1}
+        .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;display:block !important;width:100% !important}
         .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-img{width:100%;height:auto;display:block}
       `;
@@ -3633,6 +3637,32 @@ window.addEventListener('load', resetInitialScrollPositions);
       img.alt = "Exported map image";
       mapWrapper.appendChild(img);
 
+      function copyVisualStyles(sourceNode, targetNode) {
+        if (!sourceNode || !targetNode) return;
+        const cs = window.getComputedStyle(sourceNode);
+        const props = [
+          'display', 'visibility', 'opacity',
+          'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
+          'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
+          'boxShadow', 'outline',
+          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
+          'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
+        ];
+        props.forEach((prop) => {
+          try { targetNode.style[prop] = cs[prop]; } catch (e) {}
+        });
+      }
+
+      function copyVisualStylesRecursive(sourceNode, targetNode) {
+        copyVisualStyles(sourceNode, targetNode);
+        const sourceChildren = Array.from(sourceNode.children || []);
+        const targetChildren = Array.from(targetNode.children || []);
+        const len = Math.min(sourceChildren.length, targetChildren.length);
+        for (let i = 0; i < len; i++) {
+          copyVisualStylesRecursive(sourceChildren[i], targetChildren[i]);
+        }
+      }
+
       function cloneMapOverlayToExport(selector, className) {
         const source = document.querySelector(selector);
         if (!source || !mapEl) return;
@@ -3642,6 +3672,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const clone = source.cloneNode(true);
         if (className) clone.classList.add(className);
+        copyVisualStylesRecursive(source, clone);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
@@ -3668,6 +3699,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (disclaimer) {
         const clone = disclaimer.cloneNode(true);
         clone.className = 'export-disclaimer-clone';
+        copyVisualStylesRecursive(disclaimer, clone);
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const discRect = disclaimer.getBoundingClientRect();
         const relLeftCss = mapRect ? (discRect.left - mapRect.left) : 10;
@@ -3692,12 +3724,13 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
-      cloneMapOverlayToExport('.leaflet-control-exact-scale', 'export-scale-clone');
+      cloneMapOverlayToExport('.leaflet-control-exact-scale, .map-bottom-scale-control', 'export-scale-clone');
 
       const legend = document.querySelector('#legend-items');
       if (legend) {
         const clone = legend.cloneNode(true);
         clone.className = 'export-legend-clone';
+        copyVisualStylesRecursive(legend, clone);
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
         cloneSyms.forEach((sym, idx) => {
