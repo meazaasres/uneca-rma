@@ -3714,6 +3714,15 @@ window.addEventListener('load', resetInitialScrollPositions);
           clone.style.top = 'auto';
           clone.style.bottom = exportBottom + 'px';
         }
+        if (
+          source.classList &&
+          (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
+        ) {
+          const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
+          const exportBottom = Math.max(0, Math.round(bottomCss * rawScaleY));
+          clone.style.top = 'auto';
+          clone.style.bottom = exportBottom + 'px';
+        }
         mapWrapper.appendChild(clone);
       }
 
@@ -3796,18 +3805,23 @@ window.addEventListener('load', resetInitialScrollPositions);
         const srcHeightCss = (srcRect && srcRect.height > 0) ? srcRect.height : (src ? (src.offsetHeight || 24) : 24);
         let leftCss;
         let topCss;
+        let bottomCss = null;
         if (src && src.dataset && src.dataset.leftPx && src.dataset.topPx) {
           leftCss = parseFloat(src.dataset.leftPx) || 0;
           topCss = parseFloat(src.dataset.topPx) || Math.max(0, mapRect.height - srcHeightCss - 8);
+          bottomCss = Math.max(0, mapRect.height - (topCss + srcHeightCss));
         } else if (srcRect && srcRect.width > 0 && srcRect.height > 0) {
           leftCss = srcRect.left - mapRect.left;
           topCss = srcRect.top - mapRect.top;
+          bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
         } else {
           leftCss = Math.max(0, (mapRect.width - srcWidthCss) / 2);
           topCss = Math.max(0, mapRect.height - srcHeightCss - 8);
+          bottomCss = Math.max(0, mapRect.height - (topCss + srcHeightCss));
         }
         const left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
         const top = Math.max(0, Math.round(topCss * rawScaleY));
+        const bottom = Math.max(0, Math.round((bottomCss == null ? 8 : bottomCss) * rawScaleY));
         const w = Math.max(70, Math.round(srcWidthCss * rawScaleX));
         const h = Math.max(20, Math.round(srcHeightCss * rawScaleY));
         const labelText = src
@@ -3818,7 +3832,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         fallback.className = 'export-scale-clone';
         fallback.style.position = 'absolute';
         fallback.style.left = left + 'px';
-        fallback.style.top = top + 'px';
+        fallback.style.top = 'auto';
+        fallback.style.bottom = bottom + 'px';
         fallback.style.width = w + 'px';
         fallback.style.minHeight = h + 'px';
         fallback.style.background = '#ffffff';
