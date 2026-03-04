@@ -3703,11 +3703,14 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.pointerEvents = 'none';
         if (source.id === 'disclaimer') {
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
-          const exportBottom = Math.max(0, Math.round(bottomCss * rawScaleY));
+          const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
+          const exportBottom = Math.max(0, Math.min(exportBottomRaw, Math.max(0, H - exportHeight)));
           clone.style.width = 'auto';
           clone.style.height = 'auto';
           clone.style.display = 'inline-block';
-          clone.style.maxWidth = exportWidth + 'px';
+          clone.style.maxWidth = Math.max(120, Math.min(exportWidth, W - exportLeft - 8)) + 'px';
+          clone.style.maxHeight = Math.max(40, Math.round(H * 0.32)) + 'px';
+          clone.style.overflow = 'hidden';
           clone.style.textAlign = 'left';
           clone.style.textJustify = 'auto';
           clone.style.whiteSpace = 'normal';
@@ -3719,7 +3722,8 @@ window.addEventListener('load', resetInitialScrollPositions);
           (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
         ) {
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
-          const exportBottom = Math.max(0, Math.round(bottomCss * rawScaleY));
+          const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
+          const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - exportHeight)));
           clone.style.top = 'auto';
           clone.style.bottom = exportBottom + 'px';
         }
@@ -3821,9 +3825,10 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
         const left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
         const top = Math.max(0, Math.round(topCss * rawScaleY));
-        const bottom = Math.max(0, Math.round((bottomCss == null ? 8 : bottomCss) * rawScaleY));
         const w = Math.max(70, Math.round(srcWidthCss * rawScaleX));
         const h = Math.max(20, Math.round(srcHeightCss * rawScaleY));
+        const bottomRaw = Math.max(0, Math.round((bottomCss == null ? 8 : bottomCss) * rawScaleY));
+        const bottom = Math.max(6, Math.min(bottomRaw, Math.max(6, H - h)));
         const labelText = src
           ? (src.querySelector('.exact-scale-label')?.textContent || src.textContent || 'Scale: --').trim()
           : 'Scale: --';
