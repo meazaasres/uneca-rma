@@ -11,6 +11,7 @@ const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
+const EXPORT_DISCLAIMER_Y_SHIFT_PX = 14;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -3685,7 +3686,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
-        const extraTopPx = source.id === 'disclaimer' ? 10 : 0;
+        const extraTopPx = source.id === 'disclaimer' ? EXPORT_DISCLAIMER_Y_SHIFT_PX : 0;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
         const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) + extraTopPx);
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
@@ -4490,7 +4491,7 @@ function exportSVG() {
 
         const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
         const discY = discRect && mapRect
-          ? titleHeightPx + Math.max(0, Math.round((discRect.top - mapRect.top) * rawScaleY) - cropY - 10)
+          ? titleHeightPx + Math.max(0, Math.round((discRect.top - mapRect.top) * rawScaleY) - cropY - 10 + EXPORT_DISCLAIMER_Y_SHIFT_PX)
           : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
 
         const discBg = document.createElementNS(svgNS, "rect");
