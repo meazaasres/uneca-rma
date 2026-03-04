@@ -3955,6 +3955,55 @@ function tryCanvasToDataURL(canvas) {
   }
 }
 
+function trimCanvasHorizontalWhitespace(sourceCanvas, maxTrimRatio = 0.2) {
+  if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") return sourceCanvas;
+  const w = Math.max(1, sourceCanvas.width | 0);
+  const h = Math.max(1, sourceCanvas.height | 0);
+  const ctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return sourceCanvas;
+
+  let imgData;
+  try {
+    imgData = ctx.getImageData(0, 0, w, h);
+  } catch (e) {
+    return sourceCanvas;
+  }
+  const px = imgData.data;
+  const maxTrimPx = Math.max(0, Math.floor(w * Math.max(0, Math.min(0.45, maxTrimRatio))));
+
+  function isMostlyWhiteColumn(x) {
+    let nonWhite = 0;
+    for (let y = 0; y < h; y++) {
+      const idx = ((y * w) + x) * 4;
+      const r = px[idx];
+      const g = px[idx + 1];
+      const b = px[idx + 2];
+      const a = px[idx + 3];
+      if (!(a >= 250 && r >= 250 && g >= 250 && b >= 250)) {
+        nonWhite++;
+        if (nonWhite > Math.max(2, Math.floor(h * 0.002))) return false;
+      }
+    }
+    return true;
+  }
+
+  let left = 0;
+  while (left < maxTrimPx && isMostlyWhiteColumn(left)) left++;
+  let right = w - 1;
+  while (right >= (w - maxTrimPx) && isMostlyWhiteColumn(right)) right--;
+
+  const trimmedW = Math.max(1, right - left + 1);
+  if (left === 0 && trimmedW === w) return sourceCanvas;
+
+  const trimmed = document.createElement("canvas");
+  trimmed.width = trimmedW;
+  trimmed.height = h;
+  const tctx = trimmed.getContext("2d");
+  if (!tctx) return sourceCanvas;
+  tctx.drawImage(sourceCanvas, left, 0, trimmedW, h, 0, 0, trimmedW, h);
+  return trimmed;
+}
+
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
   showLoading("Exporting map as SVG...");
@@ -4020,10 +4069,11 @@ function exportSVG() {
     })
       .then(canvas => {
         try {
+          const svgCanvas = trimCanvasHorizontalWhitespace(canvas, 0.22);
           const svgNS = "http://www.w3.org/2000/svg";
           const XLINK = "http://www.w3.org/1999/xlink";
-          const svgWidth = Math.max(1, canvas.width);
-          const svgHeight = Math.max(1, canvas.height);
+          const svgWidth = Math.max(1, svgCanvas.width);
+          const svgHeight = Math.max(1, svgCanvas.height);
 
           const svg = document.createElementNS(svgNS, "svg");
           svg.setAttribute("xmlns", svgNS);
@@ -4045,7 +4095,7 @@ function exportSVG() {
           imageGroup.setAttribute("transform", `translate(${svgWidth / 2}, ${svgHeight / 2})`);
 
           const img = document.createElementNS(svgNS, "image");
-          img.setAttributeNS(XLINK, "xlink:href", canvas.toDataURL("image/png"));
+          img.setAttributeNS(XLINK, "xlink:href", svgCanvas.toDataURL("image/png"));
           img.setAttribute("x", String(-svgWidth / 2));
           img.setAttribute("y", String(-svgHeight / 2));
           img.setAttribute("width", String(svgWidth));
