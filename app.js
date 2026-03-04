@@ -4031,7 +4031,7 @@ function exportSVG() {
           svg.setAttribute("width", String(svgWidth));
           svg.setAttribute("height", String(svgHeight));
           svg.setAttribute("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
-          svg.setAttribute("preserveAspectRatio", "none");
+          svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
           const bg = document.createElementNS(svgNS, "rect");
           bg.setAttribute("x", "0");
@@ -4041,14 +4041,18 @@ function exportSVG() {
           bg.setAttribute("fill", "#ffffff");
           svg.appendChild(bg);
 
+          const imageGroup = document.createElementNS(svgNS, "g");
+          imageGroup.setAttribute("transform", `translate(${svgWidth / 2}, ${svgHeight / 2})`);
+
           const img = document.createElementNS(svgNS, "image");
           img.setAttributeNS(XLINK, "xlink:href", canvas.toDataURL("image/png"));
-          img.setAttribute("x", "0");
-          img.setAttribute("y", "0");
+          img.setAttribute("x", String(-svgWidth / 2));
+          img.setAttribute("y", String(-svgHeight / 2));
           img.setAttribute("width", String(svgWidth));
           img.setAttribute("height", String(svgHeight));
-          img.setAttribute("preserveAspectRatio", "none");
-          svg.appendChild(img);
+          img.setAttribute("preserveAspectRatio", "xMidYMid meet");
+          imageGroup.appendChild(img);
+          svg.appendChild(imageGroup);
 
           const serializer = new XMLSerializer();
           const svgString = serializer.serializeToString(svg);
