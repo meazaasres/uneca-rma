@@ -3594,7 +3594,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;width:fit-content !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-img{width:100%;height:auto;display:block}
       `;
       wrapper.appendChild(styleEl);
@@ -3651,7 +3651,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.top = exportTop + 'px';
         clone.style.right = 'auto';
         clone.style.bottom = 'auto';
-        clone.style.width = 'fit-content';
+        clone.style.width = 'auto';
+        clone.style.display = 'inline-block';
         clone.style.maxWidth = exportWidth + 'px';
         clone.style.maxHeight = 'none';
         clone.style.overflow = 'visible';
@@ -3750,14 +3751,21 @@ window.addEventListener('load', resetInitialScrollPositions);
       showLoading("Exporting map as PNG...");
       compositeExportElement(wrapper => {
         const canvasScale = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+        const rect = wrapper.getBoundingClientRect();
+        const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
+        const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
         html2canvas(wrapper, {
           scale: canvasScale,
           useCORS: true,
+          foreignObjectRendering: false,
+          logging: false,
           backgroundColor: "#ffffff",
-          width: wrapper.scrollWidth,
-          height: wrapper.scrollHeight,
-          windowWidth: wrapper.scrollWidth,
-          windowHeight: wrapper.scrollHeight
+          width: exportWidth,
+          height: exportHeight,
+          windowWidth: exportWidth,
+          windowHeight: exportHeight,
+          scrollX: 0,
+          scrollY: 0
         })
           .then(canvas => {
             const a = document.createElement('a');
@@ -3780,14 +3788,21 @@ window.addEventListener('load', resetInitialScrollPositions);
         showLoading("Exporting map as PDF...");
         compositeExportElement(wrapper => {
             const canvasScale = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+            const rect = wrapper.getBoundingClientRect();
+            const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
+            const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
             html2canvas(wrapper, {
               scale: canvasScale,
               useCORS: true,
+              foreignObjectRendering: false,
+              logging: false,
               backgroundColor: "#ffffff",
-              width: wrapper.scrollWidth,
-              height: wrapper.scrollHeight,
-              windowWidth: wrapper.scrollWidth,
-              windowHeight: wrapper.scrollHeight
+              width: exportWidth,
+              height: exportHeight,
+              windowWidth: exportWidth,
+              windowHeight: exportHeight,
+              scrollX: 0,
+              scrollY: 0
             })
             .then(canvas => {
               const imgData = canvas.toDataURL('image/png');
@@ -4010,6 +4025,7 @@ function exportSVG() {
       const imgDataUrl = cropped.toDataURL("image/png");
       const img = document.createElementNS(svgNS, "image");
       img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
+      img.setAttribute("href", imgDataUrl);
       img.setAttribute("x", "0");
       img.setAttribute("y", String(titleHeightPx));
       img.setAttribute("width", String(usedCanvasWidth));
