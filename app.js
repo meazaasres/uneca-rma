@@ -9,6 +9,7 @@ const SCALE_BAR_OFFSET_Y_PX = 7;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
+const EXPORT_SIDE_CROP_RATIO = 0.06;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -3541,10 +3542,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cssH = (mapRectForScale && mapRectForScale.height > 0) ? mapRectForScale.height : (mapEl ? mapEl.clientHeight : mapCanvas.height);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = cssH > 0 ? (mapCanvas.height / cssH) : rawScaleX;
-      // Keep full map canvas in export to avoid perceived basemap shifts.
-      const cropInsetCss = 0;
-      const cropLeftPx = 0;
-      const cropRightPx = 0;
+      // Mild horizontal crop to reduce left/right empty space in exports.
+      const cropInsetCss = Math.max(0, cssW * EXPORT_SIDE_CROP_RATIO);
+      const cropLeftPx = Math.max(0, Math.round(cropInsetCss * rawScaleX));
+      const cropRightPx = Math.max(0, Math.round(cropInsetCss * rawScaleX));
       const cropW = Math.max(1, mapCanvas.width - cropLeftPx - cropRightPx);
       const cropH = Math.max(1, mapCanvas.height);
 
@@ -3711,6 +3712,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         const clone = disclaimer.cloneNode(true);
         clone.className = 'export-disclaimer-clone';
         copyVisualStylesRecursive(disclaimer, clone);
+        clone.style.textAlign = 'left';
+        clone.style.textJustify = 'auto';
         const discRect = getElementRectRelativeToMap(disclaimer, mapEl);
         if (discRect && discRect.width > 0 && discRect.height > 0) {
           placeCloneInMap(clone, discRect);
