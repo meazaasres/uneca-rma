@@ -4512,7 +4512,7 @@ function exportSVG() {
         discWidth = Math.min(discWidth, tightWidth);
 
         const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
-        const discY = discRect && mapRect
+        let discY = discRect && mapRect
           ? (() => {
               const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
               const bottomPx = Math.max(0, Math.round(bottomCss * rawScaleY));
@@ -4522,6 +4522,9 @@ function exportSVG() {
               );
             })()
           : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
+        const discYMin = titleHeightPx + 2;
+        const discYMax = Math.max(discYMin, (titleHeightPx + usedCanvasHeight - discHeight - 2));
+        discY = Math.max(discYMin, Math.min(discYMax, discY));
 
         const discBg = document.createElementNS(svgNS, "rect");
         discBg.setAttribute("x", String(discX));
@@ -4558,7 +4561,10 @@ function exportSVG() {
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
         const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
-        const naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
+        let naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
+        const naYMin = titleHeightPx + 2;
+        const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
+        naY = Math.max(naYMin, Math.min(naYMax, naY));
 
         const naBg = document.createElementNS(svgNS, "rect");
         naBg.setAttribute("x", String(naX));
@@ -4600,10 +4606,15 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        const sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
-        const sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
+        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
+        let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
+        const sbXMax = Math.max(0, usedCanvasWidth - sbW - 2);
+        sbX = Math.max(0, Math.min(sbXMax, sbX));
+        const sbYMin = titleHeightPx + 2;
+        const sbYMax = Math.max(sbYMin, (titleHeightPx + usedCanvasHeight - sbH - 2));
+        sbY = Math.max(sbYMin, Math.min(sbYMax, sbY));
 
         const sbBg = document.createElementNS(svgNS, "rect");
         sbBg.setAttribute("x", String(sbX));
