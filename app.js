@@ -3541,6 +3541,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cssH = (mapRectForScale && mapRectForScale.height > 0) ? mapRectForScale.height : (mapEl ? mapEl.clientHeight : mapCanvas.height);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = cssH > 0 ? (mapCanvas.height / cssH) : rawScaleX;
+      const overlayScale = Math.max(0.75, Math.min(2, Math.min(rawScaleX, rawScaleY)));
       const maxHorizontalCropCss = Math.max(0, Math.floor(cssW * 0.2));
       const cropInsetCss = Math.max(0, Math.min(MAP_SIDE_VISIBLE_INSET_PX || 0, maxHorizontalCropCss));
       const cropLeftPx = Math.max(0, Math.round(cropInsetCss * rawScaleX));
@@ -3616,6 +3617,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1}
         .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;text-align:justify !important;text-justify:inter-word !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-map-wrapper .export-legend-clone{font-size:11px !important;line-height:1.25 !important}
+        .export-map-wrapper .export-legend-clone .legend-header{font-size:12px !important;font-weight:600 !important}
+        .export-map-wrapper .export-legend-clone .legend-row{display:flex !important;align-items:center !important;margin:3px 0 !important}
+        .export-map-wrapper .export-legend-clone .legend-row span{display:inline-block !important;word-break:break-word !important}
         .export-img{width:100%;height:auto;display:block}
       `;
       wrapper.appendChild(styleEl);
@@ -3695,7 +3700,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.bottom = 'auto';
         clone.style.margin = '0';
         clone.style.transformOrigin = 'top left';
-        clone.style.transform = `scale(${rawScaleX}, ${rawScaleY})`;
+        clone.style.transform = `scale(${overlayScale}, ${overlayScale})`;
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
         mapWrapper.appendChild(clone);
@@ -3719,6 +3724,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         const clone = disclaimer.cloneNode(true);
         clone.className = 'export-disclaimer-clone';
         copyVisualStylesRecursive(disclaimer, clone);
+        const disclaimerMaxWidthCss = Math.max(160, Math.round(exportedMapCssWidth * 0.45));
+        clone.style.maxWidth = disclaimerMaxWidthCss + 'px';
+        clone.style.width = 'auto';
         const discRect = getElementRectRelativeToMap(disclaimer, mapEl);
         if (discRect && discRect.width > 0 && discRect.height > 0) {
           placeCloneInMap(clone, discRect);
@@ -3734,18 +3742,20 @@ window.addEventListener('load', resetInitialScrollPositions);
         const clone = legendLive.cloneNode(true);
         clone.className = 'export-legend-clone';
         copyVisualStylesRecursive(legendLive, clone);
-        const legendWidthCss = Math.max(160, Math.min(legendRectLive.width || 220, exportedMapCssWidth * 0.36));
-        const legendLeftCss = cropInsetCss + Math.max(8, exportedMapCssWidth - legendWidthCss - 12);
+        const legendWidthCss = Math.max(180, Math.min(legendRectLive.width || 240, exportedMapCssWidth * 0.34));
+        const legendLeftCss = cropInsetCss + Math.max(8, exportedMapCssWidth - legendWidthCss - 10);
         const legendTopCss = 12;
+        const legendMaxHeightCss = Math.max(120, Math.round(exportedMapCssHeight * 0.6));
         clone.style.margin = '0';
         clone.style.width = legendWidthCss + 'px';
         clone.style.maxWidth = legendWidthCss + 'px';
+        clone.style.maxHeight = legendMaxHeightCss + 'px';
         clone.style.padding = '8px';
         clone.style.background = 'rgba(255,255,255,0.96)';
         clone.style.border = '1px solid rgba(0,0,0,0.2)';
         clone.style.borderRadius = '4px';
         clone.style.boxSizing = 'border-box';
-        clone.style.overflow = 'visible';
+        clone.style.overflow = 'hidden';
         clone.style.pointerEvents = 'none';
         const sourceSyms = Array.from(legendLive.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
