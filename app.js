@@ -10,6 +10,7 @@ const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const EXPORT_SIDE_CROP_RATIO = 0.06;
+const EXPORT_SIDE_CROP_EXTRA_PX = 10;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -3552,7 +3553,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         0,
         Math.min(
           Math.floor(baseCropW * 0.2),
-          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO)
+          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
         )
       );
       const cropX = Math.max(0, sideCropPx);
@@ -3918,7 +3919,7 @@ function exportSVG() {
         0,
         Math.min(
           Math.floor(baseCropW * 0.2),
-          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO)
+          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
         )
       );
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
