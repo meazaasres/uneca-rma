@@ -3669,6 +3669,34 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (legend) {
         const clone = legend.cloneNode(true);
         clone.className = 'export-legend-clone';
+        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
+        const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
+        cloneSyms.forEach((sym, idx) => {
+          const src = sourceSyms[idx];
+          if (!src) return;
+          const cs = window.getComputedStyle(src);
+          const fillColor = (cs && cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)')
+            ? cs.backgroundColor
+            : '#ccc';
+          const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
+            ? cs.border
+            : '1px solid #333';
+          sym.style.backgroundColor = fillColor;
+          sym.style.border = borderValue;
+          if (sym.classList.contains('legend-sym-line')) {
+            const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
+              ? cs.borderTopColor
+              : fillColor;
+            sym.style.height = '3px';
+            sym.style.minHeight = '3px';
+            sym.style.maxHeight = '3px';
+            sym.style.border = '0';
+            sym.style.borderTop = `3px solid ${lineColor}`;
+            sym.style.background = 'transparent';
+          } else if (sym.classList.contains('legend-sym-point')) {
+            sym.style.borderRadius = '50%';
+          }
+        });
         wrapper.appendChild(clone);
       }
 
