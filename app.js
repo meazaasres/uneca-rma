@@ -3628,6 +3628,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       mapWrapper.className = 'export-map-wrapper';
       mapWrapper.style.width = W + 'px';
       mapWrapper.style.height = H + 'px';
+      mapWrapper.style.position = 'relative';
       mapWrapper.style.overflow = 'hidden';
       wrapper.appendChild(mapWrapper);
 
@@ -3716,6 +3717,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           clone.style.whiteSpace = 'normal';
           clone.style.top = 'auto';
           clone.style.bottom = exportBottom + 'px';
+          clone.style.zIndex = '5';
         }
         if (
           source.classList &&
@@ -3726,8 +3728,15 @@ window.addEventListener('load', resetInitialScrollPositions);
           const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - exportHeight)));
           clone.style.top = 'auto';
           clone.style.bottom = exportBottom + 'px';
+          clone.style.zIndex = '5';
         }
         mapWrapper.appendChild(clone);
+        // Final hard clamp inside map frame to prevent spill into legend section.
+        if (source.id === 'disclaimer' || (source.classList && (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control')))) {
+          const maxBottom = Math.max(0, H - (clone.offsetHeight || exportHeight));
+          const currentBottom = Math.max(0, parseFloat(clone.style.bottom || "0") || 0);
+          clone.style.bottom = Math.max(0, Math.min(maxBottom, currentBottom)) + 'px';
+        }
       }
 
       // Export disclaimer exactly as currently displayed on map.
@@ -3959,6 +3968,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.className = 'export-legend-clone';
         copyVisualStylesRecursive(legend, clone);
         clone.style.position = 'relative';
+        clone.style.display = 'block';
+        clone.style.clear = 'both';
         clone.style.zIndex = '4';
         clone.style.background = 'transparent';
         clone.style.border = '0';
