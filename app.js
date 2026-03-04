@@ -3526,6 +3526,34 @@ window.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('load', resetInitialScrollPositions);
 
         // --- Secure Export Helper ---
+    function isFirefoxBrowser() {
+    try {
+      return /firefox/i.test(navigator.userAgent || "");
+    } catch (e) {
+      return false;
+    }
+    }
+
+    function buildHtml2CanvasOptions(wrapper) {
+    const rect = wrapper.getBoundingClientRect();
+    const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
+    const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
+    const isFirefox = isFirefoxBrowser();
+    return {
+      scale: isFirefox ? Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)) : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
+      useCORS: true,
+      foreignObjectRendering: false,
+      logging: false,
+      backgroundColor: "#ffffff",
+      width: exportWidth,
+      height: exportHeight,
+      windowWidth: exportWidth,
+      windowHeight: exportHeight,
+      scrollX: 0,
+      scrollY: 0
+    };
+    }
+
     function compositeExportElement(cb) {
     leafletImage(map, (err, mapCanvas) => {
       if (err) {
@@ -3571,6 +3599,16 @@ window.addEventListener('load', resetInitialScrollPositions);
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
+      if (isFirefoxBrowser()) {
+        // Firefox exports are more stable when the element is in-viewport but transparent.
+        wrapper.style.position = 'fixed';
+        wrapper.style.left = '0';
+        wrapper.style.top = '0';
+        wrapper.style.transform = 'none';
+        wrapper.style.opacity = '0';
+        wrapper.style.pointerEvents = 'none';
+        wrapper.style.zIndex = '-1';
+      }
       document.body.appendChild(wrapper);
 
       const titleEl = document.getElementById('map-title');
@@ -3750,23 +3788,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     function exportMap() {
       showLoading("Exporting map as PNG...");
       compositeExportElement(wrapper => {
-        const canvasScale = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
-        const rect = wrapper.getBoundingClientRect();
-        const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
-        const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
-        html2canvas(wrapper, {
-          scale: canvasScale,
-          useCORS: true,
-          foreignObjectRendering: false,
-          logging: false,
-          backgroundColor: "#ffffff",
-          width: exportWidth,
-          height: exportHeight,
-          windowWidth: exportWidth,
-          windowHeight: exportHeight,
-          scrollX: 0,
-          scrollY: 0
-        })
+        html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
           .then(canvas => {
             const a = document.createElement('a');
             a.href = canvas.toDataURL('image/png');
@@ -3787,23 +3809,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       function exportPDF() {
         showLoading("Exporting map as PDF...");
         compositeExportElement(wrapper => {
-            const canvasScale = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
-            const rect = wrapper.getBoundingClientRect();
-            const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
-            const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
-            html2canvas(wrapper, {
-              scale: canvasScale,
-              useCORS: true,
-              foreignObjectRendering: false,
-              logging: false,
-              backgroundColor: "#ffffff",
-              width: exportWidth,
-              height: exportHeight,
-              windowWidth: exportWidth,
-              windowHeight: exportHeight,
-              scrollX: 0,
-              scrollY: 0
-            })
+            html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
             .then(canvas => {
               const imgData = canvas.toDataURL('image/png');
               const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
