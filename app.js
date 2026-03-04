@@ -9,6 +9,7 @@ const SCALE_BAR_OFFSET_Y_PX = 7;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
+const EXPORT_SIDE_CROP_RATIO = 0.06;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -3545,14 +3546,23 @@ window.addEventListener('load', resetInitialScrollPositions);
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
       const expectedW = Math.round(cssW * rawScaleX);
       const expectedH = Math.round(cssH * rawScaleY);
-      const cropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
+      const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
       const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
+      const sideCropPx = Math.max(
+        0,
+        Math.min(
+          Math.floor(baseCropW * 0.2),
+          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO)
+        )
+      );
+      const cropX = Math.max(0, sideCropPx);
+      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(mapCanvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(mapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
       const W = cropW;
       const H = cropH;
@@ -3606,7 +3616,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
         const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
@@ -3633,7 +3643,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const discRect = disclaimer.getBoundingClientRect();
         const relLeftCss = mapRect ? (discRect.left - mapRect.left) : 10;
         const relTopCss = mapRect ? (discRect.top - mapRect.top) : 10;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
         const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 10);
         const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
         clone.style.left = exportLeft + 'px';
@@ -3902,9 +3912,17 @@ function exportSVG() {
       const expectedCanvasH = Math.round(containerHeight * rawScaleY);
 
       // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
-      const cropW = Math.min(expectedCanvasW, canvasPixelWidth);
+      const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
       const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
-      const cropX = 0; // left-align crop
+      const sideCropPx = Math.max(
+        0,
+        Math.min(
+          Math.floor(baseCropW * 0.2),
+          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO)
+        )
+      );
+      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
+      const cropX = sideCropPx;
       const cropY = 0; // top-align crop
 
       // Debug logging to help tune if needed
