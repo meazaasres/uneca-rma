@@ -4031,7 +4031,7 @@ function exportSVG() {
           svg.setAttribute("width", String(svgWidth));
           svg.setAttribute("height", String(svgHeight));
           svg.setAttribute("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
-          svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+          svg.setAttribute("preserveAspectRatio", "none");
 
           const bg = document.createElementNS(svgNS, "rect");
           bg.setAttribute("x", "0");
@@ -4047,6 +4047,7 @@ function exportSVG() {
           img.setAttribute("y", "0");
           img.setAttribute("width", String(svgWidth));
           img.setAttribute("height", String(svgHeight));
+          img.setAttribute("preserveAspectRatio", "none");
           svg.appendChild(img);
 
           const serializer = new XMLSerializer();
