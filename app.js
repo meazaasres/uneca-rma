@@ -3837,6 +3837,21 @@ window.addEventListener('load', resetInitialScrollPositions);
         copyVisualStylesRecursive(legend, clone);
         clone.style.position = 'relative';
         clone.style.zIndex = '4';
+        clone.style.background = 'transparent';
+        clone.style.border = '0';
+        clone.style.boxShadow = 'none';
+        clone.style.outline = 'none';
+        clone.style.padding = '0';
+        clone.style.marginTop = '10px';
+        clone.style.borderRadius = '0';
+        clone.style.overflow = 'visible';
+        Array.from(clone.querySelectorAll('.legend-block')).forEach((block) => {
+          block.style.borderTop = '0';
+          block.style.border = '0';
+          block.style.boxShadow = 'none';
+          block.style.outline = 'none';
+          block.style.background = 'transparent';
+        });
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
         cloneSyms.forEach((sym, idx) => {
