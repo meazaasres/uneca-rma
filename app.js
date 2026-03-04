@@ -3793,17 +3793,34 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       function ensureScaleBarFallback() {
-        const src = findMapControlElement('.leaflet-control-exact-scale, .map-bottom-scale-control');
-        if (!src || !mapEl) return;
+        const src = findMapControlElement('.leaflet-control-exact-scale, .map-bottom-scale-control')
+          || (scaleControl && typeof scaleControl.getContainer === "function" ? scaleControl.getContainer() : null);
+        if (!mapEl) return;
         const existing = mapWrapper.querySelector('.export-scale-clone');
         if (existing) existing.remove();
         const mapRect = mapEl.getBoundingClientRect();
-        const srcRect = src.getBoundingClientRect();
-        const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
-        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
-        const w = Math.max(70, Math.round(srcRect.width * rawScaleX));
-        const h = Math.max(20, Math.round(srcRect.height * rawScaleY));
-        const labelText = (src.querySelector('.exact-scale-label')?.textContent || src.textContent || 'Scale: --').trim();
+        const srcRect = src ? src.getBoundingClientRect() : null;
+        const srcWidthCss = (srcRect && srcRect.width > 0) ? srcRect.width : (src ? (src.offsetWidth || 120) : 120);
+        const srcHeightCss = (srcRect && srcRect.height > 0) ? srcRect.height : (src ? (src.offsetHeight || 24) : 24);
+        let leftCss;
+        let topCss;
+        if (src && src.dataset && src.dataset.leftPx && src.dataset.topPx) {
+          leftCss = parseFloat(src.dataset.leftPx) || 0;
+          topCss = parseFloat(src.dataset.topPx) || Math.max(0, mapRect.height - srcHeightCss - 8);
+        } else if (srcRect && srcRect.width > 0 && srcRect.height > 0) {
+          leftCss = srcRect.left - mapRect.left;
+          topCss = srcRect.top - mapRect.top;
+        } else {
+          leftCss = Math.max(0, (mapRect.width - srcWidthCss) / 2);
+          topCss = Math.max(0, mapRect.height - srcHeightCss - 8);
+        }
+        const left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
+        const top = Math.max(0, Math.round(topCss * rawScaleY));
+        const w = Math.max(70, Math.round(srcWidthCss * rawScaleX));
+        const h = Math.max(20, Math.round(srcHeightCss * rawScaleY));
+        const labelText = src
+          ? (src.querySelector('.exact-scale-label')?.textContent || src.textContent || 'Scale: --').trim()
+          : 'Scale: --';
 
         const fallback = document.createElement('div');
         fallback.className = 'export-scale-clone';
