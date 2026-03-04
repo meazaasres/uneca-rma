@@ -3685,8 +3685,9 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
+        const extraTopPx = source.id === 'disclaimer' ? 10 : 0;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) + extraTopPx);
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
 
