@@ -3685,9 +3685,8 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
-        const extraTopPx = 0;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) + extraTopPx);
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
 
@@ -3703,6 +3702,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
         if (source.id === 'disclaimer') {
+          const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
+          const exportBottom = Math.max(0, Math.round(bottomCss * rawScaleY));
           clone.style.width = 'auto';
           clone.style.height = 'auto';
           clone.style.display = 'inline-block';
@@ -3710,6 +3711,8 @@ window.addEventListener('load', resetInitialScrollPositions);
           clone.style.textAlign = 'left';
           clone.style.textJustify = 'auto';
           clone.style.whiteSpace = 'normal';
+          clone.style.top = 'auto';
+          clone.style.bottom = exportBottom + 'px';
         }
         mapWrapper.appendChild(clone);
       }
@@ -4490,7 +4493,14 @@ function exportSVG() {
 
         const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
         const discY = discRect && mapRect
-          ? titleHeightPx + Math.max(0, Math.round((discRect.top - mapRect.top) * rawScaleY) - cropY)
+          ? (() => {
+              const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
+              const bottomPx = Math.max(0, Math.round(bottomCss * rawScaleY));
+              return Math.max(
+                titleHeightPx,
+                titleHeightPx + usedCanvasHeight - discHeight - bottomPx
+              );
+            })()
           : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
 
         const discBg = document.createElementNS(svgNS, "rect");
