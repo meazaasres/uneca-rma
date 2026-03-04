@@ -3541,7 +3541,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cssH = (mapRectForScale && mapRectForScale.height > 0) ? mapRectForScale.height : (mapEl ? mapEl.clientHeight : mapCanvas.height);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = cssH > 0 ? (mapCanvas.height / cssH) : rawScaleX;
-      const overlayScale = Math.max(0.75, Math.min(2, Math.min(rawScaleX, rawScaleY)));
       // Keep full map canvas in export to avoid perceived basemap shifts.
       const cropInsetCss = 0;
       const cropLeftPx = 0;
@@ -3560,10 +3559,9 @@ window.addEventListener('load', resetInitialScrollPositions);
       const legendLive = document.querySelector('#legend-items');
       const legendRectLive = legendLive ? legendLive.getBoundingClientRect() : null;
       const hasLegendRect = !!(legendRectLive && legendRectLive.width > 0 && legendRectLive.height > 0);
+      const legendFooterHeight = hasLegendRect ? Math.max(44, Math.round((legendRectLive.height + 16) * rawScaleY)) : 0;
       const sceneW = Math.max(1, W);
-      const sceneH = Math.max(1, H);
-      const exportedMapCssWidth = Math.max(1, cssW - (2 * cropInsetCss));
-      const exportedMapCssHeight = Math.max(1, cssH);
+      const sceneH = Math.max(1, H + legendFooterHeight);
 
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
@@ -3616,11 +3614,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;text-align:justify !important;text-justify:inter-word !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
-        .export-map-wrapper .export-legend-clone{font-size:11px !important;line-height:1.25 !important}
-        .export-map-wrapper .export-legend-clone .legend-header{font-size:12px !important;font-weight:600 !important}
-        .export-map-wrapper .export-legend-clone .legend-row{display:flex !important;align-items:center !important;margin:3px 0 !important}
-        .export-map-wrapper .export-legend-clone .legend-row span{display:inline-block !important;word-break:break-word !important}
         .export-img{width:100%;height:auto;display:block}
       `;
       wrapper.appendChild(styleEl);
@@ -3685,14 +3678,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       function placeCloneInMap(clone, relRect) {
         const leftCss = relRect.left - cropInsetCss;
         const topCss = relRect.top;
-        const widthCss = Math.max(0, Number(relRect.width) || 0);
-        const heightCss = Math.max(0, Number(relRect.height) || 0);
-        const maxLeftCss = Math.max(0, exportedMapCssWidth - widthCss);
-        const maxTopCss = Math.max(0, exportedMapCssHeight - heightCss);
-        const clampedLeftCss = Math.max(0, Math.min(maxLeftCss, leftCss));
-        const clampedTopCss = Math.max(0, Math.min(maxTopCss, topCss));
-        const exportLeft = Math.max(0, Math.round(clampedLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(clampedTopCss * rawScaleY));
+        const exportLeft = Math.round(leftCss * rawScaleX);
+        const exportTop = Math.round(topCss * rawScaleY);
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
@@ -3700,7 +3687,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.bottom = 'auto';
         clone.style.margin = '0';
         clone.style.transformOrigin = 'top left';
-        clone.style.transform = `scale(${overlayScale}, ${overlayScale})`;
+        clone.style.transform = `scale(${rawScaleX}, ${rawScaleY})`;
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
         mapWrapper.appendChild(clone);
@@ -3724,9 +3711,6 @@ window.addEventListener('load', resetInitialScrollPositions);
         const clone = disclaimer.cloneNode(true);
         clone.className = 'export-disclaimer-clone';
         copyVisualStylesRecursive(disclaimer, clone);
-        const disclaimerMaxWidthCss = Math.max(160, Math.round(exportedMapCssWidth * 0.45));
-        clone.style.maxWidth = disclaimerMaxWidthCss + 'px';
-        clone.style.width = 'auto';
         const discRect = getElementRectRelativeToMap(disclaimer, mapEl);
         if (discRect && discRect.width > 0 && discRect.height > 0) {
           placeCloneInMap(clone, discRect);
@@ -3737,25 +3721,37 @@ window.addEventListener('load', resetInitialScrollPositions);
       cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
       cloneMapOverlayToExport('.leaflet-control-exact-scale', 'export-scale-clone');
 
-      // Legend exported in-map at a stable top-right position to avoid sidebar offset drift.
+      // Legend exported below map (outside map frame), preserving item styles.
       if (legendLive && hasLegendRect) {
+        const legendFooter = document.createElement('div');
+        legendFooter.style.position = 'absolute';
+        legendFooter.style.left = '0';
+        legendFooter.style.top = H + 'px';
+        legendFooter.style.width = W + 'px';
+        legendFooter.style.height = legendFooterHeight + 'px';
+        legendFooter.style.background = '#ffffff';
+        legendFooter.style.boxSizing = 'border-box';
+        legendFooter.style.padding = '8px 10px';
+        legendFooter.style.overflow = 'hidden';
+        scene.appendChild(legendFooter);
+
         const clone = legendLive.cloneNode(true);
         clone.className = 'export-legend-clone';
         copyVisualStylesRecursive(legendLive, clone);
-        const legendWidthCss = Math.max(180, Math.min(legendRectLive.width || 240, exportedMapCssWidth * 0.34));
-        const legendLeftCss = cropInsetCss + Math.max(8, exportedMapCssWidth - legendWidthCss - 10);
-        const legendTopCss = 12;
-        const legendMaxHeightCss = Math.max(120, Math.round(exportedMapCssHeight * 0.6));
+        clone.style.position = 'relative';
+        clone.style.left = '0';
+        clone.style.top = '0';
         clone.style.margin = '0';
-        clone.style.width = legendWidthCss + 'px';
-        clone.style.maxWidth = legendWidthCss + 'px';
-        clone.style.maxHeight = legendMaxHeightCss + 'px';
-        clone.style.padding = '8px';
-        clone.style.background = 'rgba(255,255,255,0.96)';
-        clone.style.border = '1px solid rgba(0,0,0,0.2)';
-        clone.style.borderRadius = '4px';
+        clone.style.padding = '0';
+        clone.style.width = '100%';
+        clone.style.maxWidth = '100%';
+        clone.style.height = '100%';
+        clone.style.maxHeight = '100%';
+        clone.style.border = '0';
+        clone.style.borderRadius = '0';
+        clone.style.background = 'transparent';
         clone.style.boxSizing = 'border-box';
-        clone.style.overflow = 'hidden';
+        clone.style.overflow = 'auto';
         clone.style.pointerEvents = 'none';
         const sourceSyms = Array.from(legendLive.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
@@ -3786,22 +3782,16 @@ window.addEventListener('load', resetInitialScrollPositions);
             const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
               ? cs.borderTopColor
               : fillColor;
-            sym.style.height = '0';
-            sym.style.minHeight = '0';
-            sym.style.maxHeight = '0';
-            sym.style.border = '0';
+            sym.style.height = '3px';
+            sym.style.minHeight = '3px';
+            sym.style.maxHeight = '3px';
             sym.style.borderTop = `3px solid ${lineColor}`;
             sym.style.background = 'transparent';
           } else if (sym.classList.contains('legend-sym-point')) {
             sym.style.borderRadius = '50%';
           }
         });
-        placeCloneInMap(clone, {
-          left: legendLeftCss,
-          top: legendTopCss,
-          width: legendWidthCss,
-          height: legendRectLive.height || clone.offsetHeight || 0
-        });
+        legendFooter.appendChild(clone);
       }
 
       const runCb = () => {
