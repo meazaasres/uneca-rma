@@ -3584,8 +3584,13 @@ window.addEventListener('load', resetInitialScrollPositions);
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
       const expectedW = Math.round(cssW * rawScaleX);
       const expectedH = Math.round(cssH * rawScaleY);
-      const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
-      const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
+      const edgeFullCanvas = isEdgeBrowser();
+      const baseCropW = edgeFullCanvas
+        ? Math.max(1, mapCanvas.width)
+        : Math.max(1, Math.min(expectedW, mapCanvas.width));
+      const cropH = edgeFullCanvas
+        ? Math.max(1, mapCanvas.height)
+        : Math.max(1, Math.min(expectedH, mapCanvas.height));
       const sideCropPx = Math.max(
         0,
         Math.min(
@@ -4309,10 +4314,15 @@ function exportSVG() {
       // expected canvas pixels for visible map area
       const expectedCanvasW = Math.round(containerWidth * rawScaleX);
       const expectedCanvasH = Math.round(containerHeight * rawScaleY);
+      const edgeFullCanvas = isEdgeBrowser();
 
       // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
-      const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
-      const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
+      const baseCropW = edgeFullCanvas
+        ? Math.max(1, canvasPixelWidth)
+        : Math.min(expectedCanvasW, canvasPixelWidth);
+      const cropH = edgeFullCanvas
+        ? Math.max(1, canvasPixelHeight)
+        : Math.min(expectedCanvasH, canvasPixelHeight);
       const sideCropPx = Math.max(
         0,
         Math.min(
