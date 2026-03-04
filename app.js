@@ -3599,16 +3599,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
-      if (isFirefoxBrowser()) {
-        // Firefox exports are more stable when the element is in-viewport but transparent.
-        wrapper.style.position = 'fixed';
-        wrapper.style.left = '0';
-        wrapper.style.top = '0';
-        wrapper.style.transform = 'none';
-        wrapper.style.opacity = '0';
-        wrapper.style.pointerEvents = 'none';
-        wrapper.style.zIndex = '-1';
-      }
       document.body.appendChild(wrapper);
 
       const titleEl = document.getElementById('map-title');
@@ -3853,6 +3843,57 @@ function tryCanvasToDataURL(canvas) {
   }
 }
 
+function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
+  if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") {
+    return { canvas: sourceCanvas, leftTrim: 0 };
+  }
+  const w = Math.max(1, sourceCanvas.width | 0);
+  const h = Math.max(1, sourceCanvas.height | 0);
+  const ctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return { canvas: sourceCanvas, leftTrim: 0 };
+
+  let imgData;
+  try {
+    imgData = ctx.getImageData(0, 0, w, h);
+  } catch (e) {
+    return { canvas: sourceCanvas, leftTrim: 0 };
+  }
+  const px = imgData.data;
+  const maxTrimPx = Math.max(0, Math.floor(w * Math.max(0, Math.min(0.45, maxTrimRatio))));
+  const nonWhiteThreshold = Math.max(2, Math.floor(h * 0.002));
+
+  function isMostlyWhiteColumn(x) {
+    let nonWhite = 0;
+    for (let y = 0; y < h; y++) {
+      const idx = ((y * w) + x) * 4;
+      const r = px[idx];
+      const g = px[idx + 1];
+      const b = px[idx + 2];
+      const a = px[idx + 3];
+      if (!(a >= 250 && r >= 250 && g >= 250 && b >= 250)) {
+        nonWhite++;
+        if (nonWhite > nonWhiteThreshold) return false;
+      }
+    }
+    return true;
+  }
+
+  let left = 0;
+  while (left < maxTrimPx && isMostlyWhiteColumn(left)) left++;
+  let right = w - 1;
+  while (right >= (w - maxTrimPx) && isMostlyWhiteColumn(right)) right--;
+  const trimmedW = Math.max(1, right - left + 1);
+  if (left === 0 && trimmedW === w) return { canvas: sourceCanvas, leftTrim: 0 };
+
+  const trimmed = document.createElement("canvas");
+  trimmed.width = trimmedW;
+  trimmed.height = h;
+  const tctx = trimmed.getContext("2d");
+  if (!tctx) return { canvas: sourceCanvas, leftTrim: 0 };
+  tctx.drawImage(sourceCanvas, left, 0, trimmedW, h, 0, 0, trimmedW, h);
+  return { canvas: trimmed, leftTrim: left };
+}
+
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
   showLoading("Exporting map as SVG...");
@@ -3986,9 +4027,14 @@ function exportSVG() {
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
       cctx.drawImage(mapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+      const trimInfo = isFirefoxBrowser()
+        ? trimHorizontalWhitespaceWithOffset(cropped, 0.28)
+        : { canvas: cropped, leftTrim: 0 };
+      const exportCanvas = trimInfo.canvas || cropped;
+      const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
 
-      const usedCanvasWidth  = cropW;
-      const usedCanvasHeight = cropH;
+      const usedCanvasWidth  = Math.max(1, exportCanvas.width);
+      const usedCanvasHeight = Math.max(1, exportCanvas.height);
 
       const totalWidthPx  = usedCanvasWidth;
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
@@ -4028,7 +4074,7 @@ function exportSVG() {
       }
 
       // embed cropped image
-      const imgDataUrl = cropped.toDataURL("image/png");
+      const imgDataUrl = exportCanvas.toDataURL("image/png");
       const img = document.createElementNS(svgNS, "image");
       img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
       img.setAttribute("href", imgDataUrl);
@@ -4043,7 +4089,7 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * scale) - cropX;
+        const x = (containerPoint.x * scale) - cropX - extraTrimX;
         const y = (containerPoint.y * scale) - cropY + titleHeightPx;
         return [x, y];
       }
@@ -4134,7 +4180,7 @@ function exportSVG() {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const discX = discRect && mapRect
-          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX - 4)
+          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX - 4)
           : marginPx;
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * scale);
         let discWidth = Math.max(
@@ -4217,7 +4263,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX);
+        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
         const naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
 
         const naBg = document.createElementNS(svgNS, "rect");
@@ -4260,7 +4306,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        const sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX);
+        const sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
         const sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
