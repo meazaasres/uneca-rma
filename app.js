@@ -3726,6 +3726,102 @@ window.addEventListener('load', resetInitialScrollPositions);
       cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
       cloneMapOverlayToExport('.leaflet-control-exact-scale, .map-bottom-scale-control', 'export-scale-clone');
 
+      function findMapControlElement(selector) {
+        const nodes = Array.from(document.querySelectorAll(selector));
+        if (!nodes.length || !mapEl) return null;
+        const mapRect = mapEl.getBoundingClientRect();
+        return nodes.find((el) => {
+          const r = el.getBoundingClientRect();
+          return r && r.width > 0 && r.height > 0 &&
+            r.right > mapRect.left && r.left < mapRect.right &&
+            r.bottom > mapRect.top && r.top < mapRect.bottom;
+        }) || nodes[0] || null;
+      }
+
+      function ensureNorthArrowFallback() {
+        if (mapWrapper.querySelector('.export-north-arrow-clone')) return;
+        const src = findMapControlElement('.leaflet-control-north-arrow');
+        if (!src || !mapEl) return;
+        const mapRect = mapEl.getBoundingClientRect();
+        const srcRect = src.getBoundingClientRect();
+        const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
+        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
+        const w = Math.max(20, Math.round(srcRect.width * rawScaleX));
+        const h = Math.max(24, Math.round(srcRect.height * rawScaleY));
+
+        const fallback = document.createElement('div');
+        fallback.className = 'export-north-arrow-clone';
+        fallback.style.position = 'absolute';
+        fallback.style.left = left + 'px';
+        fallback.style.top = top + 'px';
+        fallback.style.width = w + 'px';
+        fallback.style.height = h + 'px';
+        fallback.style.background = '#ffffff';
+        fallback.style.border = '1px solid #cfd6e4';
+        fallback.style.borderRadius = '4px';
+        fallback.style.display = 'flex';
+        fallback.style.flexDirection = 'column';
+        fallback.style.alignItems = 'center';
+        fallback.style.justifyContent = 'center';
+        fallback.style.boxSizing = 'border-box';
+        fallback.style.pointerEvents = 'none';
+
+        const letter = document.createElement('div');
+        letter.textContent = 'N';
+        letter.style.fontSize = Math.max(9, Math.round(h * 0.28)) + 'px';
+        letter.style.fontWeight = '700';
+        letter.style.lineHeight = '1';
+        letter.style.color = '#1e3a8a';
+        fallback.appendChild(letter);
+
+        const tri = document.createElement('div');
+        tri.style.width = '0';
+        tri.style.height = '0';
+        tri.style.borderLeft = Math.max(4, Math.round(w * 0.17)) + 'px solid transparent';
+        tri.style.borderRight = Math.max(4, Math.round(w * 0.17)) + 'px solid transparent';
+        tri.style.borderBottom = Math.max(8, Math.round(h * 0.28)) + 'px solid #1e3a8a';
+        tri.style.marginTop = Math.max(1, Math.round(h * 0.05)) + 'px';
+        fallback.appendChild(tri);
+        mapWrapper.appendChild(fallback);
+      }
+
+      function ensureScaleBarFallback() {
+        if (mapWrapper.querySelector('.export-scale-clone')) return;
+        const src = findMapControlElement('.leaflet-control-exact-scale, .map-bottom-scale-control');
+        if (!src || !mapEl) return;
+        const mapRect = mapEl.getBoundingClientRect();
+        const srcRect = src.getBoundingClientRect();
+        const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
+        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
+        const w = Math.max(70, Math.round(srcRect.width * rawScaleX));
+        const h = Math.max(20, Math.round(srcRect.height * rawScaleY));
+        const labelText = (src.querySelector('.exact-scale-label')?.textContent || src.textContent || 'Scale: --').trim();
+
+        const fallback = document.createElement('div');
+        fallback.className = 'export-scale-clone';
+        fallback.style.position = 'absolute';
+        fallback.style.left = left + 'px';
+        fallback.style.top = top + 'px';
+        fallback.style.width = w + 'px';
+        fallback.style.minHeight = h + 'px';
+        fallback.style.background = '#ffffff';
+        fallback.style.border = '1px solid #cfd6e4';
+        fallback.style.borderRadius = '4px';
+        fallback.style.padding = '3px 6px';
+        fallback.style.boxSizing = 'border-box';
+        fallback.style.fontSize = Math.max(8, Math.round(h * 0.32)) + 'px';
+        fallback.style.lineHeight = '1.2';
+        fallback.style.fontWeight = '400';
+        fallback.style.color = '#102a43';
+        fallback.style.textAlign = 'center';
+        fallback.style.pointerEvents = 'none';
+        fallback.textContent = labelText;
+        mapWrapper.appendChild(fallback);
+      }
+
+      ensureNorthArrowFallback();
+      ensureScaleBarFallback();
+
       const legend = document.querySelector('#legend-items');
       if (legend) {
         const clone = legend.cloneNode(true);
