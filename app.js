@@ -3534,6 +3534,15 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
+    function isEdgeBrowser() {
+    try {
+      const ua = navigator.userAgent || "";
+      return /edg\//i.test(ua) || /edge\//i.test(ua);
+    } catch (e) {
+      return false;
+    }
+    }
+
     function buildHtml2CanvasOptions(wrapper) {
     const rect = wrapper.getBoundingClientRect();
     const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
@@ -3584,8 +3593,9 @@ window.addEventListener('load', resetInitialScrollPositions);
           Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
         )
       );
-      const cropX = Math.max(0, sideCropPx);
-      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
+      const effectiveSideCropPx = isEdgeBrowser() ? 0 : sideCropPx;
+      const cropX = Math.max(0, effectiveSideCropPx);
+      const cropW = Math.max(1, baseCropW - (2 * effectiveSideCropPx));
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
@@ -4310,8 +4320,9 @@ function exportSVG() {
           Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
         )
       );
-      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
-      const cropX = sideCropPx;
+      const effectiveSideCropPx = isEdgeBrowser() ? 0 : sideCropPx;
+      const cropW = Math.max(1, baseCropW - (2 * effectiveSideCropPx));
+      const cropX = effectiveSideCropPx;
       const cropY = 0; // top-align crop
 
       // Debug logging to help tune if needed
