@@ -3542,10 +3542,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = cssH > 0 ? (mapCanvas.height / cssH) : rawScaleX;
       const overlayScale = Math.max(0.75, Math.min(2, Math.min(rawScaleX, rawScaleY)));
-      const maxHorizontalCropCss = Math.max(0, Math.floor(cssW * 0.2));
-      const cropInsetCss = Math.max(0, Math.min(MAP_SIDE_VISIBLE_INSET_PX || 0, maxHorizontalCropCss));
-      const cropLeftPx = Math.max(0, Math.round(cropInsetCss * rawScaleX));
-      const cropRightPx = Math.max(0, Math.round(cropInsetCss * rawScaleX));
+      // Keep full map canvas in export to avoid perceived basemap shifts.
+      const cropInsetCss = 0;
+      const cropLeftPx = 0;
+      const cropRightPx = 0;
       const cropW = Math.max(1, mapCanvas.width - cropLeftPx - cropRightPx);
       const cropH = Math.max(1, mapCanvas.height);
 
