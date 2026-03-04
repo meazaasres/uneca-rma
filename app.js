@@ -3617,7 +3617,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX - 4);
         const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
@@ -4084,7 +4084,7 @@ function exportSVG() {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const discX = discRect && mapRect
-          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX)
+          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX - 4)
           : marginPx;
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * scale);
         let discWidth = Math.max(
