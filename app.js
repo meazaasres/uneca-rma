@@ -3540,44 +3540,29 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cssW = (mapRectForScale && mapRectForScale.width > 0) ? mapRectForScale.width : (mapEl ? mapEl.clientWidth : mapCanvas.width);
       const cssH = (mapRectForScale && mapRectForScale.height > 0) ? mapRectForScale.height : (mapEl ? mapEl.clientHeight : mapCanvas.height);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
-      const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
-      const cropW = Math.max(1, mapCanvas.width);
+      const rawScaleY = cssH > 0 ? (mapCanvas.height / cssH) : rawScaleX;
+      const maxHorizontalCropCss = Math.max(0, Math.floor(cssW * 0.2));
+      const cropInsetCss = Math.max(0, Math.min(MAP_SIDE_VISIBLE_INSET_PX || 0, maxHorizontalCropCss));
+      const cropLeftPx = Math.max(0, Math.round(cropInsetCss * rawScaleX));
+      const cropRightPx = Math.max(0, Math.round(cropInsetCss * rawScaleX));
+      const cropW = Math.max(1, mapCanvas.width - cropLeftPx - cropRightPx);
       const cropH = Math.max(1, mapCanvas.height);
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(mapCanvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(mapCanvas, cropLeftPx, 0, cropW, cropH, 0, 0, cropW, cropH);
 
       const W = cropW;
       const H = cropH;
-      const mapRectLive = mapEl ? mapEl.getBoundingClientRect() : null;
       const legendLive = document.querySelector('#legend-items');
       const legendRectLive = legendLive ? legendLive.getBoundingClientRect() : null;
       const hasLegendRect = !!(legendRectLive && legendRectLive.width > 0 && legendRectLive.height > 0);
-
-      let extraLeftCss = 0;
-      let extraTopCss = 0;
-      let extraRightCss = 0;
-      let extraBottomCss = 0;
-      if (mapRectLive && hasLegendRect) {
-        const relLegendLeft = legendRectLive.left - mapRectLive.left;
-        const relLegendTop = legendRectLive.top - mapRectLive.top;
-        const mapWcss = mapRectLive.width;
-        const mapHcss = mapRectLive.height;
-        extraLeftCss = Math.max(0, -relLegendLeft);
-        extraTopCss = Math.max(0, -relLegendTop);
-        extraRightCss = Math.max(0, relLegendLeft + legendRectLive.width - mapWcss);
-        extraBottomCss = Math.max(0, relLegendTop + legendRectLive.height - mapHcss);
-      }
-
-      const scenePadLeft = Math.max(0, Math.round(extraLeftCss * rawScaleX));
-      const scenePadTop = Math.max(0, Math.round(extraTopCss * rawScaleY));
-      const scenePadRight = Math.max(0, Math.round(extraRightCss * rawScaleX));
-      const scenePadBottom = Math.max(0, Math.round(extraBottomCss * rawScaleY));
-      const sceneW = Math.max(1, W + scenePadLeft + scenePadRight);
-      const sceneH = Math.max(1, H + scenePadTop + scenePadBottom);
+      const sceneW = Math.max(1, W);
+      const sceneH = Math.max(1, H);
+      const exportedMapCssWidth = Math.max(1, cssW - (2 * cropInsetCss));
+      const exportedMapCssHeight = Math.max(1, cssH);
 
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
@@ -3620,8 +3605,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       mapWrapper.style.width = W + 'px';
       mapWrapper.style.height = H + 'px';
       mapWrapper.style.position = 'absolute';
-      mapWrapper.style.left = scenePadLeft + 'px';
-      mapWrapper.style.top = scenePadTop + 'px';
+      mapWrapper.style.left = '0';
+      mapWrapper.style.top = '0';
       mapWrapper.style.overflow = 'hidden';
       scene.appendChild(mapWrapper);
 
@@ -3693,8 +3678,16 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       function placeCloneInMap(clone, relRect) {
-        const exportLeft = Math.max(0, Math.round(relRect.left * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relRect.top * rawScaleY));
+        const leftCss = relRect.left - cropInsetCss;
+        const topCss = relRect.top;
+        const widthCss = Math.max(0, Number(relRect.width) || 0);
+        const heightCss = Math.max(0, Number(relRect.height) || 0);
+        const maxLeftCss = Math.max(0, exportedMapCssWidth - widthCss);
+        const maxTopCss = Math.max(0, exportedMapCssHeight - heightCss);
+        const clampedLeftCss = Math.max(0, Math.min(maxLeftCss, leftCss));
+        const clampedTopCss = Math.max(0, Math.min(maxTopCss, topCss));
+        const exportLeft = Math.max(0, Math.round(clampedLeftCss * rawScaleX));
+        const exportTop = Math.max(0, Math.round(clampedTopCss * rawScaleY));
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
@@ -3736,21 +3729,22 @@ window.addEventListener('load', resetInitialScrollPositions);
       cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
       cloneMapOverlayToExport('.leaflet-control-exact-scale', 'export-scale-clone');
 
-      // Legend cloned at on-screen location relative to map.
-      if (legendLive && hasLegendRect && mapRectLive) {
+      // Legend exported in-map at a stable top-right position to avoid sidebar offset drift.
+      if (legendLive && hasLegendRect) {
         const clone = legendLive.cloneNode(true);
         clone.className = 'export-legend-clone';
         copyVisualStylesRecursive(legendLive, clone);
-        const relLeftCss = extraLeftCss + (legendRectLive.left - mapRectLive.left);
-        const relTopCss = extraTopCss + (legendRectLive.top - mapRectLive.top);
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX));
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
-        clone.style.position = 'absolute';
-        clone.style.left = exportLeft + 'px';
-        clone.style.top = exportTop + 'px';
+        const legendWidthCss = Math.max(160, Math.min(legendRectLive.width || 220, exportedMapCssWidth * 0.36));
+        const legendLeftCss = cropInsetCss + Math.max(8, exportedMapCssWidth - legendWidthCss - 12);
+        const legendTopCss = 12;
         clone.style.margin = '0';
-        clone.style.transformOrigin = 'top left';
-        clone.style.transform = `scale(${rawScaleX}, ${rawScaleY})`;
+        clone.style.width = legendWidthCss + 'px';
+        clone.style.maxWidth = legendWidthCss + 'px';
+        clone.style.padding = '8px';
+        clone.style.background = 'rgba(255,255,255,0.96)';
+        clone.style.border = '1px solid rgba(0,0,0,0.2)';
+        clone.style.borderRadius = '4px';
+        clone.style.boxSizing = 'border-box';
         clone.style.overflow = 'visible';
         clone.style.pointerEvents = 'none';
         const sourceSyms = Array.from(legendLive.querySelectorAll('.legend-sym'));
@@ -3792,7 +3786,12 @@ window.addEventListener('load', resetInitialScrollPositions);
             sym.style.borderRadius = '50%';
           }
         });
-        scene.appendChild(clone);
+        placeCloneInMap(clone, {
+          left: legendLeftCss,
+          top: legendTopCss,
+          width: legendWidthCss,
+          height: legendRectLive.height || clone.offsetHeight || 0
+        });
       }
 
       const runCb = () => {
