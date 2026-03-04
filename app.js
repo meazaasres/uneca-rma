@@ -3707,6 +3707,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX - 4);
         const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - 10);
         const exportWidth = Math.max(130, Math.round(discRect.width * rawScaleX * 1.08));
+        clone.textContent = String(disclaimer.textContent || "").trim();
+        clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
         clone.style.top = exportTop + 'px';
         clone.style.right = 'auto';
@@ -3720,9 +3722,13 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.lineHeight = '1.25';
         clone.style.fontSize = '10px';
         clone.style.padding = '6px';
+        clone.style.background = 'rgba(255,255,255,0.95)';
+        clone.style.color = '#000';
+        clone.style.zIndex = '5';
         mapWrapper.appendChild(clone);
       }
 
+      // Keep clone attempt for Chrome/Edge fidelity.
       cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
       cloneMapOverlayToExport('.leaflet-control-exact-scale, .map-bottom-scale-control', 'export-scale-clone');
 
@@ -3739,9 +3745,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       function ensureNorthArrowFallback() {
-        if (mapWrapper.querySelector('.export-north-arrow-clone')) return;
         const src = findMapControlElement('.leaflet-control-north-arrow');
         if (!src || !mapEl) return;
+        const existing = mapWrapper.querySelector('.export-north-arrow-clone');
+        if (existing) existing.remove();
         const mapRect = mapEl.getBoundingClientRect();
         const srcRect = src.getBoundingClientRect();
         const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
@@ -3786,9 +3793,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       function ensureScaleBarFallback() {
-        if (mapWrapper.querySelector('.export-scale-clone')) return;
         const src = findMapControlElement('.leaflet-control-exact-scale, .map-bottom-scale-control');
         if (!src || !mapEl) return;
+        const existing = mapWrapper.querySelector('.export-scale-clone');
+        if (existing) existing.remove();
         const mapRect = mapEl.getBoundingClientRect();
         const srcRect = src.getBoundingClientRect();
         const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
@@ -3827,6 +3835,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         const clone = legend.cloneNode(true);
         clone.className = 'export-legend-clone';
         copyVisualStylesRecursive(legend, clone);
+        clone.style.position = 'relative';
+        clone.style.zIndex = '4';
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
         cloneSyms.forEach((sym, idx) => {
@@ -3839,6 +3849,16 @@ window.addEventListener('load', resetInitialScrollPositions);
           const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
             ? cs.border
             : '1px solid #333';
+          sym.style.display = 'inline-block';
+          sym.style.boxSizing = 'border-box';
+          sym.style.width = '16px';
+          sym.style.minWidth = '16px';
+          sym.style.maxWidth = '16px';
+          sym.style.height = '16px';
+          sym.style.minHeight = '16px';
+          sym.style.maxHeight = '16px';
+          sym.style.marginRight = '8px';
+          sym.style.flex = '0 0 16px';
           sym.style.backgroundColor = fillColor;
           sym.style.border = borderValue;
           if (sym.classList.contains('legend-sym-line')) {
