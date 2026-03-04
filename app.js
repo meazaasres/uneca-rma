@@ -3564,7 +3564,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function compositeExportElement(cb) {
-    leafletImage(map, (err, mapCanvas) => {
+    const runCapture = () => leafletImage(map, (err, mapCanvas) => {
       if (err) {
         console.error("Leaflet image export failed:", err);
         return;
@@ -3614,8 +3614,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
-      if (isFirefoxBrowser()) {
-        // Firefox: keep export node on-screen for reliable html2canvas capture.
+      if (isFirefoxBrowser() || isEdgeBrowser()) {
+        // Firefox/Edge: keep export node on-screen for reliable html2canvas capture.
         wrapper.style.transform = 'none';
         wrapper.style.position = 'fixed';
         wrapper.style.left = '0';
@@ -4059,6 +4059,19 @@ window.addEventListener('load', resetInitialScrollPositions);
         img.onerror = runCb;
       }
     });
+    if (isEdgeBrowser()) {
+      if (map && typeof map.stop === "function") {
+        try { map.stop(); } catch (e) {}
+      }
+      if (map && typeof map.invalidateSize === "function") {
+        try { map.invalidateSize({ pan: false }); } catch (e) {}
+      }
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(runCapture);
+      });
+      return;
+    }
+    runCapture();
     }
 
     // --- Helper: show/hide loading message with spinner ---
@@ -4257,7 +4270,7 @@ function exportSVG() {
     return;
   }
 
-  leafletImage(map, (err, mapCanvas) => {
+  const runSvgCapture = () => leafletImage(map, (err, mapCanvas) => {
     if (err || !mapCanvas) {
       showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
       hideLoading();
@@ -4776,6 +4789,19 @@ function exportSVG() {
       exportMap();
     }
   });
+  if (isEdgeBrowser()) {
+    if (map && typeof map.stop === "function") {
+      try { map.stop(); } catch (e) {}
+    }
+    if (map && typeof map.invalidateSize === "function") {
+      try { map.invalidateSize({ pan: false }); } catch (e) {}
+    }
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(runSvgCapture);
+    });
+    return;
+  }
+  runSvgCapture();
 }
 
 
