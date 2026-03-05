@@ -3577,13 +3577,15 @@ window.addEventListener('load', resetInitialScrollPositions);
       const expectedH = Math.round(cssH * rawScaleY);
       const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
       const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
-      const sideCropPx = Math.max(
-        0,
-        Math.min(
-          Math.floor(baseCropW * 0.2),
-          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
-        )
-      );
+      const sideCropPx = isFirefoxBrowser()
+        ? Math.max(
+            0,
+            Math.min(
+              Math.floor(baseCropW * 0.2),
+              Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
+            )
+          )
+        : 0;
       const cropX = Math.max(0, sideCropPx);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
 
@@ -4303,13 +4305,15 @@ function exportSVG() {
       // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
       const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
       const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
-      const sideCropPx = Math.max(
-        0,
-        Math.min(
-          Math.floor(baseCropW * 0.2),
-          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
-        )
-      );
+      const sideCropPx = isFirefoxBrowser()
+        ? Math.max(
+            0,
+            Math.min(
+              Math.floor(baseCropW * 0.2),
+              Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
+            )
+          )
+        : 0;
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
       const cropX = sideCropPx;
       const cropY = 0; // top-align crop
