@@ -3546,8 +3546,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     function notifyEdgeExportFixStatus(formatLabel = "Export") {
     const executed = isEdgeBrowser();
     const message = executed
-      ? `Edge export relocation fix executed (${formatLabel}).`
-      : `Edge export relocation fix not executed (${formatLabel}) - non-Edge browser detected.`;
+      ? `Edge export relocation update v2 executed (${formatLabel}).`
+      : `Edge export relocation update v2 not executed (${formatLabel}) - non-Edge browser detected.`;
     try { showPopup(message, "success"); } catch (e) {}
     console.info(message);
     }
@@ -3599,6 +3599,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
       const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
       const edgeExport = isEdgeBrowser();
+      const baseOffsetX = edgeExport ? Math.max(0, Math.round((mapCanvas.width - baseCropW) / 2)) : 0;
+      const baseOffsetY = edgeExport ? Math.max(0, Math.round((mapCanvas.height - cropH) / 2)) : 0;
       const sideCropPx = Math.max(
         0,
         edgeExport ? 0 : Math.min(
@@ -3606,14 +3608,15 @@ window.addEventListener('load', resetInitialScrollPositions);
           Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
         )
       );
-      const cropX = Math.max(0, sideCropPx);
+      const cropX = Math.max(0, baseOffsetX + sideCropPx);
+      const cropY = Math.max(0, baseOffsetY);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(mapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(mapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
       const W = cropW;
       const H = cropH;
@@ -3709,7 +3712,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - cropY);
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
 
@@ -3788,7 +3791,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const mapRect = mapEl.getBoundingClientRect();
         const srcRect = src.getBoundingClientRect();
         const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
-        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
+        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY) - cropY);
         const w = Math.max(20, Math.round(srcRect.width * rawScaleX));
         const h = Math.max(24, Math.round(srcRect.height * rawScaleY));
 
@@ -3855,7 +3858,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           bottomCss = Math.max(0, mapRect.height - (topCss + srcHeightCss));
         }
         const left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
-        const top = Math.max(0, Math.round(topCss * rawScaleY));
+        const top = Math.max(0, Math.round(topCss * rawScaleY) - cropY);
         const w = Math.max(70, Math.round(srcWidthCss * rawScaleX));
         const h = Math.max(20, Math.round(srcHeightCss * rawScaleY));
         const bottomRaw = Math.max(0, Math.round((bottomCss == null ? 8 : bottomCss) * rawScaleY));
@@ -4331,6 +4334,8 @@ function exportSVG() {
       // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
       const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
       const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
+      const baseOffsetX = edgeExport ? Math.max(0, Math.round((canvasPixelWidth - baseCropW) / 2)) : 0;
+      const baseOffsetY = edgeExport ? Math.max(0, Math.round((canvasPixelHeight - cropH) / 2)) : 0;
       const sideCropPx = Math.max(
         0,
         edgeExport ? 0 : Math.min(
@@ -4339,8 +4344,8 @@ function exportSVG() {
         )
       );
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
-      const cropX = sideCropPx;
-      const cropY = 0; // top-align crop
+      const cropX = baseOffsetX + sideCropPx;
+      const cropY = baseOffsetY;
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
