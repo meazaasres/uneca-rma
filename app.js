@@ -3561,6 +3561,91 @@ window.addEventListener('load', resetInitialScrollPositions);
     return aligned;
     }
 
+    function alignMapCanvasForFractionalTileZoom(mapCanvas) {
+    if (!mapCanvas || !map || typeof map.getZoom !== 'function' || typeof map.getZoomScale !== 'function') {
+      return mapCanvas;
+    }
+    let tileZoom = null;
+    try {
+      map.eachLayer((l) => {
+        if (tileZoom != null) return;
+        if (l instanceof L.TileLayer && typeof l._tileZoom === 'number') tileZoom = l._tileZoom;
+      });
+    } catch (e) {
+      return mapCanvas;
+    }
+    if (tileZoom == null) return mapCanvas;
+    const currentZoom = Number(map.getZoom());
+    if (!Number.isFinite(currentZoom) || !Number.isFinite(tileZoom)) return mapCanvas;
+    const dz = currentZoom - tileZoom;
+    if (Math.abs(dz) < 1e-4) return mapCanvas;
+
+    const scale = map.getZoomScale(currentZoom, tileZoom);
+    if (!Number.isFinite(scale) || scale <= 0 || Math.abs(scale - 1) < 1e-4) return mapCanvas;
+
+    const w = Math.max(1, mapCanvas.width | 0);
+    const h = Math.max(1, mapCanvas.height | 0);
+    const corrected = document.createElement('canvas');
+    corrected.width = w;
+    corrected.height = h;
+    const cctx = corrected.getContext('2d');
+    if (!cctx) return mapCanvas;
+    const dstW = w * scale;
+    const dstH = h * scale;
+    const dstX = (w - dstW) / 2;
+    const dstY = (h - dstH) / 2;
+    cctx.clearRect(0, 0, w, h);
+    cctx.drawImage(mapCanvas, 0, 0, w, h, dstX, dstY, dstW, dstH);
+    return corrected;
+    }
+
+    function getExportCorrectionDebug(mapCanvas, mapEl) {
+    const info = {
+      edge: isEdgeBrowser(),
+      paneOffsetX: 0,
+      paneOffsetY: 0,
+      zoom: null,
+      tileZoom: null,
+      zoomScale: 1
+    };
+    try {
+      if (mapEl) {
+        const paneEl = mapEl.querySelector('.leaflet-map-pane');
+        if (paneEl) {
+          const mapRect = mapEl.getBoundingClientRect();
+          const paneRect = paneEl.getBoundingClientRect();
+          info.paneOffsetX = Math.round(paneRect.left - mapRect.left);
+          info.paneOffsetY = Math.round(paneRect.top - mapRect.top);
+        }
+      }
+      if (map && typeof map.getZoom === 'function') info.zoom = Number(map.getZoom());
+      if (map && typeof map.eachLayer === 'function') {
+        map.eachLayer((l) => {
+          if (info.tileZoom != null) return;
+          if (l instanceof L.TileLayer && typeof l._tileZoom === 'number') info.tileZoom = l._tileZoom;
+        });
+      }
+      if (map && typeof map.getZoomScale === 'function' && Number.isFinite(info.zoom) && Number.isFinite(info.tileZoom)) {
+        info.zoomScale = map.getZoomScale(info.zoom, info.tileZoom);
+      }
+    } catch (e) {}
+    info.canvasW = mapCanvas ? mapCanvas.width : null;
+    info.canvasH = mapCanvas ? mapCanvas.height : null;
+    return info;
+    }
+
+    function showExportCorrectionDebugMessage(debugInfo) {
+    if (!debugInfo) return;
+    try {
+      console.info("Export correction debug:", debugInfo);
+      const z = Number.isFinite(debugInfo.zoom) ? debugInfo.zoom.toFixed(2) : "--";
+      const tz = Number.isFinite(debugInfo.tileZoom) ? String(debugInfo.tileZoom) : "--";
+      const sc = Number.isFinite(debugInfo.zoomScale) ? debugInfo.zoomScale.toFixed(4) : "--";
+      const msg = `Export corrections active | Edge:${debugInfo.edge ? "yes" : "no"} | pane(${debugInfo.paneOffsetX},${debugInfo.paneOffsetY}) | zoom:${z} tileZoom:${tz} scale:${sc}`;
+      showPopup(msg, "success");
+    } catch (e) {}
+    }
+
     function buildHtml2CanvasOptions(wrapper) {
     const rect = wrapper.getBoundingClientRect();
     const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
@@ -3593,7 +3678,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       const mapEl = document.getElementById('map');
-      const adjustedMapCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
+      const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
+      const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
+      const adjustedMapCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
+      showExportCorrectionDebugMessage(debugInfo);
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
       const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
       const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
@@ -4293,7 +4381,10 @@ function exportSVG() {
       const XLINK = "http://www.w3.org/1999/xlink";
 
       // authoritative canvas pixels from leafletImage
-      const adjustedMapCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
+      const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
+      const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
+      const adjustedMapCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
+      showExportCorrectionDebugMessage(debugInfo);
       const canvasPixelWidth  = adjustedMapCanvas.width;
       const canvasPixelHeight = adjustedMapCanvas.height;
 
