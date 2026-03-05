@@ -3543,6 +3543,15 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
+    function notifyEdgeExportFixStatus(formatLabel = "Export") {
+    const executed = isEdgeBrowser();
+    const message = executed
+      ? `Edge export relocation fix executed (${formatLabel}).`
+      : `Edge export relocation fix not executed (${formatLabel}) - non-Edge browser detected.`;
+    try { showPopup(message, "success"); } catch (e) {}
+    console.info(message);
+    }
+
     function buildHtml2CanvasOptions(wrapper) {
     const rect = wrapper.getBoundingClientRect();
     const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
@@ -4087,6 +4096,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (loader) setDynamicStyle(loader, { display: "none" });
     }
     function exportMap() {
+      notifyEdgeExportFixStatus("PNG");
       showLoading("Exporting map as PNG...");
       compositeExportElement(wrapper => {
         html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
@@ -4108,6 +4118,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
       function exportPDF() {
+        notifyEdgeExportFixStatus("PDF");
         showLoading("Exporting map as PDF...");
         compositeExportElement(wrapper => {
             html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
@@ -4207,6 +4218,7 @@ function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
 
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
+  notifyEdgeExportFixStatus("SVG");
   showLoading("Exporting map as SVG...");
 
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
