@@ -3744,7 +3744,187 @@ window.addEventListener('load', resetInitialScrollPositions);
     };
     }
 
+    function appendLegendCloneToExportWrapper(wrapper) {
+    const legend = document.querySelector('#legend-items');
+    if (!legend || !wrapper) return;
+    const clone = legend.cloneNode(true);
+    clone.className = 'export-legend-clone';
+
+    function copyVisualStyles(sourceNode, targetNode) {
+      if (!sourceNode || !targetNode) return;
+      const cs = window.getComputedStyle(sourceNode);
+      const props = [
+        'display', 'visibility', 'opacity',
+        'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
+        'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
+        'boxShadow', 'outline',
+        'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
+        'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
+      ];
+      props.forEach((prop) => {
+        try { targetNode.style[prop] = cs[prop]; } catch (e) {}
+      });
+    }
+
+    function copyVisualStylesRecursive(sourceNode, targetNode) {
+      copyVisualStyles(sourceNode, targetNode);
+      const sourceChildren = Array.from(sourceNode.children || []);
+      const targetChildren = Array.from(targetNode.children || []);
+      const len = Math.min(sourceChildren.length, targetChildren.length);
+      for (let i = 0; i < len; i++) {
+        copyVisualStylesRecursive(sourceChildren[i], targetChildren[i]);
+      }
+    }
+
+    copyVisualStylesRecursive(legend, clone);
+    clone.style.position = 'relative';
+    clone.style.display = 'block';
+    clone.style.clear = 'both';
+    clone.style.zIndex = '4';
+    clone.style.background = 'transparent';
+    clone.style.border = '0';
+    clone.style.boxShadow = 'none';
+    clone.style.outline = 'none';
+    clone.style.padding = '0';
+    clone.style.marginTop = '10px';
+    clone.style.borderRadius = '0';
+    clone.style.overflow = 'visible';
+    Array.from(clone.querySelectorAll('.legend-block')).forEach((block) => {
+      block.style.borderTop = '0';
+      block.style.border = '0';
+      block.style.boxShadow = 'none';
+      block.style.outline = 'none';
+      block.style.background = 'transparent';
+    });
+    const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
+    const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
+    cloneSyms.forEach((sym, idx) => {
+      const src = sourceSyms[idx];
+      if (!src) return;
+      const cs = window.getComputedStyle(src);
+      const fillColor = (cs && cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)')
+        ? cs.backgroundColor
+        : '#ccc';
+      const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
+        ? cs.border
+        : '1px solid #333';
+      sym.style.display = 'inline-block';
+      sym.style.boxSizing = 'border-box';
+      sym.style.width = '16px';
+      sym.style.minWidth = '16px';
+      sym.style.maxWidth = '16px';
+      sym.style.height = '16px';
+      sym.style.minHeight = '16px';
+      sym.style.maxHeight = '16px';
+      sym.style.marginRight = '8px';
+      sym.style.flex = '0 0 16px';
+      sym.style.backgroundColor = fillColor;
+      sym.style.border = borderValue;
+      if (sym.classList.contains('legend-sym-line')) {
+        const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
+          ? cs.borderTopColor
+          : fillColor;
+        sym.style.height = '3px';
+        sym.style.minHeight = '3px';
+        sym.style.maxHeight = '3px';
+        sym.style.border = '0';
+        sym.style.borderTop = `3px solid ${lineColor}`;
+        sym.style.background = 'transparent';
+      } else if (sym.classList.contains('legend-sym-point')) {
+        sym.style.borderRadius = '50%';
+      }
+    });
+    wrapper.appendChild(clone);
+    }
+
+    function buildEdgeDisplayedExportWrapper(cb) {
+    const mapEl = document.getElementById('map');
+    if (!mapEl) return;
+    const rect = mapEl.getBoundingClientRect();
+    const width = Math.max(1, Math.ceil(rect.width || mapEl.clientWidth || mapEl.offsetWidth));
+    const height = Math.max(1, Math.ceil(rect.height || mapEl.clientHeight || mapEl.offsetHeight));
+    html2canvas(mapEl, {
+      scale: Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
+      useCORS: true,
+      foreignObjectRendering: false,
+      logging: false,
+      backgroundColor: "#ffffff",
+      width,
+      height,
+      windowWidth: width,
+      windowHeight: height,
+      scrollX: 0,
+      scrollY: 0
+    }).then((mapCanvas) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'export-wrapper';
+      wrapper.style.width = Math.max(1, mapCanvas.width) + 'px';
+      document.body.appendChild(wrapper);
+
+      const titleEl = document.getElementById('map-title');
+      if (titleEl) {
+        const t = document.createElement('h1');
+        t.className = 'export-title';
+        t.textContent = titleEl.textContent || "Map Export";
+        t.style.fontSize = '20px';
+        t.style.fontWeight = '600';
+        t.style.margin = '0 0 8px 0';
+        t.style.textAlign = 'center';
+        t.style.width = '100%';
+        t.style.display = 'block';
+        wrapper.appendChild(t);
+      }
+
+      const mapWrapper = document.createElement('div');
+      mapWrapper.className = 'export-map-wrapper';
+      mapWrapper.style.width = Math.max(1, mapCanvas.width) + 'px';
+      mapWrapper.style.height = Math.max(1, mapCanvas.height) + 'px';
+      mapWrapper.style.position = 'relative';
+      mapWrapper.style.overflow = 'hidden';
+      wrapper.appendChild(mapWrapper);
+
+      const styleEl = document.createElement('style');
+      styleEl.type = 'text/css';
+      styleEl.textContent = `
+        .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;display:block !important;width:100% !important}
+        .export-img{width:100%;height:auto;display:block}
+      `;
+      wrapper.appendChild(styleEl);
+
+      const img = document.createElement('img');
+      img.className = 'export-img';
+      img.src = mapCanvas.toDataURL("image/png");
+      img.alt = "Exported map image";
+      mapWrapper.appendChild(img);
+
+      appendLegendCloneToExportWrapper(wrapper);
+
+      const runCb = () => {
+        try {
+          showPopup("Edge export uses displayed map capture.", "success");
+          cb(wrapper);
+        } catch (err) {
+          console.error("Edge export callback failed:", err);
+        }
+      };
+      if (img.decode) {
+        img.decode().then(runCb).catch(runCb);
+      } else if (img.complete) {
+        runCb();
+      } else {
+        img.onload = runCb;
+        img.onerror = runCb;
+      }
+    }).catch((err) => {
+      console.error("Edge displayed-map capture failed:", err);
+    });
+    }
+
     function compositeExportElement(cb) {
+    if (isEdgeBrowser()) {
+      buildEdgeDisplayedExportWrapper(cb);
+      return;
+    }
     leafletImage(map, (err, mapCanvas) => {
       if (err) {
         console.error("Leaflet image export failed:", err);
@@ -4160,70 +4340,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       ensureFirefoxGuaranteedOverlays();
 
-      const legend = document.querySelector('#legend-items');
-      if (legend) {
-        const clone = legend.cloneNode(true);
-        clone.className = 'export-legend-clone';
-        copyVisualStylesRecursive(legend, clone);
-        clone.style.position = 'relative';
-        clone.style.display = 'block';
-        clone.style.clear = 'both';
-        clone.style.zIndex = '4';
-        clone.style.background = 'transparent';
-        clone.style.border = '0';
-        clone.style.boxShadow = 'none';
-        clone.style.outline = 'none';
-        clone.style.padding = '0';
-        clone.style.marginTop = '10px';
-        clone.style.borderRadius = '0';
-        clone.style.overflow = 'visible';
-        Array.from(clone.querySelectorAll('.legend-block')).forEach((block) => {
-          block.style.borderTop = '0';
-          block.style.border = '0';
-          block.style.boxShadow = 'none';
-          block.style.outline = 'none';
-          block.style.background = 'transparent';
-        });
-        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
-        const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
-        cloneSyms.forEach((sym, idx) => {
-          const src = sourceSyms[idx];
-          if (!src) return;
-          const cs = window.getComputedStyle(src);
-          const fillColor = (cs && cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)')
-            ? cs.backgroundColor
-            : '#ccc';
-          const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
-            ? cs.border
-            : '1px solid #333';
-          sym.style.display = 'inline-block';
-          sym.style.boxSizing = 'border-box';
-          sym.style.width = '16px';
-          sym.style.minWidth = '16px';
-          sym.style.maxWidth = '16px';
-          sym.style.height = '16px';
-          sym.style.minHeight = '16px';
-          sym.style.maxHeight = '16px';
-          sym.style.marginRight = '8px';
-          sym.style.flex = '0 0 16px';
-          sym.style.backgroundColor = fillColor;
-          sym.style.border = borderValue;
-          if (sym.classList.contains('legend-sym-line')) {
-            const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
-              ? cs.borderTopColor
-              : fillColor;
-            sym.style.height = '3px';
-            sym.style.minHeight = '3px';
-            sym.style.maxHeight = '3px';
-            sym.style.border = '0';
-            sym.style.borderTop = `3px solid ${lineColor}`;
-            sym.style.background = 'transparent';
-          } else if (sym.classList.contains('legend-sym-point')) {
-            sym.style.borderRadius = '50%';
-          }
-        });
-        wrapper.appendChild(clone);
-      }
+      appendLegendCloneToExportWrapper(wrapper);
 
       const runCb = () => {
         try {
@@ -4393,6 +4510,62 @@ function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
   showLoading("Exporting map as SVG...");
+
+  if (isEdgeBrowser()) {
+    compositeExportElement((wrapper) => {
+      html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
+        .then((canvas) => {
+          const svgNS = "http://www.w3.org/2000/svg";
+          const XLINK = "http://www.w3.org/1999/xlink";
+          const w = Math.max(1, canvas.width);
+          const h = Math.max(1, canvas.height);
+          const svg = document.createElementNS(svgNS, "svg");
+          svg.setAttribute("xmlns", svgNS);
+          svg.setAttribute("xmlns:xlink", XLINK);
+          svg.setAttribute("width", String(w));
+          svg.setAttribute("height", String(h));
+          svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+          const bg = document.createElementNS(svgNS, "rect");
+          bg.setAttribute("x", "0");
+          bg.setAttribute("y", "0");
+          bg.setAttribute("width", String(w));
+          bg.setAttribute("height", String(h));
+          bg.setAttribute("fill", "#ffffff");
+          svg.appendChild(bg);
+          const imgDataUrl = canvas.toDataURL("image/png");
+          const img = document.createElementNS(svgNS, "image");
+          img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
+          img.setAttribute("href", imgDataUrl);
+          img.setAttribute("x", "0");
+          img.setAttribute("y", "0");
+          img.setAttribute("width", String(w));
+          img.setAttribute("height", String(h));
+          svg.appendChild(img);
+          const serializer = new XMLSerializer();
+          const svgString = serializer.serializeToString(svg);
+          const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = (currentLayerName ? sanitizeName(currentLayerName) : "map") + ".svg";
+          a.rel = "noopener";
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            try { URL.revokeObjectURL(url); } catch (e) {}
+            a.remove();
+          }, 1000);
+          if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+          hideLoading();
+        })
+        .catch((err) => {
+          console.error("Edge SVG export failed:", err);
+          if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+          hideLoading();
+        });
+    });
+    return;
+  }
 
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
   const data = getFilteredGeojson(sourceData);
