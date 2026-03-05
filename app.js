@@ -3542,64 +3542,23 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
-    function captureMapCanvas(cb) {
-    const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : document.getElementById('map');
-    const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
-    const targetW = Math.max(1, (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : 0));
-    const targetH = Math.max(1, (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : 0));
-
-    function fallbackLeafletImage() {
-      leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas));
-    }
-
-    if (!isEdgeBrowser() || !mapEl || typeof html2canvas !== 'function') {
-      return fallbackLeafletImage();
-    }
-
+    function alignMapCanvasForEdge(mapCanvas, mapEl) {
+    if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
     const paneEl = mapEl.querySelector('.leaflet-map-pane');
-    if (!paneEl) return fallbackLeafletImage();
-
+    if (!paneEl) return mapCanvas;
     const mapRect = mapEl.getBoundingClientRect();
     const paneRect = paneEl.getBoundingClientRect();
-    const paneW = Math.max(1, Math.ceil(paneRect.width));
-    const paneH = Math.max(1, Math.ceil(paneRect.height));
-    const paneOffsetX = Math.round(paneRect.left - mapRect.left);
-    const paneOffsetY = Math.round(paneRect.top - mapRect.top);
+    const offsetX = Math.round(paneRect.left - mapRect.left);
+    const offsetY = Math.round(paneRect.top - mapRect.top);
+    if (Math.abs(offsetX) <= 1 && Math.abs(offsetY) <= 1) return mapCanvas;
 
-    html2canvas(paneEl, {
-      scale: 1,
-      useCORS: true,
-      foreignObjectRendering: false,
-      logging: false,
-      backgroundColor: null,
-      width: paneW,
-      height: paneH,
-      windowWidth: paneW,
-      windowHeight: paneH,
-      scrollX: 0,
-      scrollY: 0
-    }).then((paneCanvas) => {
-      try {
-        const out = document.createElement('canvas');
-        out.width = targetW;
-        out.height = targetH;
-        const octx = out.getContext('2d');
-        if (!octx) return fallbackLeafletImage();
-        octx.clearRect(0, 0, out.width, out.height);
-        const sx = Math.max(0, Math.round(-paneOffsetX));
-        const sy = Math.max(0, Math.round(-paneOffsetY));
-        const sw = Math.max(1, Math.min(targetW, paneCanvas.width - sx));
-        const sh = Math.max(1, Math.min(targetH, paneCanvas.height - sy));
-        octx.drawImage(paneCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
-        cb(null, out);
-      } catch (e) {
-        console.warn("Edge pane capture composite failed; falling back to leafletImage.", e);
-        fallbackLeafletImage();
-      }
-    }).catch((e) => {
-      console.warn("Edge pane capture failed; falling back to leafletImage.", e);
-      fallbackLeafletImage();
-    });
+    const aligned = document.createElement('canvas');
+    aligned.width = mapCanvas.width;
+    aligned.height = mapCanvas.height;
+    const actx = aligned.getContext('2d');
+    if (!actx) return mapCanvas;
+    actx.drawImage(mapCanvas, -offsetX, -offsetY);
+    return aligned;
     }
 
     function buildHtml2CanvasOptions(wrapper) {
@@ -3623,7 +3582,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function compositeExportElement(cb) {
-    captureMapCanvas((err, mapCanvas) => {
+    leafletImage(map, (err, mapCanvas) => {
       if (err) {
         console.error("Leaflet image export failed:", err);
         return;
@@ -3634,15 +3593,16 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       const mapEl = document.getElementById('map');
+      const adjustedMapCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
-      const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : mapCanvas.width);
-      const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : mapCanvas.height);
-      const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
-      const rawScaleY = cssH > 0 ? (mapCanvas.height / cssH) : rawScaleX;
+      const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
+      const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
+      const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
+      const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
       const expectedW = Math.round(cssW * rawScaleX);
       const expectedH = Math.round(cssH * rawScaleY);
-      const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
-      const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
+      const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
+      const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
       const sideCropPx = isFirefoxBrowser()
         ? Math.max(
             0,
@@ -3659,7 +3619,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(mapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
       const W = cropW;
       const H = cropH;
@@ -4313,7 +4273,7 @@ function exportSVG() {
     return;
   }
 
-  captureMapCanvas((err, mapCanvas) => {
+  leafletImage(map, (err, mapCanvas) => {
     if (err || !mapCanvas) {
       showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
       hideLoading();
@@ -4333,8 +4293,9 @@ function exportSVG() {
       const XLINK = "http://www.w3.org/1999/xlink";
 
       // authoritative canvas pixels from leafletImage
-      const canvasPixelWidth  = mapCanvas.width;
-      const canvasPixelHeight = mapCanvas.height;
+      const adjustedMapCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
+      const canvasPixelWidth  = adjustedMapCanvas.width;
+      const canvasPixelHeight = adjustedMapCanvas.height;
 
       // container CSS size and scale factor
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
@@ -4395,7 +4356,7 @@ function exportSVG() {
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(mapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
       const trimInfo = isFirefoxBrowser()
         ? trimHorizontalWhitespaceWithOffset(cropped, 0.28)
         : { canvas: cropped, leftTrim: 0 };
