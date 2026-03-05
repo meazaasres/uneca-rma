@@ -3534,6 +3534,70 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
+    function isEdgeBrowser() {
+    try {
+      return /edg\//i.test(navigator.userAgent || "");
+    } catch (e) {
+      return false;
+    }
+    }
+
+    function captureMapCanvas(cb) {
+    const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : document.getElementById('map');
+    const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+    const targetW = Math.max(1, (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : 0));
+    const targetH = Math.max(1, (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : 0));
+
+    function fallbackLeafletImage() {
+      leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas));
+    }
+
+    if (!isEdgeBrowser() || !mapEl || typeof html2canvas !== 'function') {
+      return fallbackLeafletImage();
+    }
+
+    const paneEl = mapEl.querySelector('.leaflet-map-pane');
+    if (!paneEl) return fallbackLeafletImage();
+
+    const mapRect = mapEl.getBoundingClientRect();
+    const paneRect = paneEl.getBoundingClientRect();
+    const paneW = Math.max(1, Math.ceil(paneRect.width));
+    const paneH = Math.max(1, Math.ceil(paneRect.height));
+    const drawX = Math.round(paneRect.left - mapRect.left);
+    const drawY = Math.round(paneRect.top - mapRect.top);
+
+    html2canvas(paneEl, {
+      scale: 1,
+      useCORS: true,
+      foreignObjectRendering: false,
+      logging: false,
+      backgroundColor: null,
+      width: paneW,
+      height: paneH,
+      windowWidth: paneW,
+      windowHeight: paneH,
+      scrollX: 0,
+      scrollY: 0
+    }).then((paneCanvas) => {
+      try {
+        const out = document.createElement('canvas');
+        out.width = targetW;
+        out.height = targetH;
+        const octx = out.getContext('2d');
+        if (!octx) return fallbackLeafletImage();
+        octx.clearRect(0, 0, out.width, out.height);
+        octx.drawImage(paneCanvas, drawX, drawY);
+        cb(null, out);
+      } catch (e) {
+        console.warn("Edge pane capture composite failed; falling back to leafletImage.", e);
+        fallbackLeafletImage();
+      }
+    }).catch((e) => {
+      console.warn("Edge pane capture failed; falling back to leafletImage.", e);
+      fallbackLeafletImage();
+    });
+    }
+
     function buildHtml2CanvasOptions(wrapper) {
     const rect = wrapper.getBoundingClientRect();
     const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
@@ -3555,7 +3619,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function compositeExportElement(cb) {
-    leafletImage(map, (err, mapCanvas) => {
+    captureMapCanvas((err, mapCanvas) => {
       if (err) {
         console.error("Leaflet image export failed:", err);
         return;
@@ -4245,7 +4309,7 @@ function exportSVG() {
     return;
   }
 
-  leafletImage(map, (err, mapCanvas) => {
+  captureMapCanvas((err, mapCanvas) => {
     if (err || !mapCanvas) {
       showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
       hideLoading();
