@@ -3599,6 +3599,84 @@ window.addEventListener('load', resetInitialScrollPositions);
     return corrected;
     }
 
+    function parse2DTransformMatrix(el) {
+    if (!el) return { a: 1, d: 1, e: 0, f: 0 };
+    let t = "";
+    try {
+      const cs = window.getComputedStyle(el);
+      t = (cs && cs.transform) ? cs.transform : "";
+    } catch (e) {}
+    if (!t || t === "none") return { a: 1, d: 1, e: 0, f: 0 };
+    try {
+      if (typeof DOMMatrixReadOnly !== "undefined") {
+        const m = new DOMMatrixReadOnly(t);
+        return { a: m.a, d: m.d, e: m.e, f: m.f };
+      }
+    } catch (e) {}
+    const m2 = t.match(/^matrix\(([^)]+)\)$/i);
+    if (m2) {
+      const p = m2[1].split(",").map(v => parseFloat(v.trim()));
+      if (p.length === 6 && p.every(Number.isFinite)) return { a: p[0], d: p[3], e: p[4], f: p[5] };
+    }
+    const m3 = t.match(/^matrix3d\(([^)]+)\)$/i);
+    if (m3) {
+      const p = m3[1].split(",").map(v => parseFloat(v.trim()));
+      if (p.length === 16 && p.every(Number.isFinite)) return { a: p[0], d: p[5], e: p[12], f: p[13] };
+    }
+    return { a: 1, d: 1, e: 0, f: 0 };
+    }
+
+    function compose2DTransform(parent, child) {
+    const pa = Number.isFinite(parent?.a) ? parent.a : 1;
+    const pd = Number.isFinite(parent?.d) ? parent.d : 1;
+    const pe = Number.isFinite(parent?.e) ? parent.e : 0;
+    const pf = Number.isFinite(parent?.f) ? parent.f : 0;
+    const ca = Number.isFinite(child?.a) ? child.a : 1;
+    const cd = Number.isFinite(child?.d) ? child.d : 1;
+    const ce = Number.isFinite(child?.e) ? child.e : 0;
+    const cf = Number.isFinite(child?.f) ? child.f : 0;
+    return {
+      a: pa * ca,
+      d: pd * cd,
+      e: pe + (pa * ce),
+      f: pf + (pd * cf)
+    };
+    }
+
+    function alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl) {
+    if (!mapCanvas || !mapEl) return mapCanvas;
+    const tilePane = mapEl.querySelector('.leaflet-tile-pane');
+    if (!tilePane) return mapCanvas;
+    let level = tilePane.querySelector('.leaflet-tile-container');
+    if (!level) {
+      const levels = Array.from(tilePane.querySelectorAll('.leaflet-tile-container'));
+      level = levels.find((el) => (el.offsetWidth > 0 && el.offsetHeight > 0)) || levels[0] || null;
+    }
+
+    const paneM = parse2DTransformMatrix(tilePane);
+    const levelM = parse2DTransformMatrix(level);
+    const combined = compose2DTransform(paneM, levelM);
+    const sx = Number.isFinite(combined.a) ? combined.a : 1;
+    const sy = Number.isFinite(combined.d) ? combined.d : 1;
+    const tx = Number.isFinite(combined.e) ? combined.e : 0;
+    const ty = Number.isFinite(combined.f) ? combined.f : 0;
+
+    if (Math.abs(sx - 1) < 1e-4 && Math.abs(sy - 1) < 1e-4 && Math.abs(tx) < 0.5 && Math.abs(ty) < 0.5) {
+      return mapCanvas;
+    }
+
+    const out = document.createElement('canvas');
+    out.width = mapCanvas.width;
+    out.height = mapCanvas.height;
+    const octx = out.getContext('2d');
+    if (!octx) return mapCanvas;
+    octx.clearRect(0, 0, out.width, out.height);
+    octx.setTransform(sx, 0, 0, sy, tx, ty);
+    octx.drawImage(mapCanvas, 0, 0);
+    octx.setTransform(1, 0, 0, 1, 0, 0);
+    return out;
+    }
+
     function getExportCorrectionDebug(mapCanvas, mapEl) {
     const info = {
       edge: isEdgeBrowser(),
@@ -3680,7 +3758,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       const mapEl = document.getElementById('map');
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
-      const adjustedMapCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
+      const zoomAlignedCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
+      const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(zoomAlignedCanvas, mapEl);
       showExportCorrectionDebugMessage(debugInfo);
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
       const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
@@ -4383,7 +4462,8 @@ function exportSVG() {
       // authoritative canvas pixels from leafletImage
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
-      const adjustedMapCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
+      const zoomAlignedCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
+      const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(zoomAlignedCanvas, mapEl);
       showExportCorrectionDebugMessage(debugInfo);
       const canvasPixelWidth  = adjustedMapCanvas.width;
       const canvasPixelHeight = adjustedMapCanvas.height;
