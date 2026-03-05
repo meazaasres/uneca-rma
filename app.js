@@ -4327,6 +4327,51 @@ function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
   return { canvas: trimmed, leftTrim: left };
 }
 
+function computeHorizontalContentShift(sourceCanvas) {
+  if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") return 0;
+  const w = Math.max(1, sourceCanvas.width | 0);
+  const h = Math.max(1, sourceCanvas.height | 0);
+  const ctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return 0;
+
+  let imgData;
+  try {
+    imgData = ctx.getImageData(0, 0, w, h);
+  } catch (e) {
+    return 0;
+  }
+  const px = imgData.data;
+  const nonEmptyThreshold = Math.max(2, Math.floor(h * 0.002));
+
+  function isContentColumn(x) {
+    let nonEmpty = 0;
+    for (let y = 0; y < h; y++) {
+      const idx = ((y * w) + x) * 4;
+      const a = px[idx + 3];
+      if (a > 8) {
+        nonEmpty++;
+        if (nonEmpty > nonEmptyThreshold) return true;
+      }
+    }
+    return false;
+  }
+
+  let left = -1;
+  for (let x = 0; x < w; x++) {
+    if (isContentColumn(x)) {
+      left = x;
+      break;
+    }
+  }
+  if (left < 0) return 0;
+
+  let right = w - 1;
+  while (right > left && !isContentColumn(right)) right--;
+  const contentCenter = (left + right) / 2;
+  const canvasCenter = (w - 1) / 2;
+  return Math.round(canvasCenter - contentCenter);
+}
+
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
   showLoading("Exporting map as SVG...");
@@ -4529,6 +4574,7 @@ function exportSVG() {
       const trimInfo = { canvas: cropped, leftTrim: 0 };
       const exportCanvas = trimInfo.canvas || cropped;
       const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
+      const mapShiftX = isFirefoxBrowser() ? computeHorizontalContentShift(exportCanvas) : 0;
 
       const usedCanvasWidth  = Math.max(1, exportCanvas.width);
       const usedCanvasHeight = Math.max(1, exportCanvas.height);
@@ -4575,7 +4621,7 @@ function exportSVG() {
       const img = document.createElementNS(svgNS, "image");
       img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
       img.setAttribute("href", imgDataUrl);
-      img.setAttribute("x", "0");
+      img.setAttribute("x", String(mapShiftX));
       img.setAttribute("y", String(titleHeightPx));
       img.setAttribute("width", String(usedCanvasWidth));
       img.setAttribute("height", String(usedCanvasHeight));
@@ -4586,7 +4632,7 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * scale) - cropX - extraTrimX;
+        const x = (containerPoint.x * scale) - cropX - extraTrimX + mapShiftX;
         const y = (containerPoint.y * scale) - cropY + titleHeightPx;
         return [x, y];
       }
@@ -4677,7 +4723,7 @@ function exportSVG() {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const discX = discRect && mapRect
-          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX - 4)
+          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + mapShiftX - 4)
           : marginPx;
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * scale);
         let discWidth = Math.max(
@@ -4770,7 +4816,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
+        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + mapShiftX);
         let naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
         const naYMin = titleHeightPx + 2;
         const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
@@ -4816,7 +4862,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
+        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + mapShiftX);
         let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
