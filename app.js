@@ -4496,7 +4496,7 @@ function exportSVG() {
       const expectedCanvasH = Math.round(containerHeight * rawScaleY);
       const edgeFullCanvas = isEdgeBrowser();
 
-      // Center crop for Firefox SVG export to avoid left-shifted output.
+      // Use the same crop origin as Chrome for consistent SVG alignment.
       const baseCropW = edgeFullCanvas
         ? Math.max(1, canvasPixelWidth)
         : Math.min(expectedCanvasW, canvasPixelWidth);
@@ -4512,9 +4512,7 @@ function exportSVG() {
       );
       const effectiveSideCropPx = isEdgeBrowser() ? 0 : sideCropPx;
       const cropW = Math.max(1, baseCropW - (2 * effectiveSideCropPx));
-      const horizontalSlackPx = Math.max(0, canvasPixelWidth - baseCropW);
-      const centerCropOffsetX = isFirefoxBrowser() ? Math.floor(horizontalSlackPx / 2) : 0;
-      const cropX = centerCropOffsetX + effectiveSideCropPx;
+      const cropX = effectiveSideCropPx;
       const cropY = 0; // top-align crop
 
       // Debug logging to help tune if needed
@@ -4528,9 +4526,7 @@ function exportSVG() {
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
       cctx.drawImage(mapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const trimInfo = isFirefoxBrowser()
-        ? trimHorizontalWhitespaceWithOffset(cropped, 0.28)
-        : { canvas: cropped, leftTrim: 0 };
+      const trimInfo = { canvas: cropped, leftTrim: 0 };
       const exportCanvas = trimInfo.canvas || cropped;
       const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
 
