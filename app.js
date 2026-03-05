@@ -4381,6 +4381,8 @@ function computeHorizontalContentShift(sourceCanvas) {
 function exportSVG() {
   showLoading("Exporting map as SVG...");
   if (isEdgeBrowser()) {
+    console.info("SVG export debug: Edge branch executed.");
+    showPopup("Debug: Edge SVG export branch executed.", "success");
     buildEdgeExportWrapper((wrapper) => {
       const opts = buildHtml2CanvasOptions(wrapper);
       html2canvas(wrapper, opts)
