@@ -3563,8 +3563,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     const paneRect = paneEl.getBoundingClientRect();
     const paneW = Math.max(1, Math.ceil(paneRect.width));
     const paneH = Math.max(1, Math.ceil(paneRect.height));
-    const drawX = Math.round(paneRect.left - mapRect.left);
-    const drawY = Math.round(paneRect.top - mapRect.top);
+    const paneOffsetX = Math.round(paneRect.left - mapRect.left);
+    const paneOffsetY = Math.round(paneRect.top - mapRect.top);
 
     html2canvas(paneEl, {
       scale: 1,
@@ -3586,7 +3586,11 @@ window.addEventListener('load', resetInitialScrollPositions);
         const octx = out.getContext('2d');
         if (!octx) return fallbackLeafletImage();
         octx.clearRect(0, 0, out.width, out.height);
-        octx.drawImage(paneCanvas, drawX, drawY);
+        const sx = Math.max(0, Math.round(-paneOffsetX));
+        const sy = Math.max(0, Math.round(-paneOffsetY));
+        const sw = Math.max(1, Math.min(targetW, paneCanvas.width - sx));
+        const sh = Math.max(1, Math.min(targetH, paneCanvas.height - sy));
+        octx.drawImage(paneCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
         cb(null, out);
       } catch (e) {
         console.warn("Edge pane capture composite failed; falling back to leafletImage.", e);
