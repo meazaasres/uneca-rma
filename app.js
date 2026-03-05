@@ -4300,7 +4300,10 @@ function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
       const g = px[idx + 1];
       const b = px[idx + 2];
       const a = px[idx + 3];
-      if (!(a >= 250 && r >= 250 && g >= 250 && b >= 250)) {
+      // Treat transparent pixels as empty so Firefox right-edge alpha gaps get trimmed.
+      const isTransparent = a <= 8;
+      const isWhiteOpaque = (a >= 250 && r >= 250 && g >= 250 && b >= 250);
+      if (!(isTransparent || isWhiteOpaque)) {
         nonWhite++;
         if (nonWhite > nonWhiteThreshold) return false;
       }
