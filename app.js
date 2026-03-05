@@ -4576,10 +4576,12 @@ function exportSVG() {
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
       cctx.drawImage(mapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const trimInfo = { canvas: cropped, leftTrim: 0 };
+      const trimInfo = isFirefoxBrowser()
+        ? trimHorizontalWhitespaceWithOffset(cropped, 0.3)
+        : { canvas: cropped, leftTrim: 0 };
       const exportCanvas = trimInfo.canvas || cropped;
       const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
-      const mapShiftX = isFirefoxBrowser() ? computeHorizontalContentShift(exportCanvas) : 0;
+      const mapShiftX = 0;
 
       const usedCanvasWidth  = Math.max(1, exportCanvas.width);
       const usedCanvasHeight = Math.max(1, exportCanvas.height);
