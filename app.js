@@ -3546,10 +3546,44 @@ window.addEventListener('load', resetInitialScrollPositions);
     function notifyEdgeExportFixStatus(formatLabel = "Export") {
     const executed = isEdgeBrowser();
     const message = executed
-      ? `Edge export relocation update v4 initiated (${formatLabel}).`
-      : `Edge export relocation update v4 not executed (${formatLabel}) - non-Edge browser detected.`;
+      ? `Edge export relocation update v5 initiated (${formatLabel}).`
+      : `Edge export relocation update v5 not executed (${formatLabel}) - non-Edge browser detected.`;
     try { showPopup(message, "success"); } catch (e) {}
     console.info(message);
+    }
+
+    function isLikelyBlankCanvas(canvas) {
+    if (!canvas || typeof canvas.getContext !== "function") return true;
+    const w = Math.max(1, canvas.width | 0);
+    const h = Math.max(1, canvas.height | 0);
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return true;
+    let data;
+    try {
+      data = ctx.getImageData(0, 0, w, h).data;
+    } catch (e) {
+      // If we cannot inspect pixels, do not mark it blank.
+      return false;
+    }
+    const stepX = Math.max(1, Math.floor(w / 40));
+    const stepY = Math.max(1, Math.floor(h / 40));
+    let colored = 0;
+    let sampled = 0;
+    for (let y = 0; y < h; y += stepY) {
+      for (let x = 0; x < w; x += stepX) {
+        const idx = ((y * w) + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const a = data[idx + 3];
+        sampled++;
+        // treat near-white or fully transparent as blank background
+        const nonBlank = (a > 8) && !(r > 246 && g > 246 && b > 246);
+        if (nonBlank) colored++;
+      }
+    }
+    if (sampled <= 0) return true;
+    return (colored / sampled) < 0.003;
     }
 
     function buildHtml2CanvasOptions(wrapper) {
@@ -3609,12 +3643,18 @@ window.addEventListener('load', resetInitialScrollPositions);
         scrollY: 0
       }).then((canvas) => {
         restoreTempStyles();
-        try { showPopup("Edge export relocation update v4 executed (DOM capture mode).", "success"); } catch (e) {}
+        if (isLikelyBlankCanvas(canvas)) {
+          console.warn("Edge DOM capture returned blank canvas; falling back to leafletImage.");
+          try { showPopup("Edge export relocation update v5 fallback executed (DOM blank -> leaflet mode).", "success"); } catch (e) {}
+          leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
+          return;
+        }
+        try { showPopup("Edge export relocation update v5 executed (DOM capture mode).", "success"); } catch (e) {}
         cb(null, canvas, true);
       }).catch((edgeErr) => {
         restoreTempStyles();
         console.warn("Edge DOM map capture failed; falling back to leafletImage:", edgeErr);
-        try { showPopup("Edge export relocation update v4 fallback executed (leaflet capture mode).", "success"); } catch (e) {}
+        try { showPopup("Edge export relocation update v5 fallback executed (leaflet capture mode).", "success"); } catch (e) {}
         leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
       });
       return;
