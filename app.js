@@ -1883,65 +1883,30 @@ makeControlDraggable(northArrowControl, (el, mapEl) => {
   return { left: pos.left, top: pos.top + 30 };
 });
 
-// Base layers
-const unBaseLayer = L.tileLayer(
+// Base layer
+const baseLayer = L.tileLayer(
   'https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}',
   {
     attribution: '© United Nations',
-    // Do not force CORS on runtime map tiles; Chromium blocks tiles when ACAO is missing.
+    crossOrigin: 'anonymous',
     maxZoom: 18,
     tileSize: 256
   }
-);
-
-const osmBaseLayer = L.tileLayer(
-  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 19,
-    subdomains: 'abc',
-    tileSize: 256
-  }
-);
-
-unBaseLayer.addTo(map);
-let didAutoSwitchBasemap = false;
-
-function switchToFallbackBaseLayer(reason) {
-  if (didAutoSwitchBasemap) return;
-  didAutoSwitchBasemap = true;
-  try {
-    if (map.hasLayer(unBaseLayer)) map.removeLayer(unBaseLayer);
-    if (!map.hasLayer(osmBaseLayer)) osmBaseLayer.addTo(map);
-    ensureBaseLayerAtBack();
-    console.warn("UN Topo unavailable; switched to OpenStreetMap.", reason || "");
-    showPopup("UN Topo is unavailable (token/network restriction). Switched to OpenStreetMap.", "error");
-  } catch (e) {
-    console.warn("Failed to switch to fallback basemap:", e);
-  }
-}
-
-unBaseLayer.on('tileerror', (e) => {
-  const status = e && e.error && (e.error.status || (e.error.target && e.error.target.status));
-  switchToFallbackBaseLayer(status ? `HTTP ${status}` : "tileerror");
-});
+).addTo(map);
 
 function ensureBaseLayerAtBack() {
-  if (!map) return;
+  if (!baseLayer || !map || !map.hasLayer(baseLayer)) return;
   try {
-    [unBaseLayer, osmBaseLayer].forEach((layer, idx) => {
-      if (!layer || !map.hasLayer(layer)) return;
-      if (typeof layer.bringToBack === 'function') layer.bringToBack();
-      if (typeof layer.setZIndex === 'function') layer.setZIndex(1 + idx);
-    });
+    if (typeof baseLayer.bringToBack === 'function') baseLayer.bringToBack();
+    if (typeof baseLayer.setZIndex === 'function') baseLayer.setZIndex(1);
   } catch (e) {
-    console.warn("Failed to keep basemap at back:", e);
+    console.warn("Failed to keep UN Topo at back:", e);
   }
 }
 
 ensureBaseLayerAtBack();
 map.on('layeradd', (e) => {
-  if (e && (e.layer === unBaseLayer || e.layer === osmBaseLayer)) ensureBaseLayerAtBack();
+  if (e && e.layer === baseLayer) ensureBaseLayerAtBack();
 });
 
 // --- Draw control ---
@@ -2189,7 +2154,7 @@ map.on && map.on('moveend', () => setTimeout(positionDisclaimer, 50));
 
 // --- Layers control (moved into sidebar if present) ---
 const layersControl = L.control.layers(
-  { 'UN Topo': unBaseLayer, 'OpenStreetMap': osmBaseLayer },
+  { 'UN Topo': baseLayer },
   {},
   { collapsed: false }
 ).addTo(map);
