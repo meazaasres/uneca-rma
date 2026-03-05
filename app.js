@@ -3546,8 +3546,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     function notifyEdgeExportFixStatus(formatLabel = "Export") {
     const executed = isEdgeBrowser();
     const message = executed
-      ? `Edge export relocation update v4 initiated (${formatLabel}).`
-      : `Edge export relocation update v4 not executed (${formatLabel}) - non-Edge browser detected.`;
+      ? `Edge export relocation update v2 executed (${formatLabel}).`
+      : `Edge export relocation update v2 not executed (${formatLabel}) - non-Edge browser detected.`;
     try { showPopup(message, "success"); } catch (e) {}
     console.info(message);
     }
@@ -3575,55 +3575,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     };
     }
 
-    function captureMapCanvasForExport(cb) {
-    const mapEl = document.getElementById('map');
-    if (isEdgeBrowser() && mapEl && typeof html2canvas === "function") {
-      const width = Math.max(1, Math.ceil(mapEl.clientWidth || mapEl.offsetWidth || 1));
-      const height = Math.max(1, Math.ceil(mapEl.clientHeight || mapEl.offsetHeight || 1));
-      const patchedNodes = [];
-      const applyTempStyle = (el, prop, val) => {
-        if (!el) return;
-        patchedNodes.push({ el, prop, prev: el.style[prop] });
-        el.style[prop] = val;
-      };
-      applyTempStyle(mapEl, "contain", "none");
-      const panes = Array.from(mapEl.querySelectorAll(".leaflet-pane, .leaflet-map-pane, .leaflet-tile-pane"));
-      panes.forEach((p) => applyTempStyle(p, "willChange", "auto"));
-      const restoreTempStyles = () => {
-        patchedNodes.forEach((it) => {
-          try { it.el.style[it.prop] = it.prev || ""; } catch (e) {}
-        });
-      };
-
-      html2canvas(mapEl, {
-        scale: Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)),
-        useCORS: true,
-        foreignObjectRendering: false,
-        logging: false,
-        backgroundColor: "#ffffff",
-        width,
-        height,
-        windowWidth: width,
-        windowHeight: height,
-        scrollX: 0,
-        scrollY: 0
-      }).then((canvas) => {
-        restoreTempStyles();
-        try { showPopup("Edge export relocation update v4 executed (DOM capture mode).", "success"); } catch (e) {}
-        cb(null, canvas, true);
-      }).catch((edgeErr) => {
-        restoreTempStyles();
-        console.warn("Edge DOM map capture failed; falling back to leafletImage:", edgeErr);
-        try { showPopup("Edge export relocation update v4 fallback executed (leaflet capture mode).", "success"); } catch (e) {}
-        leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
-      });
-      return;
-    }
-    leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
-    }
-
     function compositeExportElement(cb) {
-    captureMapCanvasForExport((err, mapCanvas, mapCanvasFromDom) => {
+    leafletImage(map, (err, mapCanvas) => {
       if (err) {
         console.error("Leaflet image export failed:", err);
         return;
@@ -3641,24 +3594,23 @@ window.addEventListener('load', resetInitialScrollPositions);
         : (mapEl ? mapEl.clientHeight : mapCanvas.height);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
-      const disableCrop = !!mapCanvasFromDom;
-      const expectedW = disableCrop ? mapCanvas.width : Math.round(cssW * rawScaleX);
-      const expectedH = disableCrop ? mapCanvas.height : Math.round(cssH * rawScaleY);
-      const baseCropW = disableCrop ? mapCanvas.width : Math.max(1, Math.min(expectedW, mapCanvas.width));
-      const cropH = disableCrop ? mapCanvas.height : Math.max(1, Math.min(expectedH, mapCanvas.height));
+      const expectedW = Math.round(cssW * rawScaleX);
+      const expectedH = Math.round(cssH * rawScaleY);
+      const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
+      const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
       const edgeExport = isEdgeBrowser();
-      const baseOffsetX = (!disableCrop && edgeExport) ? Math.max(0, Math.round((mapCanvas.width - baseCropW) / 2)) : 0;
-      const baseOffsetY = (!disableCrop && edgeExport) ? Math.max(0, Math.round((mapCanvas.height - cropH) / 2)) : 0;
+      const baseOffsetX = edgeExport ? Math.max(0, Math.round((mapCanvas.width - baseCropW) / 2)) : 0;
+      const baseOffsetY = edgeExport ? Math.max(0, Math.round((mapCanvas.height - cropH) / 2)) : 0;
       const sideCropPx = Math.max(
         0,
-        disableCrop ? 0 : (edgeExport ? 0 : Math.min(
+        edgeExport ? 0 : Math.min(
           Math.floor(baseCropW * 0.2),
           Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
-        ))
+        )
       );
-      const cropX = disableCrop ? 0 : Math.max(0, baseOffsetX + sideCropPx);
-      const cropY = disableCrop ? 0 : Math.max(0, baseOffsetY);
-      const cropW = disableCrop ? mapCanvas.width : Math.max(1, baseCropW - (2 * sideCropPx));
+      const cropX = Math.max(0, baseOffsetX + sideCropPx);
+      const cropY = Math.max(0, baseOffsetY);
+      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
@@ -3812,14 +3764,12 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
       }
 
-      if (!mapCanvasFromDom) {
-        // Export disclaimer exactly as currently displayed on map.
-        cloneMapOverlayToExport('#disclaimer', 'export-disclaimer-clone');
+      // Export disclaimer exactly as currently displayed on map.
+      cloneMapOverlayToExport('#disclaimer', 'export-disclaimer-clone');
 
-        // Keep clone attempt for non-DOM captures.
-        cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
-        cloneMapOverlayToExport('.leaflet-control-exact-scale, .map-bottom-scale-control', 'export-scale-clone');
-      }
+      // Keep clone attempt for Chrome/Edge fidelity.
+      cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
+      cloneMapOverlayToExport('.leaflet-control-exact-scale, .map-bottom-scale-control', 'export-scale-clone');
 
       function findMapControlElement(selector) {
         const nodes = Array.from(document.querySelectorAll(selector));
@@ -3940,10 +3890,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         mapWrapper.appendChild(fallback);
       }
 
-      if (!mapCanvasFromDom) {
-        ensureNorthArrowFallback();
-        ensureScaleBarFallback();
-      }
+      ensureNorthArrowFallback();
+      ensureScaleBarFallback();
 
       function ensureFirefoxGuaranteedOverlays() {
         // Keep Firefox behavior aligned with Chrome by relying on exact clones.
@@ -4322,7 +4270,7 @@ function exportSVG() {
     return;
   }
 
-  captureMapCanvasForExport((err, mapCanvas, mapCanvasFromDom) => {
+  leafletImage(map, (err, mapCanvas) => {
     if (err || !mapCanvas) {
       showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
       hideLoading();
@@ -4380,25 +4328,24 @@ function exportSVG() {
       const legendHeightPx = Math.max(Math.round(legendHeightCss * scale), computedLegendHeightPx);
 
       // expected canvas pixels for visible map area
-      const disableCrop = !!mapCanvasFromDom;
-      const expectedCanvasW = disableCrop ? canvasPixelWidth : Math.round(containerWidth * rawScaleX);
-      const expectedCanvasH = disableCrop ? canvasPixelHeight : Math.round(containerHeight * rawScaleY);
+      const expectedCanvasW = Math.round(containerWidth * rawScaleX);
+      const expectedCanvasH = Math.round(containerHeight * rawScaleY);
 
       // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
-      const baseCropW = disableCrop ? canvasPixelWidth : Math.min(expectedCanvasW, canvasPixelWidth);
-      const cropH = disableCrop ? canvasPixelHeight : Math.min(expectedCanvasH, canvasPixelHeight);
-      const baseOffsetX = (!disableCrop && edgeExport) ? Math.max(0, Math.round((canvasPixelWidth - baseCropW) / 2)) : 0;
-      const baseOffsetY = (!disableCrop && edgeExport) ? Math.max(0, Math.round((canvasPixelHeight - cropH) / 2)) : 0;
+      const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
+      const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
+      const baseOffsetX = edgeExport ? Math.max(0, Math.round((canvasPixelWidth - baseCropW) / 2)) : 0;
+      const baseOffsetY = edgeExport ? Math.max(0, Math.round((canvasPixelHeight - cropH) / 2)) : 0;
       const sideCropPx = Math.max(
         0,
-        disableCrop ? 0 : (edgeExport ? 0 : Math.min(
+        edgeExport ? 0 : Math.min(
           Math.floor(baseCropW * 0.2),
           Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
-        ))
+        )
       );
-      const cropW = disableCrop ? canvasPixelWidth : Math.max(1, baseCropW - (2 * sideCropPx));
-      const cropX = disableCrop ? 0 : (baseOffsetX + sideCropPx);
-      const cropY = disableCrop ? 0 : baseOffsetY;
+      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
+      const cropX = baseOffsetX + sideCropPx;
+      const cropY = baseOffsetY;
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
@@ -4504,65 +4451,63 @@ function exportSVG() {
         return style;
       }
 
-      // draw features (skip when using DOM-captured map canvas to avoid duplicate overlays/layers)
-      if (!mapCanvasFromDom) {
-        data.features.forEach(feature => {
-          const geom = feature.geometry;
-          if (!geom) return;
-          const style = styleForFeature(feature);
+      // draw features
+      data.features.forEach(feature => {
+        const geom = feature.geometry;
+        if (!geom) return;
+        const style = styleForFeature(feature);
 
-          if (geom.type === "Polygon" || geom.type === "MultiPolygon") {
-            const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
-            polys.forEach(polygon => {
-              polygon.forEach((ring, rIdx) => {
-                const path = document.createElementNS(svgNS, "path");
-                const d = ring.map((coord, i) => {
-                  const [x, y] = projectCoordToCanvas(coord);
-                  return (i === 0 ? "M" : "L") + x + " " + y;
-                }).join(" ") + " Z";
-                path.setAttribute("d", d);
-                path.setAttribute("fill", rIdx === 0 ? (style.fill || "none") : "#ffffff");
-                path.setAttribute("stroke", style.stroke || "#000");
-                path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
-                path.setAttribute("fill-opacity", String(style.fillOpacity));
-                svg.appendChild(path);
-              });
-            });
-          } else if (geom.type === "LineString" || geom.type === "MultiLineString") {
-            const lines = geom.type === "LineString" ? [geom.coordinates] : geom.coordinates;
-            lines.forEach(line => {
+        if (geom.type === "Polygon" || geom.type === "MultiPolygon") {
+          const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
+          polys.forEach(polygon => {
+            polygon.forEach((ring, rIdx) => {
               const path = document.createElementNS(svgNS, "path");
-              const d = line.map((coord, i) => {
+              const d = ring.map((coord, i) => {
                 const [x, y] = projectCoordToCanvas(coord);
                 return (i === 0 ? "M" : "L") + x + " " + y;
-              }).join(" ");
+              }).join(" ") + " Z";
               path.setAttribute("d", d);
-              path.setAttribute("fill", "none");
+              path.setAttribute("fill", rIdx === 0 ? (style.fill || "none") : "#ffffff");
               path.setAttribute("stroke", style.stroke || "#000");
               path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
+              path.setAttribute("fill-opacity", String(style.fillOpacity));
               svg.appendChild(path);
             });
-          } else if (geom.type === "Point" || geom.type === "MultiPoint") {
-            const pts = geom.type === "Point" ? [geom.coordinates] : geom.coordinates;
-            pts.forEach(coord => {
+          });
+        } else if (geom.type === "LineString" || geom.type === "MultiLineString") {
+          const lines = geom.type === "LineString" ? [geom.coordinates] : geom.coordinates;
+          lines.forEach(line => {
+            const path = document.createElementNS(svgNS, "path");
+            const d = line.map((coord, i) => {
               const [x, y] = projectCoordToCanvas(coord);
-              const circle = document.createElementNS(svgNS, "circle");
-              const r = Math.max(1, Math.round(getPointRadius() * scale));
-              circle.setAttribute("cx", String(x));
-              circle.setAttribute("cy", String(y));
-              circle.setAttribute("r", String(r));
-              circle.setAttribute("fill", style.fill || "#ccc");
-              circle.setAttribute("stroke", style.stroke || "#000");
-              circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
-              svg.appendChild(circle);
-            });
-          }
-        });
-      }
+              return (i === 0 ? "M" : "L") + x + " " + y;
+            }).join(" ");
+            path.setAttribute("d", d);
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke", style.stroke || "#000");
+            path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
+            svg.appendChild(path);
+          });
+        } else if (geom.type === "Point" || geom.type === "MultiPoint") {
+          const pts = geom.type === "Point" ? [geom.coordinates] : geom.coordinates;
+          pts.forEach(coord => {
+            const [x, y] = projectCoordToCanvas(coord);
+            const circle = document.createElementNS(svgNS, "circle");
+            const r = Math.max(1, Math.round(getPointRadius() * scale));
+            circle.setAttribute("cx", String(x));
+            circle.setAttribute("cy", String(y));
+            circle.setAttribute("r", String(r));
+            circle.setAttribute("fill", style.fill || "#ccc");
+            circle.setAttribute("stroke", style.stroke || "#000");
+            circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
+            svg.appendChild(circle);
+          });
+        }
+      });
 
       // disclaimer rendered as pure SVG to avoid foreignObject inconsistencies
       const safeDisclaimer = safeText(disclaimerEl);
-      if (safeDisclaimer && !mapCanvasFromDom) {
+      if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const discX = discRect && mapRect
@@ -4654,7 +4599,7 @@ function exportSVG() {
       }
 
       // north arrow (render from live control position)
-      if (northArrowEl && mapEl && !mapCanvasFromDom) {
+      if (northArrowEl && mapEl) {
         const naRect = northArrowEl.getBoundingClientRect();
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
@@ -4700,7 +4645,7 @@ function exportSVG() {
       }
 
       // scale bar label (render from live control position/text)
-      if (scaleBarEl && mapEl && !mapCanvasFromDom) {
+      if (scaleBarEl && mapEl) {
         const sbRect = scaleBarEl.getBoundingClientRect();
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
