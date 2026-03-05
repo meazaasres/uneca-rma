@@ -3546,8 +3546,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     function notifyEdgeExportFixStatus(formatLabel = "Export") {
     const executed = isEdgeBrowser();
     const message = executed
-      ? `Edge export relocation update v6 initiated (${formatLabel}).`
-      : `Edge export relocation update v6 not executed (${formatLabel}) - non-Edge browser detected.`;
+      ? `Edge export relocation update v7 initiated (${formatLabel}).`
+      : `Edge export relocation update v7 not executed (${formatLabel}) - non-Edge browser detected.`;
     try { showPopup(message, "success"); } catch (e) {}
     console.info(message);
     }
@@ -3612,8 +3612,48 @@ window.addEventListener('load', resetInitialScrollPositions);
     function captureMapCanvasForExport(cb) {
     const mapEl = document.getElementById('map');
     if (isEdgeBrowser() && mapEl && typeof html2canvas === "function") {
-      try { showPopup("Edge export relocation update v6 executed (leaflet stable mode).", "success"); } catch (e) {}
-      leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
+      const runDomFallback = (reasonLabel) => {
+        const width = Math.max(1, Math.ceil(mapEl.clientWidth || mapEl.offsetWidth || 1));
+        const height = Math.max(1, Math.ceil(mapEl.clientHeight || mapEl.offsetHeight || 1));
+        html2canvas(mapEl, {
+          scale: Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)),
+          useCORS: true,
+          foreignObjectRendering: false,
+          logging: false,
+          backgroundColor: "#ffffff",
+          width,
+          height,
+          windowWidth: width,
+          windowHeight: height,
+          scrollX: 0,
+          scrollY: 0
+        }).then((canvas) => {
+          if (isLikelyBlankCanvas(canvas)) {
+            console.warn("Edge DOM fallback also returned blank canvas.");
+          }
+          try { showPopup(`Edge export relocation update v7 executed (DOM fallback: ${reasonLabel}).`, "success"); } catch (e) {}
+          cb(null, canvas, true);
+        }).catch((domErr) => {
+          console.warn("Edge DOM fallback failed:", domErr);
+          cb(domErr, null, false);
+        });
+      };
+
+      leafletImage(map, (err, mapCanvas) => {
+        if (err || !mapCanvas) {
+          console.warn("Edge leaflet capture failed; switching to DOM fallback:", err);
+          runDomFallback("leaflet error");
+          return;
+        }
+        const safeUrl = tryCanvasToDataURL(mapCanvas);
+        if (!safeUrl || isLikelyBlankCanvas(mapCanvas)) {
+          console.warn("Edge leaflet capture blank/tainted; switching to DOM fallback.");
+          runDomFallback(!safeUrl ? "leaflet tainted" : "leaflet blank");
+          return;
+        }
+        try { showPopup("Edge export relocation update v7 executed (leaflet mode).", "success"); } catch (e) {}
+        cb(null, mapCanvas, false);
+      });
       return;
     }
     leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
