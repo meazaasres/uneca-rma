@@ -3566,13 +3566,11 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       const mapEl = document.getElementById('map');
-      const holderEl = document.getElementById('map-container');
-      const cssW = mapEl ? mapEl.clientWidth : mapCanvas.width;
-      const cssH = holderEl
-        ? Math.min(holderEl.clientHeight || mapCanvas.height, mapEl ? mapEl.clientHeight : mapCanvas.height)
-        : (mapEl ? mapEl.clientHeight : mapCanvas.height);
+      const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+      const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : mapCanvas.width);
+      const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : mapCanvas.height);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
-      const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
+      const rawScaleY = cssH > 0 ? (mapCanvas.height / cssH) : rawScaleX;
       const expectedW = Math.round(cssW * rawScaleX);
       const expectedH = Math.round(cssH * rawScaleY);
       const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
@@ -3705,13 +3703,16 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
         if (source.id === 'disclaimer') {
+          const leftInset = Math.max(6, Math.round(8 * rawScaleX));
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
           const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
           const exportBottom = Math.max(0, Math.min(exportBottomRaw, Math.max(0, H - exportHeight)));
           clone.style.width = 'auto';
           clone.style.height = 'auto';
           clone.style.display = 'inline-block';
-          clone.style.maxWidth = Math.max(120, Math.min(exportWidth, W - exportLeft - 8)) + 'px';
+          clone.style.left = leftInset + 'px';
+          clone.style.right = 'auto';
+          clone.style.maxWidth = Math.max(120, Math.min(exportWidth, W - leftInset - 8)) + 'px';
           clone.style.maxHeight = Math.max(40, Math.round(H * 0.32)) + 'px';
           clone.style.overflow = 'hidden';
           clone.style.textAlign = 'left';
@@ -4268,35 +4269,33 @@ function exportSVG() {
       const canvasPixelHeight = mapCanvas.height;
 
       // container CSS size and scale factor
-      const holderEl = document.getElementById('map-container');
-      const containerWidth  = mapEl.clientWidth || canvasPixelWidth;
-      const containerHeight = holderEl
-        ? Math.min(holderEl.clientHeight || canvasPixelHeight, mapEl.clientHeight || canvasPixelHeight)
-        : (mapEl.clientHeight || canvasPixelHeight);
+      const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+      const containerWidth  = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl.clientWidth || canvasPixelWidth);
+      const containerHeight = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl.clientHeight || canvasPixelHeight);
       // clamp scale to avoid excessively large exported font sizes when
       // device or canvas ratios are large. Keep within [1,2] for stability.
       const rawScaleX = containerWidth > 0 ? (canvasPixelWidth / containerWidth) : 1;
       const rawScaleY = containerHeight > 0 ? (canvasPixelHeight / containerHeight) : rawScaleX;
-      const scale = Math.min(Math.max(rawScaleX, 1), 2);
+      const uiScale = Math.min(Math.max(rawScaleX, 1), 2);
 
       // title/legend heights (CSS -> canvas px)
       const marginCss = 10;
       const titleHeightCss = titleEl ? (titleEl.getBoundingClientRect().height + marginCss) : 0;
       const legendHeightCss = legendEl ? (legendEl.getBoundingClientRect().height + marginCss) : 0;
-      const titleHeightPx  = Math.round(titleHeightCss * scale);
-      const marginPx = Math.round(marginCss * scale);
+      const titleHeightPx  = Math.round(titleHeightCss * uiScale);
+      const marginPx = Math.round(marginCss * uiScale);
 
       const overlay = overlayData[currentLayerName] || {};
       const legendRows = (overlay.vals && overlay.cols)
         ? (overlay.isNumeric ? Math.max(0, overlay.vals.length - 1) : overlay.vals.length)
         : 0;
-      const legendBoxSize = Math.max(8, Math.round(12 * scale));
-      const legendRowGap = Math.round(6 * scale);
-      const legendHeaderGap = Math.round(18 * scale);
+      const legendBoxSize = Math.max(8, Math.round(12 * uiScale));
+      const legendRowGap = Math.round(6 * uiScale);
+      const legendHeaderGap = Math.round(18 * uiScale);
       const computedLegendHeightPx = legendRows
         ? (marginPx + legendHeaderGap + (legendRows * (legendBoxSize + legendRowGap)))
         : 0;
-      const legendHeightPx = Math.max(Math.round(legendHeightCss * scale), computedLegendHeightPx);
+      const legendHeightPx = Math.max(Math.round(legendHeightCss * uiScale), computedLegendHeightPx);
 
       // expected canvas pixels for visible map area
       const expectedCanvasW = Math.round(containerWidth * rawScaleX);
@@ -4320,7 +4319,7 @@ function exportSVG() {
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
-        { canvasPixelWidth, canvasPixelHeight, containerWidth, containerHeight, scale,
+        { canvasPixelWidth, canvasPixelHeight, containerWidth, containerHeight, uiScale,
           expectedCanvasW, expectedCanvasH, cropW, cropH, cropX, cropY, titleHeightPx, legendHeightPx });
 
       // draw cropped region to offscreen canvas
@@ -4364,11 +4363,11 @@ function exportSVG() {
       if (safeTitle) {
         const title = document.createElementNS(svgNS, "text");
         title.setAttribute("x", String(totalWidthPx / 2));
-        title.setAttribute("y", String(Math.max(Math.round(18 * scale), titleHeightPx - Math.round(marginPx / 2))));
+        title.setAttribute("y", String(Math.max(Math.round(18 * uiScale), titleHeightPx - Math.round(marginPx / 2))));
         title.setAttribute("text-anchor", "middle");
         title.setAttribute("font-family", "Segoe UI, sans-serif");
         // clamp font size between 12px and 24px to avoid oversized headings
-        const fs = Math.round(Math.max(12, Math.min(24, 18 * scale)));
+        const fs = Math.round(Math.max(12, Math.min(24, 18 * uiScale)));
         title.setAttribute("font-size", String(fs));
         title.setAttribute("font-weight", "600");
         title.textContent = safeTitle;
@@ -4391,8 +4390,8 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * scale) - cropX - extraTrimX;
-        const y = (containerPoint.y * scale) - cropY + titleHeightPx;
+        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX;
+        const y = (containerPoint.y * rawScaleY) - cropY + titleHeightPx;
         return [x, y];
       }
 
@@ -4440,7 +4439,7 @@ function exportSVG() {
               path.setAttribute("d", d);
               path.setAttribute("fill", rIdx === 0 ? (style.fill || "none") : "#ffffff");
               path.setAttribute("stroke", style.stroke || "#000");
-              path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
+              path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
               path.setAttribute("fill-opacity", String(style.fillOpacity));
               svg.appendChild(path);
             });
@@ -4456,7 +4455,7 @@ function exportSVG() {
             path.setAttribute("d", d);
             path.setAttribute("fill", "none");
             path.setAttribute("stroke", style.stroke || "#000");
-            path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
+            path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
             svg.appendChild(path);
           });
         } else if (geom.type === "Point" || geom.type === "MultiPoint") {
@@ -4464,13 +4463,13 @@ function exportSVG() {
           pts.forEach(coord => {
             const [x, y] = projectCoordToCanvas(coord);
             const circle = document.createElementNS(svgNS, "circle");
-            const r = Math.max(1, Math.round(getPointRadius() * scale));
+            const r = Math.max(1, Math.round(getPointRadius() * rawScaleX));
             circle.setAttribute("cx", String(x));
             circle.setAttribute("cy", String(y));
             circle.setAttribute("r", String(r));
             circle.setAttribute("fill", style.fill || "#ccc");
             circle.setAttribute("stroke", style.stroke || "#000");
-            circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * scale)));
+            circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
             svg.appendChild(circle);
           });
         }
@@ -4481,17 +4480,15 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = discRect && mapRect
-          ? Math.max(0, Math.round((discRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX - 4)
-          : marginPx;
-        const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * scale);
+        const discX = Math.max(6, Math.round(8 * rawScaleX));
+        const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
         let discWidth = Math.max(
-          Math.round(120 * scale),
+          Math.round(120 * uiScale),
           Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discX - marginPx))
         );
-        const fontSizeDisc = Math.max(8, Math.round(10 * scale));
+        const fontSizeDisc = Math.max(8, Math.round(10 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
-        const padding = Math.max(4, Math.round(5 * scale));
+        const padding = Math.max(4, Math.round(5 * uiScale));
         const maxLines = 6;
         const avgCharWidth = Math.max(5, Math.round(fontSizeDisc * 0.5));
         const maxCharsPerLine = Math.max(16, Math.floor((discWidth - (padding * 2)) / avgCharWidth));
@@ -4523,7 +4520,7 @@ function exportSVG() {
           const w = mCtx ? Math.ceil(mCtx.measureText(ln).width) : Math.round(ln.length * avgCharWidth);
           return Math.max(m, w);
         }, 0);
-        const tightWidth = Math.max(Math.round(120 * scale), measuredTextWidth + (padding * 2));
+        const tightWidth = Math.max(Math.round(120 * uiScale), measuredTextWidth + (padding * 2));
         discWidth = Math.min(discWidth, tightWidth);
 
         const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
@@ -4586,26 +4583,26 @@ function exportSVG() {
         naBg.setAttribute("y", String(naY));
         naBg.setAttribute("width", String(naW));
         naBg.setAttribute("height", String(naH));
-        naBg.setAttribute("rx", String(Math.max(2, Math.round(3 * scale))));
+        naBg.setAttribute("rx", String(Math.max(2, Math.round(3 * uiScale))));
         naBg.setAttribute("fill", "#ffffff");
         naBg.setAttribute("stroke", "#cfd6e4");
         svg.appendChild(naBg);
 
         const naText = document.createElementNS(svgNS, "text");
         naText.setAttribute("x", String(naX + Math.round(naW / 2)));
-        naText.setAttribute("y", String(naY + Math.max(10, Math.round(12 * scale))));
+        naText.setAttribute("y", String(naY + Math.max(10, Math.round(12 * uiScale))));
         naText.setAttribute("text-anchor", "middle");
-        naText.setAttribute("font-size", String(Math.max(9, Math.round(12 * scale))));
+        naText.setAttribute("font-size", String(Math.max(9, Math.round(12 * uiScale))));
         naText.setAttribute("font-family", "Segoe UI, sans-serif");
         naText.setAttribute("font-weight", "700");
         naText.setAttribute("fill", "#1e3a8a");
         naText.textContent = "N";
         svg.appendChild(naText);
 
-        const triW = Math.max(8, Math.round(12 * scale));
-        const triH = Math.max(8, Math.round(12 * scale));
+        const triW = Math.max(8, Math.round(12 * uiScale));
+        const triH = Math.max(8, Math.round(12 * uiScale));
         const triCX = naX + Math.round(naW / 2);
-        const triTop = naY + Math.max(14, Math.round(18 * scale));
+        const triTop = naY + Math.max(14, Math.round(18 * uiScale));
         const tri = document.createElementNS(svgNS, "path");
         tri.setAttribute(
           "d",
@@ -4636,16 +4633,16 @@ function exportSVG() {
         sbBg.setAttribute("y", String(sbY));
         sbBg.setAttribute("width", String(sbW));
         sbBg.setAttribute("height", String(sbH));
-        sbBg.setAttribute("rx", String(Math.max(2, Math.round(3 * scale))));
+        sbBg.setAttribute("rx", String(Math.max(2, Math.round(3 * uiScale))));
         sbBg.setAttribute("fill", "#ffffff");
         sbBg.setAttribute("stroke", "#cfd6e4");
         svg.appendChild(sbBg);
 
         const sbTextEl = document.createElementNS(svgNS, "text");
         sbTextEl.setAttribute("x", String(sbX + Math.round(sbW / 2)));
-        sbTextEl.setAttribute("y", String(sbY + Math.round(sbH / 2) + Math.round(3 * scale)));
+        sbTextEl.setAttribute("y", String(sbY + Math.round(sbH / 2) + Math.round(3 * uiScale)));
         sbTextEl.setAttribute("text-anchor", "middle");
-        sbTextEl.setAttribute("font-size", String(Math.max(8, Math.round(8 * scale))));
+        sbTextEl.setAttribute("font-size", String(Math.max(8, Math.round(8 * uiScale))));
         sbTextEl.setAttribute("font-family", "Segoe UI, sans-serif");
         sbTextEl.setAttribute("font-weight", "400");
         sbTextEl.setAttribute("fill", "#102a43");
@@ -4658,10 +4655,10 @@ function exportSVG() {
         const legendGroup = document.createElementNS(svgNS, "g");
         const legendX = marginPx;
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
-        const symSize = Math.max(8, Math.round(12 * scale));
-        const fontSize = Math.max(10, Math.round(12 * scale));
-        const rowGap = Math.max(3, Math.round(5 * scale));
-        const blockGap = Math.max(6, Math.round(8 * scale));
+        const symSize = Math.max(8, Math.round(12 * uiScale));
+        const fontSize = Math.max(10, Math.round(12 * uiScale));
+        const rowGap = Math.max(3, Math.round(5 * uiScale));
+        const blockGap = Math.max(6, Math.round(8 * uiScale));
 
         const blocks = Array.from(legendEl.querySelectorAll('.legend-block'));
         blocks.forEach(block => {
@@ -4696,7 +4693,7 @@ function exportSVG() {
               line.setAttribute("x2", String(legendX + symSize));
               line.setAttribute("y2", String(yOff + Math.round(symSize / 2)));
               line.setAttribute("stroke", lineColor);
-              line.setAttribute("stroke-width", String(Math.max(2, Math.round(2 * scale))));
+              line.setAttribute("stroke-width", String(Math.max(2, Math.round(2 * uiScale))));
               legendGroup.appendChild(line);
             } else if (symEl && symEl.classList.contains('legend-sym-point')) {
               const c = document.createElementNS(svgNS, "circle");
@@ -4719,8 +4716,8 @@ function exportSVG() {
             }
 
             const t = document.createElementNS(svgNS, "text");
-            t.setAttribute("x", String(legendX + symSize + Math.round(6 * scale)));
-            t.setAttribute("y", String(yOff + symSize - Math.round(2 * scale)));
+            t.setAttribute("x", String(legendX + symSize + Math.round(6 * uiScale)));
+            t.setAttribute("y", String(yOff + symSize - Math.round(2 * uiScale)));
             t.setAttribute("font-size", String(fontSize));
             t.textContent = safeText(lblEl);
             legendGroup.appendChild(t);
