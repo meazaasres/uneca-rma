@@ -4161,27 +4161,6 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     function exportMap() {
       showLoading("Exporting map as PNG...");
-      if (isEdgeBrowser()) {
-        buildEdgeExportWrapper((wrapper) => {
-          const opts = buildHtml2CanvasOptions(wrapper);
-          html2canvas(wrapper, opts)
-            .then((canvas) => {
-              const a = document.createElement('a');
-              a.href = canvas.toDataURL('image/png');
-              a.download = 'map.png';
-              a.rel = 'noopener';
-              a.click();
-              document.body.removeChild(wrapper);
-              hideLoading();
-            })
-            .catch((err) => {
-              console.error("PNG export failed:", err);
-              if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-              hideLoading();
-            });
-        });
-        return;
-      }
       compositeExportElement(wrapper => {
         html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
           .then(canvas => {
@@ -4203,31 +4182,6 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       function exportPDF() {
         showLoading("Exporting map as PDF...");
-        if (isEdgeBrowser()) {
-          buildEdgeExportWrapper((wrapper) => {
-            const opts = buildHtml2CanvasOptions(wrapper);
-            html2canvas(wrapper, opts)
-              .then((canvas) => {
-                const imgData = canvas.toDataURL('image/png');
-                const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
-                const pdf = new jspdf.jsPDF({
-                  orientation,
-                  unit: 'px',
-                  format: [canvas.width, canvas.height]
-                });
-                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-                pdf.save('map.pdf');
-                document.body.removeChild(wrapper);
-                hideLoading();
-              })
-              .catch((err) => {
-                console.error("PDF export failed:", err);
-                if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-                hideLoading();
-              });
-          });
-          return;
-        }
         compositeExportElement(wrapper => {
             html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
             .then(canvas => {
@@ -4380,69 +4334,6 @@ function computeHorizontalContentShift(sourceCanvas) {
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
   showLoading("Exporting map as SVG...");
-  if (isEdgeBrowser()) {
-    console.info("SVG export debug: Edge branch executed.");
-    showPopup("Debug: Edge SVG export branch executed.", "success");
-    buildEdgeExportWrapper((wrapper) => {
-      const opts = buildHtml2CanvasOptions(wrapper);
-      html2canvas(wrapper, opts)
-        .then((canvas) => {
-          try {
-            const svgNS = "http://www.w3.org/2000/svg";
-            const XLINK = "http://www.w3.org/1999/xlink";
-            const svgWidth = Math.max(1, canvas.width);
-            const svgHeight = Math.max(1, canvas.height);
-            const svg = document.createElementNS(svgNS, "svg");
-            svg.setAttribute("xmlns", svgNS);
-            svg.setAttribute("xmlns:xlink", XLINK);
-            svg.setAttribute("width", String(svgWidth));
-            svg.setAttribute("height", String(svgHeight));
-            svg.setAttribute("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
-            svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-            const bg = document.createElementNS(svgNS, "rect");
-            bg.setAttribute("x", "0");
-            bg.setAttribute("y", "0");
-            bg.setAttribute("width", String(svgWidth));
-            bg.setAttribute("height", String(svgHeight));
-            bg.setAttribute("fill", "#ffffff");
-            svg.appendChild(bg);
-            const img = document.createElementNS(svgNS, "image");
-            const png = canvas.toDataURL("image/png");
-            img.setAttributeNS(XLINK, "xlink:href", png);
-            img.setAttribute("href", png);
-            img.setAttribute("x", "0");
-            img.setAttribute("y", "0");
-            img.setAttribute("width", String(svgWidth));
-            img.setAttribute("height", String(svgHeight));
-            svg.appendChild(img);
-            const serializer = new XMLSerializer();
-            const svgString = serializer.serializeToString(svg);
-            const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = (currentLayerName ? sanitizeName(currentLayerName) : "map") + ".svg";
-            a.rel = "noopener";
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-              try { URL.revokeObjectURL(url); } catch (e) {}
-              a.remove();
-            }, 1000);
-          } finally {
-            if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-            hideLoading();
-          }
-        })
-        .catch((ex) => {
-          console.error("SVG export failed:", ex);
-          if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-          hideLoading();
-        });
-    });
-    return;
-  }
-
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
   const data = getFilteredGeojson(sourceData);
   if (!data || !Array.isArray(data.features) || !data.features.length) {
