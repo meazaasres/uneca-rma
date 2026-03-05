@@ -1884,21 +1884,88 @@ makeControlDraggable(northArrowControl, (el, mapEl) => {
 });
 
 // Base layer
+const isEdgeRuntime = isEdgeBrowser();
+
+function tuneTileLayerForEdge(layer) {
+  if (!isEdgeRuntime || !layer || typeof layer.on !== "function") return;
+  layer.on("tileloadstart", (evt) => {
+    const tile = evt && evt.tile;
+    if (!tile) return;
+    try { tile.loading = "eager"; } catch (e) {}
+    try { tile.decoding = "sync"; } catch (e) {}
+    try { tile.setAttribute("fetchpriority", "high"); } catch (e) {}
+  });
+}
+
+const unTopoOptions = {
+  attribution: '© United Nations',
+  maxZoom: 18,
+  tileSize: 256
+};
+if (!isEdgeRuntime) {
+  // Keep CORS mode for non-Edge export fidelity.
+  unTopoOptions.crossOrigin = 'anonymous';
+}
+
 const baseLayer = L.tileLayer(
   'https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}',
-  {
-    attribution: '© United Nations',
-    crossOrigin: 'anonymous',
-    maxZoom: 18,
-    tileSize: 256
-  }
+  unTopoOptions
 ).addTo(map);
+tuneTileLayerForEdge(baseLayer);
+
+const edgeFallbackBaseLayer = L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19,
+    tileSize: 256,
+    subdomains: 'abc'
+  }
+);
+tuneTileLayerForEdge(edgeFallbackBaseLayer);
+
+let edgeBaseTileErrors = 0;
+let edgeBaseTileLoaded = false;
+let edgeFallbackApplied = false;
+
+function activateEdgeBasemapFallback(reason = "tile load failure") {
+  if (!isEdgeRuntime || edgeFallbackApplied) return;
+  edgeFallbackApplied = true;
+  try {
+    if (map.hasLayer(baseLayer)) map.removeLayer(baseLayer);
+    edgeFallbackBaseLayer.addTo(map);
+    ensureBaseLayerAtBack();
+    showPopup(`Edge basemap fallback enabled (${reason}).`, "error");
+  } catch (e) {
+    console.warn("Edge basemap fallback activation failed:", e);
+  }
+}
+
+if (isEdgeRuntime) {
+  baseLayer.on("tileload", () => {
+    edgeBaseTileLoaded = true;
+    edgeBaseTileErrors = 0;
+  });
+  baseLayer.on("tileerror", () => {
+    edgeBaseTileErrors += 1;
+    if (!edgeBaseTileLoaded && edgeBaseTileErrors >= 8) {
+      activateEdgeBasemapFallback("UN tiles unreachable");
+    }
+  });
+  setTimeout(() => {
+    if (!edgeBaseTileLoaded && !edgeFallbackApplied) {
+      activateEdgeBasemapFallback("UN tiles timeout");
+    }
+  }, 6000);
+}
 
 function ensureBaseLayerAtBack() {
-  if (!baseLayer || !map || !map.hasLayer(baseLayer)) return;
+  if (!map) return;
+  const activeBaseLayer = map.hasLayer(baseLayer) ? baseLayer : (map.hasLayer(edgeFallbackBaseLayer) ? edgeFallbackBaseLayer : null);
+  if (!activeBaseLayer) return;
   try {
-    if (typeof baseLayer.bringToBack === 'function') baseLayer.bringToBack();
-    if (typeof baseLayer.setZIndex === 'function') baseLayer.setZIndex(1);
+    if (typeof activeBaseLayer.bringToBack === 'function') activeBaseLayer.bringToBack();
+    if (typeof activeBaseLayer.setZIndex === 'function') activeBaseLayer.setZIndex(1);
   } catch (e) {
     console.warn("Failed to keep UN Topo at back:", e);
   }
@@ -1906,7 +1973,7 @@ function ensureBaseLayerAtBack() {
 
 ensureBaseLayerAtBack();
 map.on('layeradd', (e) => {
-  if (e && e.layer === baseLayer) ensureBaseLayerAtBack();
+  if (e && (e.layer === baseLayer || e.layer === edgeFallbackBaseLayer)) ensureBaseLayerAtBack();
 });
 
 // --- Draw control ---
@@ -2153,8 +2220,12 @@ map.on && map.on('zoomend', queueMapUiReflow);
 map.on && map.on('moveend', () => setTimeout(positionDisclaimer, 50));
 
 // --- Layers control (moved into sidebar if present) ---
+const baseLayersForControl = isEdgeRuntime
+  ? { 'UN Topo': baseLayer, 'OpenStreetMap': edgeFallbackBaseLayer }
+  : { 'UN Topo': baseLayer };
+
 const layersControl = L.control.layers(
-  { 'UN Topo': baseLayer },
+  baseLayersForControl,
   {},
   { collapsed: false }
 ).addTo(map);
