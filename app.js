@@ -4347,8 +4347,13 @@ function computeHorizontalContentShift(sourceCanvas) {
     let nonEmpty = 0;
     for (let y = 0; y < h; y++) {
       const idx = ((y * w) + x) * 4;
+      const r = px[idx];
+      const g = px[idx + 1];
+      const b = px[idx + 2];
       const a = px[idx + 3];
-      if (a > 8) {
+      const isTransparent = a <= 8;
+      const isWhiteOpaque = (a >= 245 && r >= 245 && g >= 245 && b >= 245);
+      if (!(isTransparent || isWhiteOpaque)) {
         nonEmpty++;
         if (nonEmpty > nonEmptyThreshold) return true;
       }
