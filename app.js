@@ -3546,8 +3546,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     function notifyEdgeExportFixStatus(formatLabel = "Export") {
     const executed = isEdgeBrowser();
     const message = executed
-      ? `Edge export relocation update v6 initiated (${formatLabel}).`
-      : `Edge export relocation update v6 not executed (${formatLabel}) - non-Edge browser detected.`;
+      ? `Edge export relocation update v5 initiated (${formatLabel}).`
+      : `Edge export relocation update v5 not executed (${formatLabel}) - non-Edge browser detected.`;
     try { showPopup(message, "success"); } catch (e) {}
     console.info(message);
     }
@@ -3612,8 +3612,51 @@ window.addEventListener('load', resetInitialScrollPositions);
     function captureMapCanvasForExport(cb) {
     const mapEl = document.getElementById('map');
     if (isEdgeBrowser() && mapEl && typeof html2canvas === "function") {
-      try { showPopup("Edge export relocation update v6 executed (leaflet stable mode).", "success"); } catch (e) {}
-      leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
+      const width = Math.max(1, Math.ceil(mapEl.clientWidth || mapEl.offsetWidth || 1));
+      const height = Math.max(1, Math.ceil(mapEl.clientHeight || mapEl.offsetHeight || 1));
+      const patchedNodes = [];
+      const applyTempStyle = (el, prop, val) => {
+        if (!el) return;
+        patchedNodes.push({ el, prop, prev: el.style[prop] });
+        el.style[prop] = val;
+      };
+      applyTempStyle(mapEl, "contain", "none");
+      const panes = Array.from(mapEl.querySelectorAll(".leaflet-pane, .leaflet-map-pane, .leaflet-tile-pane"));
+      panes.forEach((p) => applyTempStyle(p, "willChange", "auto"));
+      const restoreTempStyles = () => {
+        patchedNodes.forEach((it) => {
+          try { it.el.style[it.prop] = it.prev || ""; } catch (e) {}
+        });
+      };
+
+      html2canvas(mapEl, {
+        scale: Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)),
+        useCORS: true,
+        foreignObjectRendering: false,
+        logging: false,
+        backgroundColor: "#ffffff",
+        width,
+        height,
+        windowWidth: width,
+        windowHeight: height,
+        scrollX: 0,
+        scrollY: 0
+      }).then((canvas) => {
+        restoreTempStyles();
+        if (isLikelyBlankCanvas(canvas)) {
+          console.warn("Edge DOM capture returned blank canvas; falling back to leafletImage.");
+          try { showPopup("Edge export relocation update v5 fallback executed (DOM blank -> leaflet mode).", "success"); } catch (e) {}
+          leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
+          return;
+        }
+        try { showPopup("Edge export relocation update v5 executed (DOM capture mode).", "success"); } catch (e) {}
+        cb(null, canvas, true);
+      }).catch((edgeErr) => {
+        restoreTempStyles();
+        console.warn("Edge DOM map capture failed; falling back to leafletImage:", edgeErr);
+        try { showPopup("Edge export relocation update v5 fallback executed (leaflet capture mode).", "success"); } catch (e) {}
+        leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
+      });
       return;
     }
     leafletImage(map, (err, mapCanvas) => cb(err, mapCanvas, false));
@@ -3638,12 +3681,12 @@ window.addEventListener('load', resetInitialScrollPositions);
         : (mapEl ? mapEl.clientHeight : mapCanvas.height);
       const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
       const rawScaleY = (mapEl && mapEl.clientHeight > 0) ? (mapCanvas.height / mapEl.clientHeight) : rawScaleX;
-      const edgeExport = isEdgeBrowser();
-      const disableCrop = !!mapCanvasFromDom || edgeExport;
+      const disableCrop = !!mapCanvasFromDom;
       const expectedW = disableCrop ? mapCanvas.width : Math.round(cssW * rawScaleX);
       const expectedH = disableCrop ? mapCanvas.height : Math.round(cssH * rawScaleY);
       const baseCropW = disableCrop ? mapCanvas.width : Math.max(1, Math.min(expectedW, mapCanvas.width));
       const cropH = disableCrop ? mapCanvas.height : Math.max(1, Math.min(expectedH, mapCanvas.height));
+      const edgeExport = isEdgeBrowser();
       const baseOffsetX = (!disableCrop && edgeExport) ? Math.max(0, Math.round((mapCanvas.width - baseCropW) / 2)) : 0;
       const baseOffsetY = (!disableCrop && edgeExport) ? Math.max(0, Math.round((mapCanvas.height - cropH) / 2)) : 0;
       const sideCropPx = Math.max(
@@ -4377,7 +4420,7 @@ function exportSVG() {
       const legendHeightPx = Math.max(Math.round(legendHeightCss * scale), computedLegendHeightPx);
 
       // expected canvas pixels for visible map area
-      const disableCrop = !!mapCanvasFromDom || edgeExport;
+      const disableCrop = !!mapCanvasFromDom;
       const expectedCanvasW = disableCrop ? canvasPixelWidth : Math.round(containerWidth * rawScaleX);
       const expectedCanvasH = disableCrop ? canvasPixelHeight : Math.round(containerHeight * rawScaleY);
 
