@@ -4576,7 +4576,12 @@ function exportSVG() {
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
       cctx.drawImage(mapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const trimInfo = isFirefoxBrowser()
+      const useFirefoxTrim = isFirefoxBrowser();
+      if (useFirefoxTrim) {
+        console.info("SVG export debug: Firefox centering branch executed.");
+        showPopup("Debug: Firefox SVG centering branch executed.", "success");
+      }
+      const trimInfo = useFirefoxTrim
         ? trimHorizontalWhitespaceWithOffset(cropped, 0.3)
         : { canvas: cropped, leftTrim: 0 };
       const exportCanvas = trimInfo.canvas || cropped;
