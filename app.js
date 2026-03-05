@@ -3534,34 +3534,13 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
-    function isEdgeBrowser() {
-    try {
-      const ua = navigator.userAgent || "";
-      return /edg\/|edge\//i.test(ua);
-    } catch (e) {
-      return false;
-    }
-    }
-
-    function notifyEdgeExportFixStatus(formatLabel = "Export") {
-    const executed = isEdgeBrowser();
-    const message = executed
-      ? `Edge export relocation update v2 executed (${formatLabel}).`
-      : `Edge export relocation update v2 not executed (${formatLabel}) - non-Edge browser detected.`;
-    try { showPopup(message, "success"); } catch (e) {}
-    console.info(message);
-    }
-
     function buildHtml2CanvasOptions(wrapper) {
     const rect = wrapper.getBoundingClientRect();
     const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
     const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
     const isFirefox = isFirefoxBrowser();
-    const isEdge = isEdgeBrowser();
     return {
-      scale: (isFirefox || isEdge)
-        ? Math.min(1.25, Math.max(1, window.devicePixelRatio || 1))
-        : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
+      scale: isFirefox ? Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)) : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
       useCORS: true,
       foreignObjectRendering: false,
       logging: false,
@@ -3598,25 +3577,21 @@ window.addEventListener('load', resetInitialScrollPositions);
       const expectedH = Math.round(cssH * rawScaleY);
       const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
       const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
-      const edgeExport = isEdgeBrowser();
-      const baseOffsetX = edgeExport ? Math.max(0, Math.round((mapCanvas.width - baseCropW) / 2)) : 0;
-      const baseOffsetY = edgeExport ? Math.max(0, Math.round((mapCanvas.height - cropH) / 2)) : 0;
       const sideCropPx = Math.max(
         0,
-        edgeExport ? 0 : Math.min(
+        Math.min(
           Math.floor(baseCropW * 0.2),
           Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
         )
       );
-      const cropX = Math.max(0, baseOffsetX + sideCropPx);
-      const cropY = Math.max(0, baseOffsetY);
+      const cropX = Math.max(0, sideCropPx);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(mapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(mapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
       const W = cropW;
       const H = cropH;
@@ -3624,8 +3599,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
       wrapper.style.width = W + 'px';
-      if (isFirefoxBrowser() || isEdgeBrowser()) {
-        // Firefox/Edge: keep export node on-screen for reliable html2canvas capture.
+      if (isFirefoxBrowser()) {
+        // Firefox: keep export node on-screen for reliable html2canvas capture.
         wrapper.style.transform = 'none';
         wrapper.style.position = 'fixed';
         wrapper.style.left = '0';
@@ -3712,7 +3687,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
         const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY) - cropY);
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
         const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
 
@@ -3791,7 +3766,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const mapRect = mapEl.getBoundingClientRect();
         const srcRect = src.getBoundingClientRect();
         const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
-        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY) - cropY);
+        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
         const w = Math.max(20, Math.round(srcRect.width * rawScaleX));
         const h = Math.max(24, Math.round(srcRect.height * rawScaleY));
 
@@ -3858,7 +3833,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           bottomCss = Math.max(0, mapRect.height - (topCss + srcHeightCss));
         }
         const left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
-        const top = Math.max(0, Math.round(topCss * rawScaleY) - cropY);
+        const top = Math.max(0, Math.round(topCss * rawScaleY));
         const w = Math.max(70, Math.round(srcWidthCss * rawScaleX));
         const h = Math.max(20, Math.round(srcHeightCss * rawScaleY));
         const bottomRaw = Math.max(0, Math.round((bottomCss == null ? 8 : bottomCss) * rawScaleY));
@@ -4099,7 +4074,6 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (loader) setDynamicStyle(loader, { display: "none" });
     }
     function exportMap() {
-      notifyEdgeExportFixStatus("PNG");
       showLoading("Exporting map as PNG...");
       compositeExportElement(wrapper => {
         html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
@@ -4121,7 +4095,6 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
       function exportPDF() {
-        notifyEdgeExportFixStatus("PDF");
         showLoading("Exporting map as PDF...");
         compositeExportElement(wrapper => {
             html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
@@ -4221,7 +4194,6 @@ function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
 
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
-  notifyEdgeExportFixStatus("SVG");
   showLoading("Exporting map as SVG...");
 
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
@@ -4304,9 +4276,6 @@ function exportSVG() {
       const rawScaleX = containerWidth > 0 ? (canvasPixelWidth / containerWidth) : 1;
       const rawScaleY = containerHeight > 0 ? (canvasPixelHeight / containerHeight) : rawScaleX;
       const scale = Math.min(Math.max(rawScaleX, 1), 2);
-      const edgeExport = isEdgeBrowser();
-      const projectScaleX = edgeExport ? rawScaleX : scale;
-      const projectScaleY = edgeExport ? rawScaleY : scale;
 
       // title/legend heights (CSS -> canvas px)
       const marginCss = 10;
@@ -4334,18 +4303,16 @@ function exportSVG() {
       // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
       const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
       const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
-      const baseOffsetX = edgeExport ? Math.max(0, Math.round((canvasPixelWidth - baseCropW) / 2)) : 0;
-      const baseOffsetY = edgeExport ? Math.max(0, Math.round((canvasPixelHeight - cropH) / 2)) : 0;
       const sideCropPx = Math.max(
         0,
-        edgeExport ? 0 : Math.min(
+        Math.min(
           Math.floor(baseCropW * 0.2),
           Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
         )
       );
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
-      const cropX = baseOffsetX + sideCropPx;
-      const cropY = baseOffsetY;
+      const cropX = sideCropPx;
+      const cropY = 0; // top-align crop
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
@@ -4420,8 +4387,8 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * projectScaleX) - cropX - extraTrimX;
-        const y = (containerPoint.y * projectScaleY) - cropY + titleHeightPx;
+        const x = (containerPoint.x * scale) - cropX - extraTrimX;
+        const y = (containerPoint.y * scale) - cropY + titleHeightPx;
         return [x, y];
       }
 
