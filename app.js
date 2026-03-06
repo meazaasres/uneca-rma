@@ -2182,6 +2182,26 @@ function initDisclaimerDrag() {
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
   };
 
+  const beginDragAt = (clientX, clientY) => {
+    const mapRect = mapEl.getBoundingClientRect();
+    const discRect = disc.getBoundingClientRect();
+    dragging = true;
+    offsetX = clientX - discRect.left;
+    offsetY = clientY - discRect.top;
+    disc.dataset.fixedWidthPx = String(Math.max(120, Math.round(discRect.width || disc.offsetWidth || 0)));
+    disc.classList.add('is-dragging');
+    if (map.dragging && map.dragging.enabled && map.dragging.enabled()) map.dragging.disable();
+    clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
+  };
+
+  const endDrag = () => {
+    if (!dragging) return false;
+    dragging = false;
+    disc.classList.remove('is-dragging');
+    if (map.dragging && map.dragging.enabled && !map.dragging.enabled()) map.dragging.enable();
+    return true;
+  };
+
   const onPointerMove = (e) => {
     if (!dragging) return;
     const mapRect = mapEl.getBoundingClientRect();
@@ -2192,13 +2212,10 @@ function initDisclaimerDrag() {
   };
 
   const onPointerUp = (e) => {
-    if (!dragging) return;
-    dragging = false;
-    disc.classList.remove('is-dragging');
+    if (!endDrag()) return;
     if (disc.releasePointerCapture) {
       try { disc.releasePointerCapture(e.pointerId); } catch (err) {}
     }
-    if (map.dragging && map.dragging.enabled && !map.dragging.enabled()) map.dragging.enable();
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('pointercancel', onPointerUp);
@@ -2206,24 +2223,74 @@ function initDisclaimerDrag() {
 
   const onPointerDown = (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    const mapRect = mapEl.getBoundingClientRect();
-    const discRect = disc.getBoundingClientRect();
-    dragging = true;
-    offsetX = e.clientX - discRect.left;
-    offsetY = e.clientY - discRect.top;
-    disc.dataset.fixedWidthPx = String(Math.max(120, Math.round(discRect.width || disc.offsetWidth || 0)));
-    disc.classList.add('is-dragging');
+    beginDragAt(e.clientX, e.clientY);
     if (disc.setPointerCapture) disc.setPointerCapture(e.pointerId);
-    if (map.dragging && map.dragging.enabled && map.dragging.enabled()) map.dragging.disable();
     window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
     e.preventDefault();
     e.stopPropagation();
-    clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
   };
 
-  disc.addEventListener('pointerdown', onPointerDown);
+  const onMouseMove = (e) => {
+    if (!dragging) return;
+    const mapRect = mapEl.getBoundingClientRect();
+    const nextLeft = e.clientX - mapRect.left - offsetX;
+    const nextTop = e.clientY - mapRect.top - offsetY;
+    clampAndApply(nextLeft, nextTop);
+    e.preventDefault();
+  };
+
+  const onMouseUp = () => {
+    if (!endDrag()) return;
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
+
+  const onMouseDown = (e) => {
+    if (e.button !== 0) return;
+    beginDragAt(e.clientX, e.clientY);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const onTouchMove = (e) => {
+    if (!dragging) return;
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    const mapRect = mapEl.getBoundingClientRect();
+    const nextLeft = touch.clientX - mapRect.left - offsetX;
+    const nextTop = touch.clientY - mapRect.top - offsetY;
+    clampAndApply(nextLeft, nextTop);
+    e.preventDefault();
+  };
+
+  const onTouchEnd = () => {
+    if (!endDrag()) return;
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('touchend', onTouchEnd);
+    window.removeEventListener('touchcancel', onTouchEnd);
+  };
+
+  const onTouchStart = (e) => {
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    beginDragAt(touch.clientX, touch.clientY);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  if ('PointerEvent' in window) {
+    disc.addEventListener('pointerdown', onPointerDown);
+  } else {
+    disc.addEventListener('mousedown', onMouseDown);
+    disc.addEventListener('touchstart', onTouchStart, { passive: false });
+  }
 }
 
 function runMapUiReflowPasses() {
