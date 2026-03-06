@@ -1532,6 +1532,8 @@ const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 const SIDEBAR_WIDTH_PX = 250;
 const MAP_OVERLAP_PX = 80;
 const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
+const HOME_VERTICAL_PADDING_PX = 10;
+const EDGE_HOME_VERTICAL_PADDING_EXTRA_PX = 8;
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
 const MAX_HOME_VIEW_RETRIES = 6;
@@ -1626,6 +1628,7 @@ function applyHomeView() {
     retries: homeViewRetryCount,
     hasViewport: hasUsableMapViewport()
   });
+  const homePadY = HOME_VERTICAL_PADDING_PX + (isEdgeBrowser() ? EDGE_HOME_VERTICAL_PADDING_EXTRA_PX : 0);
   if (!hasUsableMapViewport()) {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
     if (homeViewRetryCount < MAX_HOME_VIEW_RETRIES) {
@@ -1642,8 +1645,8 @@ function applyHomeView() {
     map.fitBounds(trimBoundsHorizontally(INITIAL_HOME_BOUNDS), {
       animate: false,
       // Keep north/south stable, align east/west to visible map area.
-      paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, 10],
-      paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, 10]
+      paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, homePadY],
+      paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, homePadY]
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
