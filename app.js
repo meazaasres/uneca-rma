@@ -3680,6 +3680,19 @@ window.addEventListener('load', resetInitialScrollPositions);
     } catch (e) {}
     }
 
+    function isExportTraceEnabled() {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const q = params.get("exportTrace");
+      if (q === "1" || q === "true") return true;
+      if (q === "0" || q === "false") return false;
+      const stored = window.localStorage ? window.localStorage.getItem("exportTrace") : null;
+      return stored === "1" || stored === "true";
+    } catch (e) {
+      return false;
+    }
+    }
+
     function alignMapCanvasForEdge(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
     const paneEl = mapEl.querySelector('.leaflet-map-pane');
