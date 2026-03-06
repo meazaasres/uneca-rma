@@ -5139,8 +5139,14 @@ function exportSVG() {
       const svg = document.createElementNS(svgNS, "svg");
       svg.setAttribute("xmlns", svgNS);
       svg.setAttribute("xmlns:xlink", XLINK);
-      svg.setAttribute("width", String(totalWidthPx));
-      svg.setAttribute("height", String(totalHeightPx));
+      const isFirefoxExport = isFirefoxBrowser();
+      svg.setAttribute("width", isFirefoxExport ? "100%" : String(totalWidthPx));
+      svg.setAttribute("height", isFirefoxExport ? "100%" : String(totalHeightPx));
+      if (isFirefoxExport) {
+        // Preserve authored dimensions for tools while letting Firefox center in viewport.
+        svg.setAttribute("data-export-width", String(totalWidthPx));
+        svg.setAttribute("data-export-height", String(totalHeightPx));
+      }
       svg.setAttribute("style", "display:block;margin:0 auto;");
       svg.setAttribute("viewBox", `0 0 ${totalWidthPx} ${totalHeightPx}`);
       svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
