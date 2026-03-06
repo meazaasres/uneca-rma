@@ -4874,28 +4874,30 @@ function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
   }
   const px = imgData.data;
   const maxTrimPx = Math.max(0, Math.floor(w * Math.max(0, Math.min(0.45, maxTrimRatio))));
-  const nonWhiteThreshold = Math.max(2, Math.floor(h * 0.002));
+  const nonBlankThreshold = Math.max(2, Math.floor(h * 0.002));
 
-  function isMostlyWhiteColumn(x) {
-    let nonWhite = 0;
+  function isMostlyBlankColumn(x) {
+    let nonBlank = 0;
     for (let y = 0; y < h; y++) {
       const idx = ((y * w) + x) * 4;
       const r = px[idx];
       const g = px[idx + 1];
       const b = px[idx + 2];
       const a = px[idx + 3];
-      if (!(a >= 250 && r >= 250 && g >= 250 && b >= 250)) {
-        nonWhite++;
-        if (nonWhite > nonWhiteThreshold) return false;
+      // Count transparent and near-white pixels as blank export margin.
+      const blank = (a <= 8) || (a >= 248 && r >= 248 && g >= 248 && b >= 248);
+      if (!blank) {
+        nonBlank++;
+        if (nonBlank > nonBlankThreshold) return false;
       }
     }
     return true;
   }
 
   let left = 0;
-  while (left < maxTrimPx && isMostlyWhiteColumn(left)) left++;
+  while (left < maxTrimPx && isMostlyBlankColumn(left)) left++;
   let right = w - 1;
-  while (right >= (w - maxTrimPx) && isMostlyWhiteColumn(right)) right--;
+  while (right >= (w - maxTrimPx) && isMostlyBlankColumn(right)) right--;
   const trimmedW = Math.max(1, right - left + 1);
   if (left === 0 && trimmedW === w) return { canvas: sourceCanvas, leftTrim: 0 };
 
@@ -5049,7 +5051,7 @@ function exportSVG() {
       const cctx = cropped.getContext('2d');
       cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
       const trimInfo = isFirefoxBrowser()
-        ? trimHorizontalWhitespaceWithOffset(cropped, 0.28)
+        ? trimHorizontalWhitespaceWithOffset(cropped, 0.4)
         : { canvas: cropped, leftTrim: 0 };
       const exportCanvas = trimInfo.canvas || cropped;
       const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
@@ -5062,6 +5064,13 @@ function exportSVG() {
       const totalWidthPx  = isFirefoxBrowser() ? Math.max(usedCanvasWidth, cropW) : usedCanvasWidth;
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
       const contentOffsetX = Math.max(0, Math.round((totalWidthPx - usedCanvasWidth) / 2));
+
+      if (isFirefoxBrowser() && isExportTraceEnabled()) {
+        showPopup(
+          `[export-trace] Firefox SVG align | leftTrim:${extraTrimX}px usedW:${usedCanvasWidth}px totalW:${totalWidthPx}px offsetX:${contentOffsetX}px`,
+          "success"
+        );
+      }
 
       const svg = document.createElementNS(svgNS, "svg");
       svg.setAttribute("xmlns", svgNS);
