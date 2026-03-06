@@ -4935,6 +4935,9 @@ function exportSVG() {
     hasGeojson: !!geojsonData,
     timestamp: new Date().toISOString()
   });
+  if (isExportTraceEnabled()) {
+    showPopup("[export-trace] SVG export started", "success");
+  }
   showLoading("Exporting map as SVG...");
 
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
@@ -4991,6 +4994,9 @@ function exportSVG() {
     logExportTrace("svg.leafletImage.callback", { hasError: !!err, hasCanvas: !!mapCanvas });
     if (err || !mapCanvas) {
       logExportTrace("svg.raster-failed-fallback-png", { error: err ? String(err) : null });
+        if (isExportTraceEnabled()) {
+          showPopup("[export-trace] Raster capture failed, fallback to PNG", "error");
+        }
       showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
       hideLoading();
       return exportMap();
@@ -5000,6 +5006,9 @@ function exportSVG() {
     const canvasDataUrlCheck = tryCanvasToDataURL(mapCanvas);
     if (!canvasDataUrlCheck) {
       logExportTrace("svg.canvas-tainted-fallback-png");
+      if (isExportTraceEnabled()) {
+        showPopup("[export-trace] Canvas tainted, fallback to PNG", "error");
+      }
       showPopup("Export blocked by cross-origin tiles. Enable CORS or use PNG fallback.", "error");
       hideLoading();
       return exportMap();
@@ -5517,9 +5526,15 @@ function exportSVG() {
       }, 1000);
 
       logExportTrace("svg.success");
+      if (isExportTraceEnabled()) {
+        showPopup("[export-trace] SVG export completed", "success");
+      }
       hideLoading();
     } catch (ex) {
       logExportTrace("svg.failed-fallback-png", { error: ex ? String(ex) : null });
+      if (isExportTraceEnabled()) {
+        showPopup("[export-trace] SVG failed, fallback to PNG", "error");
+      }
       console.error("SVG export failed:", ex);
       showPopup("SVG export failed. Falling back to PNG.", "error");
       hideLoading();
