@@ -3803,18 +3803,16 @@ window.addEventListener('load', resetInitialScrollPositions);
       const mapEl = document.getElementById('map');
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
-      const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
       const adjustedMapCanvas = isEdge
-        // Edge: retain fractional zoom scale correction, skip transform composition.
-        ? alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas)
+        // Edge: align directly to displayed tile transform to match large fractional translations.
+        ? alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true })
         : alignMapCanvasToDisplayedTileTransform(
-            alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas),
+            alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
             mapEl,
             { allowTranslation: true }
           );
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-fractional-no-transform" : "full",
-        appliedEdgeAlign: edgeAlignedCanvas !== mapCanvas
+        mode: isEdge ? "edge-tile-transform" : "full"
       });
       showExportCorrectionDebugMessage(debugInfo);
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
@@ -4518,18 +4516,16 @@ function exportSVG() {
       // authoritative canvas pixels from leafletImage
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
-      const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
       const adjustedMapCanvas = isEdge
-        // Edge: retain fractional zoom scale correction, skip transform composition.
-        ? alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas)
+        // Edge: align directly to displayed tile transform to match large fractional translations.
+        ? alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true })
         : alignMapCanvasToDisplayedTileTransform(
-            alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas),
+            alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
             mapEl,
             { allowTranslation: true }
           );
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-fractional-no-transform" : "full",
-        appliedEdgeAlign: edgeAlignedCanvas !== mapCanvas
+        mode: isEdge ? "edge-tile-transform" : "full"
       });
       showExportCorrectionDebugMessage(debugInfo);
       const canvasPixelWidth  = adjustedMapCanvas.width;
