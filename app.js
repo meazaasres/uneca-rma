@@ -4617,6 +4617,38 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         octx.drawImage(cropped, 0, titleH);
 
+        // Draw a simple north arrow on exported map image (top-right).
+        {
+          const naW = 34;
+          const naH = 44;
+          const naX = Math.max(6, outW - naW - 12);
+          const naY = titleH + 12;
+          octx.fillStyle = '#ffffff';
+          octx.strokeStyle = '#cfd6e4';
+          octx.lineWidth = 1;
+          octx.beginPath();
+          octx.rect(naX, naY, naW, naH);
+          octx.fill();
+          octx.stroke();
+
+          octx.fillStyle = '#1e3a8a';
+          octx.font = '700 12px Segoe UI, sans-serif';
+          octx.textAlign = 'center';
+          octx.textBaseline = 'top';
+          octx.fillText('N', naX + Math.round(naW / 2), naY + 4);
+
+          const triTop = naY + 20;
+          const triW = 12;
+          const triH = 12;
+          const triCX = naX + Math.round(naW / 2);
+          octx.beginPath();
+          octx.moveTo(triCX, triTop);
+          octx.lineTo(triCX - Math.round(triW / 2), triTop + triH);
+          octx.lineTo(triCX + Math.round(triW / 2), triTop + triH);
+          octx.closePath();
+          octx.fill();
+        }
+
         if (disclaimerText) {
           const pad = 6;
           const maxW = Math.max(120, Math.round(outW * 0.42));
@@ -4628,7 +4660,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           const lines = wrapCanvasText(octx, disclaimerText, maxW - (pad * 2)).slice(0, maxLines);
           const boxH = (lines.length * lineH) + (pad * 2);
           const x = 8;
-          const y = titleH + cropH - boxH - 8;
+          const y = titleH + cropH - boxH - 18;
           octx.fillStyle = 'rgba(255,255,255,0.93)';
           octx.fillRect(x, y, maxW, boxH);
           octx.fillStyle = '#333333';
