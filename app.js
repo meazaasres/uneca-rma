@@ -4653,11 +4653,16 @@ window.addEventListener('load', resetInitialScrollPositions);
           const pad = 6;
           const maxW = Math.max(120, Math.round(outW * 0.42));
           const lineH = 13;
-          const maxLines = 6;
+          const maxLines = 5;
           octx.font = 'italic 11px Segoe UI, sans-serif';
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
-          const lines = wrapCanvasText(octx, disclaimerText, maxW - (pad * 2)).slice(0, maxLines);
+          const wrapped = wrapCanvasText(octx, disclaimerText, maxW - (pad * 2));
+          const truncated = wrapped.length > maxLines;
+          const lines = wrapped.slice(0, maxLines);
+          if (truncated && lines.length) {
+            lines[lines.length - 1] = lines[lines.length - 1].replace(/[\s.,;:!?-]*$/, '') + '...';
+          }
           const boxH = (lines.length * lineH) + (pad * 2);
           const x = 8;
           const y = titleH + cropH - boxH - 18;
@@ -4672,7 +4677,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         if (scaleText) {
           const boxW = 108;
           const boxH = 20;
-          const x = Math.round((outW - boxW) / 2);
+          const x = Math.max(0, Math.min(outW - boxW, Math.round((outW - boxW) / 2) + 10));
           const y = titleH + cropH - boxH - 8;
           octx.fillStyle = 'rgba(255,255,255,0.95)';
           octx.fillRect(x, y, boxW, boxH);
