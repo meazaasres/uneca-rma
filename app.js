@@ -4651,7 +4651,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         if (disclaimerText) {
           const pad = 6;
-          const maxW = Math.max(120, Math.round(outW * 0.42));
+          const maxW = Math.max(120, Math.round(outW * 0.46));
           const lineH = 13;
           const maxLines = 5;
           octx.font = 'italic 11px Segoe UI, sans-serif';
@@ -4665,7 +4665,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           }
           const boxH = (lines.length * lineH) + (pad * 2);
           const x = 8;
-          const y = titleH + cropH - boxH - 18;
+          const y = titleH + cropH - boxH - 28;
           octx.fillStyle = 'rgba(255,255,255,0.93)';
           octx.fillRect(x, y, maxW, boxH);
           octx.fillStyle = '#333333';
@@ -4677,7 +4677,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         if (scaleText) {
           const boxW = 108;
           const boxH = 20;
-          const x = Math.max(0, Math.min(outW - boxW, Math.round((outW - boxW) / 2) + 10));
+          const x = Math.max(0, Math.min(outW - boxW, Math.round((outW - boxW) / 2) + 15));
           const y = titleH + cropH - boxH - 8;
           octx.fillStyle = 'rgba(255,255,255,0.95)';
           octx.fillRect(x, y, boxW, boxH);
