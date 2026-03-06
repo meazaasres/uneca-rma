@@ -3718,6 +3718,18 @@ window.addEventListener('load', resetInitialScrollPositions);
     return out;
     }
 
+    function alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl) {
+    if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
+    // Edge can need both tile-level transform and a small map-pane translation.
+    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
+    const paneAligned = alignMapCanvasForEdge(tileAligned, mapEl);
+    logEdgeExportDebug("alignMapCanvasForEdgeDisplayedState", {
+      tileAlignedChanged: tileAligned !== mapCanvas,
+      paneAlignedChanged: paneAligned !== tileAligned
+    });
+    return paneAligned;
+    }
+
     function getExportCorrectionDebug(mapCanvas, mapEl) {
     const info = {
       edge: isEdgeBrowser(),
@@ -3804,15 +3816,15 @@ window.addEventListener('load', resetInitialScrollPositions);
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
       const adjustedMapCanvas = isEdge
-        // Edge: align directly to displayed tile transform to match large fractional translations.
-        ? alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true })
+        // Edge: combine tile transform with map-pane drift correction.
+        ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
         : alignMapCanvasToDisplayedTileTransform(
             alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
             mapEl,
             { allowTranslation: true }
           );
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-tile-transform" : "full"
+        mode: isEdge ? "edge-tile-plus-pane" : "full"
       });
       showExportCorrectionDebugMessage(debugInfo);
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
@@ -4375,8 +4387,8 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const mapEl = document.getElementById('map');
         const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
-        const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
-        logEdgeExportDebug("pipeline.mode", { mode: "edge-direct-canvas" });
+        const adjustedMapCanvas = alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
+        logEdgeExportDebug("pipeline.mode", { mode: "edge-direct-canvas-tile-plus-pane" });
         showExportCorrectionDebugMessage(debugInfo);
 
         const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
@@ -4726,15 +4738,15 @@ function exportSVG() {
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
       const adjustedMapCanvas = isEdge
-        // Edge: align directly to displayed tile transform to match large fractional translations.
-        ? alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true })
+        // Edge: combine tile transform with map-pane drift correction.
+        ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
         : alignMapCanvasToDisplayedTileTransform(
             alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
             mapEl,
             { allowTranslation: true }
           );
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-tile-transform" : "full"
+        mode: isEdge ? "edge-tile-plus-pane" : "full"
       });
       showExportCorrectionDebugMessage(debugInfo);
       const canvasPixelWidth  = adjustedMapCanvas.width;
