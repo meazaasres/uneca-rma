@@ -3874,11 +3874,6 @@ window.addEventListener('load', resetInitialScrollPositions);
     try {
       console.info("Export correction debug:", debugInfo);
       logEdgeExportDebug("correction.debugInfo", debugInfo);
-      const z = Number.isFinite(debugInfo.zoom) ? debugInfo.zoom.toFixed(2) : "--";
-      const tz = Number.isFinite(debugInfo.tileZoom) ? String(debugInfo.tileZoom) : "--";
-      const sc = Number.isFinite(debugInfo.zoomScale) ? debugInfo.zoomScale.toFixed(4) : "--";
-      const msg = `Export corrections active | Edge:${debugInfo.edge ? "yes" : "no"} | pane(${debugInfo.paneOffsetX},${debugInfo.paneOffsetY}) | zoom:${z} tileZoom:${tz} scale:${sc}`;
-      showPopup(msg, "success");
       if (isEdgeBrowser() && isEdgeExportDebugEnabled()) {
         console.info(`[edge-export-debug] toggle active via ?${EDGE_EXPORT_DEBUG_QUERY_KEY}=1 or localStorage.${EDGE_EXPORT_DEBUG_STORAGE_KEY}=1`);
       }
