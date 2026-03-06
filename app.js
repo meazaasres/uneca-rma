@@ -3643,7 +3643,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     };
     }
 
-    function alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl) {
+    function alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, options = {}) {
     if (!mapCanvas || !mapEl) return mapCanvas;
     const tilePane = mapEl.querySelector('.leaflet-tile-pane');
     if (!tilePane) return mapCanvas;
@@ -3658,8 +3658,9 @@ window.addEventListener('load', resetInitialScrollPositions);
     const combined = compose2DTransform(paneM, levelM);
     const sx = Number.isFinite(combined.a) ? combined.a : 1;
     const sy = Number.isFinite(combined.d) ? combined.d : 1;
-    const tx = Number.isFinite(combined.e) ? combined.e : 0;
-    const ty = Number.isFinite(combined.f) ? combined.f : 0;
+    const allowTranslation = options && options.allowTranslation !== false;
+    const tx = allowTranslation && Number.isFinite(combined.e) ? combined.e : 0;
+    const ty = allowTranslation && Number.isFinite(combined.f) ? combined.f : 0;
 
     if (Math.abs(sx - 1) < 1e-4 && Math.abs(sy - 1) < 1e-4 && Math.abs(tx) < 0.5 && Math.abs(ty) < 0.5) {
       return mapCanvas;
@@ -3759,7 +3760,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
       const zoomAlignedCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
-      const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(zoomAlignedCanvas, mapEl);
+      const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(zoomAlignedCanvas, mapEl, {
+        // Edge already gets explicit pane alignment above; reapplying tile translation can shift export.
+        allowTranslation: !isEdgeBrowser()
+      });
       showExportCorrectionDebugMessage(debugInfo);
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
       const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
@@ -4463,7 +4467,10 @@ function exportSVG() {
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
       const zoomAlignedCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
-      const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(zoomAlignedCanvas, mapEl);
+      const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(zoomAlignedCanvas, mapEl, {
+        // Edge already gets explicit pane alignment above; reapplying tile translation can shift export.
+        allowTranslation: !isEdgeBrowser()
+      });
       showExportCorrectionDebugMessage(debugInfo);
       const canvasPixelWidth  = adjustedMapCanvas.width;
       const canvasPixelHeight = adjustedMapCanvas.height;
