@@ -4923,6 +4923,50 @@ function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
   return { canvas: trimmed, leftTrim: left };
 }
 
+function getHorizontalInkCenterShift(sourceCanvas) {
+  if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") return 0;
+  const w = Math.max(1, sourceCanvas.width | 0);
+  const h = Math.max(1, sourceCanvas.height | 0);
+  const ctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return 0;
+
+  let imgData;
+  try {
+    imgData = ctx.getImageData(0, 0, w, h);
+  } catch (e) {
+    return 0;
+  }
+  const px = imgData.data;
+  const nonBlankThreshold = Math.max(2, Math.floor(h * 0.002));
+
+  function isMostlyBlankColumn(x) {
+    let nonBlank = 0;
+    for (let y = 0; y < h; y++) {
+      const idx = ((y * w) + x) * 4;
+      const r = px[idx];
+      const g = px[idx + 1];
+      const b = px[idx + 2];
+      const a = px[idx + 3];
+      const blank = (a <= 8) || (a >= 248 && r >= 248 && g >= 248 && b >= 248);
+      if (!blank) {
+        nonBlank++;
+        if (nonBlank > nonBlankThreshold) return false;
+      }
+    }
+    return true;
+  }
+
+  let left = 0;
+  while (left < w && isMostlyBlankColumn(left)) left++;
+  let right = w - 1;
+  while (right >= 0 && isMostlyBlankColumn(right)) right--;
+  if (left >= w || right < 0 || right <= left) return 0;
+
+  const inkWidth = right - left + 1;
+  const desiredLeft = (w - inkWidth) / 2;
+  return Math.round(desiredLeft - left);
+}
+
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
   showLoading("Exporting map as SVG...");
@@ -5077,10 +5121,17 @@ function exportSVG() {
       const totalWidthPx  = isFirefoxBrowser() ? Math.max(usedCanvasWidth, cropW) : usedCanvasWidth;
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
       const contentOffsetX = Math.max(0, Math.round((totalWidthPx - usedCanvasWidth) / 2));
+      const firefoxInkCenterShiftX = isFirefoxBrowser() ? getHorizontalInkCenterShift(exportCanvas) : 0;
+      const minContentOffsetX = 0;
+      const maxContentOffsetX = Math.max(0, totalWidthPx - usedCanvasWidth);
+      const alignedContentOffsetX = Math.max(
+        minContentOffsetX,
+        Math.min(maxContentOffsetX, contentOffsetX + firefoxInkCenterShiftX)
+      );
 
       if (isFirefoxBrowser() && isExportTraceEnabled()) {
         showPopup(
-          `[export-trace] Firefox SVG align | leftTrim:${extraTrimX}px usedW:${usedCanvasWidth}px totalW:${totalWidthPx}px offsetX:${contentOffsetX}px`,
+          `[export-trace] Firefox SVG align | leftTrim:${extraTrimX}px usedW:${usedCanvasWidth}px totalW:${totalWidthPx}px offsetX:${alignedContentOffsetX}px inkShift:${firefoxInkCenterShiftX}px`,
           "success"
         );
       }
@@ -5124,7 +5175,7 @@ function exportSVG() {
       const img = document.createElementNS(svgNS, "image");
       img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
       img.setAttribute("href", imgDataUrl);
-      img.setAttribute("x", String(contentOffsetX));
+      img.setAttribute("x", String(alignedContentOffsetX));
       img.setAttribute("y", String(titleHeightPx));
       img.setAttribute("width", String(usedCanvasWidth));
       img.setAttribute("height", String(usedCanvasHeight));
@@ -5135,7 +5186,7 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX + contentOffsetX;
+        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX;
         const y = (containerPoint.y * rawScaleY) - cropY + titleHeightPx;
         return [x, y];
       }
@@ -5225,7 +5276,7 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = contentOffsetX + Math.max(6, Math.round(8 * rawScaleX));
+        const discX = alignedContentOffsetX + Math.max(6, Math.round(8 * rawScaleX));
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
         let discWidth = Math.max(
           Math.round(120 * uiScale),
@@ -5317,7 +5368,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + contentOffsetX);
+        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
         let naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
         const naYMin = titleHeightPx + 2;
         const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
@@ -5363,12 +5414,12 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + contentOffsetX);
+        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
         let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
-        const sbXMin = contentOffsetX;
-        const sbXMax = Math.max(sbXMin, contentOffsetX + usedCanvasWidth - sbW - 2);
+        const sbXMin = alignedContentOffsetX;
+        const sbXMax = Math.max(sbXMin, alignedContentOffsetX + usedCanvasWidth - sbW - 2);
         sbX = Math.max(sbXMin, Math.min(sbXMax, sbX));
         const sbYMin = titleHeightPx + 2;
         const sbYMax = Math.max(sbYMin, (titleHeightPx + usedCanvasHeight - sbH - 2));
@@ -5399,7 +5450,7 @@ function exportSVG() {
             // legend below map (render from current legend DOM so all layers/symbol types are included)
       if (legendEl && legendEl.children && legendEl.children.length) {
         const legendGroup = document.createElementNS(svgNS, "g");
-        const legendX = contentOffsetX + marginPx;
+        const legendX = alignedContentOffsetX + marginPx;
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
         const symSize = Math.max(8, Math.round(12 * uiScale));
         const fontSize = Math.max(10, Math.round(12 * uiScale));
