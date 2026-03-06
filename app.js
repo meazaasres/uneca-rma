@@ -3680,19 +3680,6 @@ window.addEventListener('load', resetInitialScrollPositions);
     } catch (e) {}
     }
 
-    function isExportTraceEnabled() {
-    try {
-      const params = new URLSearchParams(window.location.search || "");
-      const q = params.get("exportTrace");
-      if (q === "1" || q === "true") return true;
-      if (q === "0" || q === "false") return false;
-      const stored = window.localStorage ? window.localStorage.getItem("exportTrace") : null;
-      return stored === "1" || stored === "true";
-    } catch (e) {
-      return false;
-    }
-    }
-
     function alignMapCanvasForEdge(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
     const paneEl = mapEl.querySelector('.leaflet-map-pane');
@@ -3896,11 +3883,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     function showExportCorrectionDebugMessage(debugInfo) {
     if (!debugInfo) return;
     try {
-      console.info("Export correction debug:", debugInfo);
       logEdgeExportDebug("correction.debugInfo", debugInfo);
-      if (isEdgeBrowser() && isEdgeExportDebugEnabled()) {
-        console.info(`[edge-export-debug] toggle active via ?${EDGE_EXPORT_DEBUG_QUERY_KEY}=1 or localStorage.${EDGE_EXPORT_DEBUG_STORAGE_KEY}=1`);
-      }
     } catch (e) {}
     }
 
@@ -3993,7 +3976,6 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (!isEdgeBrowser()) return;
     const fmt = String(formatLabel || "export").toUpperCase();
     const reducedBy = Math.max(0, (baseCropW | 0) - (cropW | 0));
-    const msg = `Edge ${fmt} side-space reduction | each:${sideCropPx}px total:${reducedBy}px`;
     logEdgeExportDebug("space-reduction", {
       format: fmt,
       sideCropPx,
@@ -4001,7 +3983,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       cropW,
       reducedBy
     });
-    try { showPopup(msg, "success"); } catch (e) {}
     }
 
     function compositeExportElement(cb) {
@@ -5128,13 +5109,6 @@ function exportSVG() {
         minContentOffsetX,
         Math.min(maxContentOffsetX, contentOffsetX + firefoxInkCenterShiftX)
       );
-
-      if (isFirefoxBrowser() && isExportTraceEnabled()) {
-        showPopup(
-          `[export-trace] Firefox SVG align | leftTrim:${extraTrimX}px usedW:${usedCanvasWidth}px totalW:${totalWidthPx}px offsetX:${alignedContentOffsetX}px inkShift:${firefoxInkCenterShiftX}px`,
-          "success"
-        );
-      }
 
       const svg = document.createElementNS(svgNS, "svg");
       svg.setAttribute("xmlns", svgNS);
