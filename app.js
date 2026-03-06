@@ -13,6 +13,7 @@ const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
 const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
+const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
 const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
@@ -3650,6 +3651,15 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
+    function isChromeBrowser() {
+    try {
+      const ua = navigator.userAgent || "";
+      return /(chrome|crios)\//i.test(ua) && !/edg\//i.test(ua) && !/opr\//i.test(ua);
+    } catch (e) {
+      return false;
+    }
+    }
+
     function isEdgeExportDebugEnabled() {
     try {
       const params = new URLSearchParams(window.location.search || "");
@@ -3958,6 +3968,10 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (isEdgeBrowser()) {
       const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
       return Math.min(EDGE_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
+    }
+    if (isChromeBrowser()) {
+      const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
+      return Math.min(CHROME_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
     }
     return 0;
     }
