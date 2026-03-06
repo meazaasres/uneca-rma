@@ -5057,8 +5057,11 @@ function exportSVG() {
       const usedCanvasWidth  = Math.max(1, exportCanvas.width);
       const usedCanvasHeight = Math.max(1, exportCanvas.height);
 
-      const totalWidthPx  = usedCanvasWidth;
+      // Firefox can trim asymmetric side whitespace; center trimmed map content
+      // in the original crop frame to match Chrome/Edge visual alignment.
+      const totalWidthPx  = isFirefoxBrowser() ? Math.max(usedCanvasWidth, cropW) : usedCanvasWidth;
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
+      const contentOffsetX = Math.max(0, Math.round((totalWidthPx - usedCanvasWidth) / 2));
 
       const svg = document.createElementNS(svgNS, "svg");
       svg.setAttribute("xmlns", svgNS);
@@ -5099,7 +5102,7 @@ function exportSVG() {
       const img = document.createElementNS(svgNS, "image");
       img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
       img.setAttribute("href", imgDataUrl);
-      img.setAttribute("x", "0");
+      img.setAttribute("x", String(contentOffsetX));
       img.setAttribute("y", String(titleHeightPx));
       img.setAttribute("width", String(usedCanvasWidth));
       img.setAttribute("height", String(usedCanvasHeight));
@@ -5110,7 +5113,7 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX;
+        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX + contentOffsetX;
         const y = (containerPoint.y * rawScaleY) - cropY + titleHeightPx;
         return [x, y];
       }
@@ -5200,7 +5203,7 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = Math.max(6, Math.round(8 * rawScaleX));
+        const discX = contentOffsetX + Math.max(6, Math.round(8 * rawScaleX));
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
         let discWidth = Math.max(
           Math.round(120 * uiScale),
@@ -5292,7 +5295,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
+        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + contentOffsetX);
         let naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
         const naYMin = titleHeightPx + 2;
         const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
@@ -5338,12 +5341,13 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX);
+        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + contentOffsetX);
         let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
-        const sbXMax = Math.max(0, usedCanvasWidth - sbW - 2);
-        sbX = Math.max(0, Math.min(sbXMax, sbX));
+        const sbXMin = contentOffsetX;
+        const sbXMax = Math.max(sbXMin, contentOffsetX + usedCanvasWidth - sbW - 2);
+        sbX = Math.max(sbXMin, Math.min(sbXMax, sbX));
         const sbYMin = titleHeightPx + 2;
         const sbYMax = Math.max(sbYMin, (titleHeightPx + usedCanvasHeight - sbH - 2));
         sbY = Math.max(sbYMin, Math.min(sbYMax, sbY));
@@ -5373,7 +5377,7 @@ function exportSVG() {
             // legend below map (render from current legend DOM so all layers/symbol types are included)
       if (legendEl && legendEl.children && legendEl.children.length) {
         const legendGroup = document.createElementNS(svgNS, "g");
-        const legendX = marginPx;
+        const legendX = contentOffsetX + marginPx;
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
         const symSize = Math.max(8, Math.round(12 * uiScale));
         const fontSize = Math.max(10, Math.round(12 * uiScale));
