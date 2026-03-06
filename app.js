@@ -1494,6 +1494,7 @@ const MAX_HOME_VIEW_RETRIES = 6;
 const MAX_BOUNDS_RETRIES = 10;
 let homeViewRetryCount = 0;
 let maxBoundsRetryCount = 0;
+let maxBoundsDeferredHooked = false;
 
 function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   if (!bounds || typeof bounds.getSouthWest !== "function" || typeof bounds.getNorthEast !== "function") {
@@ -1563,7 +1564,15 @@ function applyMaxBoundsSafely() {
         applyMaxBoundsSafely();
       }, 50);
     } else {
-      console.warn("setMaxBounds skipped after repeated invalid center state", e);
+      if (!maxBoundsDeferredHooked) {
+        maxBoundsDeferredHooked = true;
+        try { map.once("load", applyMaxBoundsSafely); } catch (err) {}
+        try { map.once("resize", applyMaxBoundsSafely); } catch (err) {}
+        setTimeout(() => {
+          maxBoundsRetryCount = 0;
+          applyMaxBoundsSafely();
+        }, 300);
+      }
     }
   }
 }
@@ -1869,7 +1878,7 @@ const ExactScaleControl = L.Control.extend({
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
     this._map.on("zoom move resize", this._update, this);
-    this._update();
+    setTimeout(() => this._update(), 0);
     return container;
   },
   onRemove: function(controlMap) {
@@ -1878,14 +1887,29 @@ const ExactScaleControl = L.Control.extend({
   _update: function() {
     if (!this._map || !this._value) return;
     const size = this._map.getSize();
+    const sx = Number(size && size.x);
+    const sy = Number(size && size.y);
+    if (!Number.isFinite(sx) || !Number.isFinite(sy) || sx <= 0 || sy <= 0) {
+      this._value.textContent = "--";
+      return;
+    }
     const y = Math.max(0, size.y - 24);
     const x = Math.max(0, Math.round((size.x - this.options.widthPx) / 2));
     const p1 = L.point(x, y);
     const p2 = L.point(x + this.options.widthPx, y);
-    const ll1 = this._map.containerPointToLatLng(p1);
-    const ll2 = this._map.containerPointToLatLng(p2);
-    const meters = this._map.distance(ll1, ll2);
-    this._value.textContent = formatScaleDistance(meters);
+    try {
+      const ll1 = this._map.containerPointToLatLng(p1);
+      const ll2 = this._map.containerPointToLatLng(p2);
+      const meters = this._map.distance(ll1, ll2);
+      this._value.textContent = formatScaleDistance(meters);
+    } catch (e) {
+      this._value.textContent = "--";
+      logEdgeExportDebug("scaleControl.updateSkipped", {
+        reason: "invalid-map-geometry",
+        sizeX: sx,
+        sizeY: sy
+      });
+    }
   }
 });
 const scaleControl = new ExactScaleControl({ widthPx: 160 });
