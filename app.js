@@ -12,6 +12,9 @@ const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
+const EXEC_TRACE_TOKEN = "20260306-92-temp-trace";
+const EXEC_TRACE_QUERY_KEY = "execTrace";
+const EXEC_TRACE_STORAGE_KEY = "execTrace";
 const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
 const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
@@ -124,6 +127,47 @@ function setDynamicStyle(el, styleObj) {
   });
   if (parts.length) upsertDynamicRule(el, parts.join(";"));
 }
+
+function isExecTraceEnabled() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const q = params.get(EXEC_TRACE_QUERY_KEY);
+    if (q === "1" || q === "true") {
+      if (window.localStorage) window.localStorage.setItem(EXEC_TRACE_STORAGE_KEY, "1");
+      return true;
+    }
+    if (q === "0" || q === "false") {
+      if (window.localStorage) window.localStorage.removeItem(EXEC_TRACE_STORAGE_KEY);
+      return false;
+    }
+    const stored = window.localStorage ? window.localStorage.getItem(EXEC_TRACE_STORAGE_KEY) : null;
+    return stored === "1" || stored === "true";
+  } catch (e) {
+    return false;
+  }
+}
+
+function traceExec(stage, payload) {
+  if (!isExecTraceEnabled()) return;
+  const details = payload || {};
+  try {
+    window.__RMA_EXEC_TRACE = {
+      token: EXEC_TRACE_TOKEN,
+      stage: String(stage || ""),
+      payload: details,
+      at: new Date().toISOString()
+    };
+  } catch (e) {}
+  try {
+    console.info(`[exec-trace ${EXEC_TRACE_TOKEN}] ${stage}`, details);
+  } catch (e) {}
+}
+
+traceExec("script-evaluated", {
+  ua: navigator.userAgent || "",
+  href: window.location.href || ""
+});
+
 function sanitizeId(str) {
   return String(str).replace(/[^\w\-]/g, "_");
 }
@@ -1578,6 +1622,10 @@ function applyMaxBoundsSafely() {
 }
 
 function applyHomeView() {
+  traceExec("applyHomeView.enter", {
+    retries: homeViewRetryCount,
+    hasViewport: hasUsableMapViewport()
+  });
   if (!hasUsableMapViewport()) {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
     if (homeViewRetryCount < MAX_HOME_VIEW_RETRIES) {
@@ -3617,6 +3665,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const tbl  = document.getElementById('table-container');
   const wrap = document.getElementById('classification-wrapper');
 
+  traceExec("dom-content-loaded", {
+    edge: /edg\//i.test(navigator.userAgent || "")
+  });
+
   if (wrap && btnClassTable) {
     setDynamicStyle(wrap, { display: "block" });
     btnClassTable.classList.add('active');
@@ -4478,6 +4530,10 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function buildEdgeDirectExportCanvas(cb, onError) {
+      traceExec("edge-direct-export.enter", {
+        layer: currentLayerName || "",
+        attr: currentAttribute || ""
+      });
       leafletImage(map, (err, mapCanvas) => {
         if (err || !mapCanvas) {
           if (typeof onError === "function") onError(err || new Error("Map canvas unavailable"));
