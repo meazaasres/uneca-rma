@@ -1490,6 +1490,8 @@ const MAP_OVERLAP_PX = 80;
 const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
+const MAX_HOME_VIEW_RETRIES = 6;
+let homeViewRetryCount = 0;
 
 function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   if (!bounds || typeof bounds.getSouthWest !== "function" || typeof bounds.getNorthEast !== "function") {
@@ -1504,7 +1506,46 @@ function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   return L.latLngBounds([sw.lat, sw.lng + trim], [ne.lat, ne.lng - trim]);
 }
 
+function hasUsableMapViewport() {
+  if (!map || typeof map.getSize !== "function" || typeof map.getContainer !== "function") return false;
+  try {
+    const sz = map.getSize();
+    const container = map.getContainer();
+    const w = Number(sz && sz.x);
+    const h = Number(sz && sz.y);
+    const cw = Number(container && container.clientWidth);
+    const ch = Number(container && container.clientHeight);
+    return Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0 &&
+      Number.isFinite(cw) && Number.isFinite(ch) && cw > 0 && ch > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+function safePanInsideBounds(bounds, options) {
+  if (!map || typeof map.panInsideBounds !== "function" || !bounds) return;
+  try {
+    const c = map.getCenter();
+    if (!c || !Number.isFinite(c.lat) || !Number.isFinite(c.lng)) return;
+    map.panInsideBounds(bounds, options || { animate: false });
+  } catch (e) {
+    console.warn("panInsideBounds skipped due to unstable map center", e);
+  }
+}
+
 function applyHomeView() {
+  if (!hasUsableMapViewport()) {
+    map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
+    if (homeViewRetryCount < MAX_HOME_VIEW_RETRIES) {
+      homeViewRetryCount += 1;
+      setTimeout(() => {
+        try { map.invalidateSize({ pan: false }); } catch (e) {}
+        applyHomeView();
+      }, 40);
+    }
+    return;
+  }
+  homeViewRetryCount = 0;
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
     map.fitBounds(trimBoundsHorizontally(INITIAL_HOME_BOUNDS), {
       animate: false,
@@ -1516,7 +1557,7 @@ function applyHomeView() {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
   }
   map.panBy([0, 10], { animate: false });
-  map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
+  safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
 }
 
 function syncLayoutWithHeaderHeight() {
@@ -1567,7 +1608,7 @@ function fitToLayerExtent(layer) {
     paddingBottomRight: [0, 35]
   });
   map.panBy([0, 10], { animate: false });
-  map.panInsideBounds(MAP_NAV_BOUNDS, { animate: false });
+  safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
   return true;
 }
 
