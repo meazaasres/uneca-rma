@@ -2205,7 +2205,6 @@ function initDisclaimerDrag() {
   };
 
   const onPointerDown = (e) => {
-    if (!e.isPrimary) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const mapRect = mapEl.getBoundingClientRect();
     const discRect = disc.getBoundingClientRect();
@@ -2216,7 +2215,7 @@ function initDisclaimerDrag() {
     disc.classList.add('is-dragging');
     if (disc.setPointerCapture) disc.setPointerCapture(e.pointerId);
     if (map.dragging && map.dragging.enabled && map.dragging.enabled()) map.dragging.disable();
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
     e.preventDefault();
@@ -2224,7 +2223,7 @@ function initDisclaimerDrag() {
     clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
   };
 
-  disc.addEventListener('pointerdown', onPointerDown, { capture: true });
+  disc.addEventListener('pointerdown', onPointerDown);
 }
 
 function runMapUiReflowPasses() {
