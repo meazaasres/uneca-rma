@@ -4684,8 +4684,12 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         if (scaleText) {
           const sbRect = scaleControlEl ? scaleControlEl.getBoundingClientRect() : null;
-          const boxW = (sbRect && sbRect.width > 0) ? Math.max(90, Math.round(sbRect.width * rawScaleX)) : 108;
+          const sourceBoxW = (sbRect && sbRect.width > 0) ? Math.max(90, Math.round(sbRect.width * rawScaleX)) : 108;
           const boxH = (sbRect && sbRect.height > 0) ? Math.max(18, Math.round(sbRect.height * rawScaleY)) : 20;
+          const scaleFontPx = Math.max(8, Math.round(8 * rawScaleY));
+          octx.font = `${scaleFontPx}px Segoe UI, sans-serif`;
+          const measuredW = Math.ceil(octx.measureText(scaleText).width) + 14;
+          const boxW = Math.max(sourceBoxW, measuredW);
           const sbLeftCss = (sbRect && mapRect) ? (sbRect.left - mapRect.left) : ((cssW - (boxW / rawScaleX)) / 2);
           const sbTopCss = (sbRect && mapRect) ? (sbRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 8);
           let x = Math.round(sbLeftCss * rawScaleX) - cropX;
@@ -4698,7 +4702,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           octx.lineWidth = 1;
           octx.strokeRect(x, y, boxW, boxH);
           octx.fillStyle = '#102a43';
-          octx.font = '11px Segoe UI, sans-serif';
+          octx.font = `${scaleFontPx}px Segoe UI, sans-serif`;
           octx.textAlign = 'center';
           octx.textBaseline = 'middle';
           octx.fillText(scaleText, x + Math.round(boxW / 2), y + Math.round(boxH / 2));
