@@ -4693,7 +4693,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           const sbLeftCss = (sbRect && mapRect) ? (sbRect.left - mapRect.left) : ((cssW - (boxW / rawScaleX)) / 2);
           const sbTopCss = (sbRect && mapRect) ? (sbRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 8);
           let x = Math.round(sbLeftCss * rawScaleX) - cropX;
-          let y = titleH + Math.round(sbTopCss * rawScaleY);
+          let y = titleH + Math.round(sbTopCss * rawScaleY) - 4;
           x = Math.max(0, Math.min(outW - boxW, x));
           y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
           octx.fillStyle = 'rgba(255,255,255,0.95)';
