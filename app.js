@@ -11,6 +11,8 @@ const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
+const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
+const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -3542,6 +3544,26 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
+    function isEdgeExportDebugEnabled() {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const q = params.get(EDGE_EXPORT_DEBUG_QUERY_KEY);
+      if (q === "1" || q === "true") return true;
+      if (q === "0" || q === "false") return false;
+      const stored = window.localStorage ? window.localStorage.getItem(EDGE_EXPORT_DEBUG_STORAGE_KEY) : null;
+      return stored === "1" || stored === "true";
+    } catch (e) {
+      return false;
+    }
+    }
+
+    function logEdgeExportDebug(stage, payload) {
+    if (!isEdgeBrowser() || !isEdgeExportDebugEnabled()) return;
+    try {
+      console.info(`[edge-export-debug] ${stage}`, payload || {});
+    } catch (e) {}
+    }
+
     function alignMapCanvasForEdge(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
     const paneEl = mapEl.querySelector('.leaflet-map-pane');
@@ -3550,6 +3572,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     const paneRect = paneEl.getBoundingClientRect();
     const offsetX = Math.round(paneRect.left - mapRect.left);
     const offsetY = Math.round(paneRect.top - mapRect.top);
+    logEdgeExportDebug("alignMapCanvasForEdge.offset", { offsetX, offsetY });
     if (Math.abs(offsetX) <= 1 && Math.abs(offsetY) <= 1) return mapCanvas;
 
     const aligned = document.createElement('canvas');
@@ -3666,6 +3689,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       return mapCanvas;
     }
 
+    logEdgeExportDebug("alignMapCanvasToDisplayedTileTransform.matrix", {
+      sx, sy, tx, ty, allowTranslation
+    });
+
     const out = document.createElement('canvas');
     out.width = mapCanvas.width;
     out.height = mapCanvas.height;
@@ -3717,11 +3744,15 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (!debugInfo) return;
     try {
       console.info("Export correction debug:", debugInfo);
+      logEdgeExportDebug("correction.debugInfo", debugInfo);
       const z = Number.isFinite(debugInfo.zoom) ? debugInfo.zoom.toFixed(2) : "--";
       const tz = Number.isFinite(debugInfo.tileZoom) ? String(debugInfo.tileZoom) : "--";
       const sc = Number.isFinite(debugInfo.zoomScale) ? debugInfo.zoomScale.toFixed(4) : "--";
       const msg = `Export corrections active | Edge:${debugInfo.edge ? "yes" : "no"} | pane(${debugInfo.paneOffsetX},${debugInfo.paneOffsetY}) | zoom:${z} tileZoom:${tz} scale:${sc}`;
       showPopup(msg, "success");
+      if (isEdgeBrowser() && isEdgeExportDebugEnabled()) {
+        console.info(`[edge-export-debug] toggle active via ?${EDGE_EXPORT_DEBUG_QUERY_KEY}=1 or localStorage.${EDGE_EXPORT_DEBUG_STORAGE_KEY}=1`);
+      }
     } catch (e) {}
     }
 
