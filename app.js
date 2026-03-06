@@ -11,6 +11,7 @@ const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
+const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
 const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
@@ -3572,8 +3573,19 @@ window.addEventListener('load', resetInitialScrollPositions);
     const paneRect = paneEl.getBoundingClientRect();
     const offsetX = Math.round(paneRect.left - mapRect.left);
     const offsetY = Math.round(paneRect.top - mapRect.top);
-    logEdgeExportDebug("alignMapCanvasForEdge.offset", { offsetX, offsetY });
+    const absMax = Math.max(Math.abs(offsetX), Math.abs(offsetY));
+    logEdgeExportDebug("alignMapCanvasForEdge.offset", {
+      offsetX,
+      offsetY,
+      absMax,
+      maxAllowed: EDGE_EXPORT_MAX_PANE_OFFSET_PX
+    });
     if (Math.abs(offsetX) <= 1 && Math.abs(offsetY) <= 1) return mapCanvas;
+    if (absMax > EDGE_EXPORT_MAX_PANE_OFFSET_PX) {
+      // Large pane offsets can be normal Leaflet map state, not export drift.
+      logEdgeExportDebug("alignMapCanvasForEdge.skipLargeOffset", { offsetX, offsetY });
+      return mapCanvas;
+    }
 
     const aligned = document.createElement('canvas');
     aligned.width = mapCanvas.width;
@@ -3789,11 +3801,19 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       const mapEl = document.getElementById('map');
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
+      const isEdge = isEdgeBrowser();
       const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
-      const zoomAlignedCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
-      const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(zoomAlignedCanvas, mapEl, {
-        // Edge already gets explicit pane alignment above; reapplying tile translation can shift export.
-        allowTranslation: !isEdgeBrowser()
+      const adjustedMapCanvas = isEdge
+        // Edge: keep corrections minimal to avoid cumulative shift.
+        ? edgeAlignedCanvas
+        : alignMapCanvasToDisplayedTileTransform(
+            alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas),
+            mapEl,
+            { allowTranslation: true }
+          );
+      logEdgeExportDebug("pipeline.mode", {
+        mode: isEdge ? "edge-minimal" : "full",
+        appliedEdgeAlign: edgeAlignedCanvas !== mapCanvas
       });
       showExportCorrectionDebugMessage(debugInfo);
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
@@ -4496,11 +4516,19 @@ function exportSVG() {
 
       // authoritative canvas pixels from leafletImage
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
+      const isEdge = isEdgeBrowser();
       const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
-      const zoomAlignedCanvas = alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas);
-      const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(zoomAlignedCanvas, mapEl, {
-        // Edge already gets explicit pane alignment above; reapplying tile translation can shift export.
-        allowTranslation: !isEdgeBrowser()
+      const adjustedMapCanvas = isEdge
+        // Edge: keep corrections minimal to avoid cumulative shift.
+        ? edgeAlignedCanvas
+        : alignMapCanvasToDisplayedTileTransform(
+            alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas),
+            mapEl,
+            { allowTranslation: true }
+          );
+      logEdgeExportDebug("pipeline.mode", {
+        mode: isEdge ? "edge-minimal" : "full",
+        appliedEdgeAlign: edgeAlignedCanvas !== mapCanvas
       });
       showExportCorrectionDebugMessage(debugInfo);
       const canvasPixelWidth  = adjustedMapCanvas.width;
