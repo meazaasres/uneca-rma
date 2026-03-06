@@ -12,6 +12,7 @@ const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
 const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
+const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
 const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
@@ -3955,7 +3956,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       );
     }
     if (isEdgeBrowser()) {
-      return getSymmetricWhitespaceSideCropPx(sourceCanvas, baseCropW, cropH, EDGE_EXPORT_SIDE_CROP_MAX_RATIO);
+      const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
+      return Math.min(EDGE_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
     }
     return 0;
     }
@@ -3972,9 +3974,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       cropW,
       reducedBy
     });
-    if (isEdgeExportDebugEnabled()) {
-      try { showPopup(msg, "success"); } catch (e) {}
-    }
+    try { showPopup(msg, "success"); } catch (e) {}
     }
 
     function compositeExportElement(cb) {
