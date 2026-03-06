@@ -3680,6 +3680,26 @@ window.addEventListener('load', resetInitialScrollPositions);
     } catch (e) {}
     }
 
+    function isExportTraceEnabled() {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const q = params.get("exportTrace");
+      if (q === "1" || q === "true") return true;
+      if (q === "0" || q === "false") return false;
+      const stored = window.localStorage ? window.localStorage.getItem("exportTrace") : null;
+      return stored === "1" || stored === "true";
+    } catch (e) {
+      return false;
+    }
+    }
+
+    function logExportTrace(stage, payload) {
+    if (!isExportTraceEnabled()) return;
+    try {
+      console.info(`[export-trace] ${stage}`, payload || {});
+    } catch (e) {}
+    }
+
     function alignMapCanvasForEdge(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
     const paneEl = mapEl.querySelector('.leaflet-map-pane');
@@ -4910,16 +4930,23 @@ function trimHorizontalWhitespaceWithOffset(sourceCanvas, maxTrimRatio = 0.25) {
 
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
+  logExportTrace("svg.start", {
+    layer: currentLayerName || null,
+    hasGeojson: !!geojsonData,
+    timestamp: new Date().toISOString()
+  });
   showLoading("Exporting map as SVG...");
 
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
   const data = getFilteredGeojson(sourceData);
   if (!data || !Array.isArray(data.features) || !data.features.length) {
+    logExportTrace("svg.no-data-fallback-png");
     showPopup("No vector data available for SVG export. Falling back to PNG.", "error");
     hideLoading();
     return exportMap();
   }
   if (data.features.length > MAX_FEATURES) {
+    logExportTrace("svg.aborted.max-features", { count: data.features.length, max: MAX_FEATURES });
     showPopup("Dataset too large for client export", "error");
     hideLoading();
     return;
@@ -4941,6 +4968,7 @@ function exportSVG() {
     });
   })(data.features);
   if (totalVertices > MAX_VERTICES) {
+    logExportTrace("svg.aborted.max-vertices", { totalVertices, max: MAX_VERTICES });
     showPopup("Dataset too complex for client export. Try simplifying the geometry.", "error");
     hideLoading();
     return;
@@ -4953,13 +4981,16 @@ function exportSVG() {
   const scaleBarEl = document.querySelector('.leaflet-control-exact-scale');
   const mapEl = document.getElementById('map');
   if (!mapEl) {
+    logExportTrace("svg.aborted.map-missing");
     console.error("Map element not found");
     hideLoading();
     return;
   }
 
   leafletImage(map, (err, mapCanvas) => {
+    logExportTrace("svg.leafletImage.callback", { hasError: !!err, hasCanvas: !!mapCanvas });
     if (err || !mapCanvas) {
+      logExportTrace("svg.raster-failed-fallback-png", { error: err ? String(err) : null });
       showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
       hideLoading();
       return exportMap();
@@ -4968,6 +4999,7 @@ function exportSVG() {
     // detect tainted canvas
     const canvasDataUrlCheck = tryCanvasToDataURL(mapCanvas);
     if (!canvasDataUrlCheck) {
+      logExportTrace("svg.canvas-tainted-fallback-png");
       showPopup("Export blocked by cross-origin tiles. Enable CORS or use PNG fallback.", "error");
       hideLoading();
       return exportMap();
@@ -5062,6 +5094,14 @@ function exportSVG() {
       const totalWidthPx  = isFirefoxBrowser() ? Math.max(usedCanvasWidth, cropW) : usedCanvasWidth;
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
       const contentOffsetX = Math.max(0, Math.round((totalWidthPx - usedCanvasWidth) / 2));
+      logExportTrace("svg.layout", {
+        totalWidthPx,
+        totalHeightPx,
+        usedCanvasWidth,
+        usedCanvasHeight,
+        contentOffsetX,
+        firefox: isFirefoxBrowser()
+      });
 
       const svg = document.createElementNS(svgNS, "svg");
       svg.setAttribute("xmlns", svgNS);
@@ -5459,6 +5499,10 @@ function exportSVG() {
       const svgString = serializer.serializeToString(svg);
       const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(blob);
+      logExportTrace("svg.serialized", {
+        svgBytes: svgString.length,
+        downloadName: (currentLayerName ? sanitizeName(currentLayerName) : "map") + ".svg"
+      });
 
       const a = document.createElement('a');
       a.href = url;
@@ -5472,8 +5516,10 @@ function exportSVG() {
         a.remove();
       }, 1000);
 
+      logExportTrace("svg.success");
       hideLoading();
     } catch (ex) {
+      logExportTrace("svg.failed-fallback-png", { error: ex ? String(ex) : null });
       console.error("SVG export failed:", ex);
       showPopup("SVG export failed. Falling back to PNG.", "error");
       hideLoading();
