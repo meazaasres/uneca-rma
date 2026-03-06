@@ -4586,6 +4586,9 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const disclaimerText = (document.getElementById('disclaimer')?.textContent || '').trim();
+        const scaleControlEl = document.querySelector('.leaflet-control-exact-scale, .map-bottom-scale-control');
+        const northArrowEl = document.querySelector('.leaflet-control-north-arrow');
+        const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
         const scaleText = (document.querySelector('.leaflet-control-exact-scale .exact-scale-label')?.textContent
           || document.querySelector('.map-bottom-scale-control .exact-scale-label')?.textContent
           || '').trim();
@@ -4617,12 +4620,17 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         octx.drawImage(cropped, 0, titleH);
 
-        // Draw a simple north arrow on exported map image (top-right).
+        // Draw north arrow where it is currently placed on the live map.
         {
-          const naW = 34;
-          const naH = 44;
-          const naX = Math.max(6, outW - naW - 12);
-          const naY = titleH + 12;
+          const naRect = northArrowEl ? northArrowEl.getBoundingClientRect() : null;
+          const naW = (naRect && naRect.width > 0) ? Math.max(22, Math.round(naRect.width * rawScaleX)) : 34;
+          const naH = (naRect && naRect.height > 0) ? Math.max(28, Math.round(naRect.height * rawScaleY)) : 44;
+          const naLeftCss = (naRect && mapRect) ? (naRect.left - mapRect.left) : (cssW - (naW / rawScaleX) - 12);
+          const naTopCss = (naRect && mapRect) ? (naRect.top - mapRect.top) : 12;
+          let naX = Math.round(naLeftCss * rawScaleX) - cropX;
+          let naY = titleH + Math.round(naTopCss * rawScaleY);
+          naX = Math.max(0, Math.min(outW - naW, naX));
+          naY = Math.max(titleH, Math.min((titleH + cropH) - naH, naY));
           octx.fillStyle = '#ffffff';
           octx.strokeStyle = '#cfd6e4';
           octx.lineWidth = 1;
@@ -4675,10 +4683,15 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
 
         if (scaleText) {
-          const boxW = 108;
-          const boxH = 20;
-          const x = Math.max(0, Math.min(outW - boxW, Math.round((outW - boxW) / 2) + 15));
-          const y = titleH + cropH - boxH - 8;
+          const sbRect = scaleControlEl ? scaleControlEl.getBoundingClientRect() : null;
+          const boxW = (sbRect && sbRect.width > 0) ? Math.max(90, Math.round(sbRect.width * rawScaleX)) : 108;
+          const boxH = (sbRect && sbRect.height > 0) ? Math.max(18, Math.round(sbRect.height * rawScaleY)) : 20;
+          const sbLeftCss = (sbRect && mapRect) ? (sbRect.left - mapRect.left) : ((cssW - (boxW / rawScaleX)) / 2);
+          const sbTopCss = (sbRect && mapRect) ? (sbRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 8);
+          let x = Math.round(sbLeftCss * rawScaleX) - cropX;
+          let y = titleH + Math.round(sbTopCss * rawScaleY);
+          x = Math.max(0, Math.min(outW - boxW, x));
+          y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
           octx.fillStyle = 'rgba(255,255,255,0.95)';
           octx.fillRect(x, y, boxW, boxH);
           octx.strokeStyle = '#cfd6e4';
