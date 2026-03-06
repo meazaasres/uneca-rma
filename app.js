@@ -3592,7 +3592,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     aligned.height = mapCanvas.height;
     const actx = aligned.getContext('2d');
     if (!actx) return mapCanvas;
-    actx.drawImage(mapCanvas, -offsetX, -offsetY);
+    // Apply pane offset in the same direction as on-screen map pane translation.
+    actx.drawImage(mapCanvas, offsetX, offsetY);
     return aligned;
     }
 
@@ -3804,15 +3805,15 @@ window.addEventListener('load', resetInitialScrollPositions);
       const isEdge = isEdgeBrowser();
       const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
       const adjustedMapCanvas = isEdge
-        // Edge: keep corrections minimal to avoid cumulative shift.
-        ? edgeAlignedCanvas
+        // Edge: retain fractional zoom scale correction, skip transform composition.
+        ? alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas)
         : alignMapCanvasToDisplayedTileTransform(
             alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas),
             mapEl,
             { allowTranslation: true }
           );
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-minimal" : "full",
+        mode: isEdge ? "edge-fractional-no-transform" : "full",
         appliedEdgeAlign: edgeAlignedCanvas !== mapCanvas
       });
       showExportCorrectionDebugMessage(debugInfo);
@@ -4519,15 +4520,15 @@ function exportSVG() {
       const isEdge = isEdgeBrowser();
       const edgeAlignedCanvas = alignMapCanvasForEdge(mapCanvas, mapEl);
       const adjustedMapCanvas = isEdge
-        // Edge: keep corrections minimal to avoid cumulative shift.
-        ? edgeAlignedCanvas
+        // Edge: retain fractional zoom scale correction, skip transform composition.
+        ? alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas)
         : alignMapCanvasToDisplayedTileTransform(
             alignMapCanvasForFractionalTileZoom(edgeAlignedCanvas),
             mapEl,
             { allowTranslation: true }
           );
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-minimal" : "full",
+        mode: isEdge ? "edge-fractional-no-transform" : "full",
         appliedEdgeAlign: edgeAlignedCanvas !== mapCanvas
       });
       showExportCorrectionDebugMessage(debugInfo);
