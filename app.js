@@ -4325,7 +4325,194 @@ window.addEventListener('load', resetInitialScrollPositions);
     const loader = document.getElementById("export-loader");
     if (loader) setDynamicStyle(loader, { display: "none" });
     }
+
+    function wrapCanvasText(ctx, text, maxWidth) {
+      const words = String(text || "").split(/\s+/).filter(Boolean);
+      const lines = [];
+      let line = "";
+      for (let i = 0; i < words.length; i++) {
+        const candidate = line ? (line + " " + words[i]) : words[i];
+        if (ctx.measureText(candidate).width <= maxWidth || !line) {
+          line = candidate;
+        } else {
+          lines.push(line);
+          line = words[i];
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    }
+
+    function getExportLegendEntries() {
+      const overlay = overlayData[currentLayerName] || {};
+      const vals = Array.isArray(overlay.vals) ? overlay.vals : [];
+      const cols = Array.isArray(overlay.cols) ? overlay.cols : [];
+      if (!vals.length || !cols.length) return [];
+      if (overlay.isNumeric) {
+        const rows = [];
+        for (let i = 0; i < vals.length - 1; i++) {
+          const a = vals[i];
+          const b = vals[i + 1];
+          rows.push({
+            color: cols[i] || "#cccccc",
+            label: `${a} - ${b}`
+          });
+        }
+        return rows;
+      }
+      return vals.map((v, i) => ({
+        color: cols[i] || "#cccccc",
+        label: String(v)
+      }));
+    }
+
+    function buildEdgeDirectExportCanvas(cb, onError) {
+      leafletImage(map, (err, mapCanvas) => {
+        if (err || !mapCanvas) {
+          if (typeof onError === "function") onError(err || new Error("Map canvas unavailable"));
+          return;
+        }
+
+        const mapEl = document.getElementById('map');
+        const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
+        const adjustedMapCanvas = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
+        logEdgeExportDebug("pipeline.mode", { mode: "edge-direct-canvas" });
+        showExportCorrectionDebugMessage(debugInfo);
+
+        const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+        const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
+        const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
+        const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
+        const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
+        const expectedW = Math.round(cssW * rawScaleX);
+        const expectedH = Math.round(cssH * rawScaleY);
+        const cropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
+        const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
+
+        const cropped = document.createElement('canvas');
+        cropped.width = cropW;
+        cropped.height = cropH;
+        const cctx = cropped.getContext('2d');
+        if (!cctx) {
+          if (typeof onError === "function") onError(new Error("Crop canvas context unavailable"));
+          return;
+        }
+        cctx.drawImage(adjustedMapCanvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+
+        const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
+        const disclaimerText = (document.getElementById('disclaimer')?.textContent || '').trim();
+        const scaleText = (document.querySelector('.leaflet-control-exact-scale .exact-scale-label')?.textContent
+          || document.querySelector('.map-bottom-scale-control .exact-scale-label')?.textContent
+          || '').trim();
+        const legendEntries = getExportLegendEntries();
+
+        const titleH = 36;
+        const legendHeaderH = legendEntries.length ? 24 : 0;
+        const legendRowH = 20;
+        const legendH = legendEntries.length ? (legendHeaderH + (legendEntries.length * legendRowH) + 10) : 0;
+        const outW = cropW;
+        const outH = titleH + cropH + legendH;
+
+        const out = document.createElement('canvas');
+        out.width = outW;
+        out.height = outH;
+        const octx = out.getContext('2d');
+        if (!octx) {
+          if (typeof onError === "function") onError(new Error("Export canvas context unavailable"));
+          return;
+        }
+
+        octx.fillStyle = '#ffffff';
+        octx.fillRect(0, 0, outW, outH);
+        octx.fillStyle = '#222222';
+        octx.font = '600 20px Segoe UI, sans-serif';
+        octx.textAlign = 'center';
+        octx.textBaseline = 'middle';
+        octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
+
+        octx.drawImage(cropped, 0, titleH);
+
+        if (disclaimerText) {
+          const pad = 6;
+          const maxW = Math.max(120, Math.round(outW * 0.42));
+          const lineH = 13;
+          const maxLines = 6;
+          octx.font = 'italic 11px Segoe UI, sans-serif';
+          octx.textAlign = 'left';
+          octx.textBaseline = 'top';
+          const lines = wrapCanvasText(octx, disclaimerText, maxW - (pad * 2)).slice(0, maxLines);
+          const boxH = (lines.length * lineH) + (pad * 2);
+          const x = 8;
+          const y = titleH + cropH - boxH - 8;
+          octx.fillStyle = 'rgba(255,255,255,0.93)';
+          octx.fillRect(x, y, maxW, boxH);
+          octx.fillStyle = '#333333';
+          for (let i = 0; i < lines.length; i++) {
+            octx.fillText(lines[i], x + pad, y + pad + (i * lineH));
+          }
+        }
+
+        if (scaleText) {
+          const boxW = 108;
+          const boxH = 20;
+          const x = Math.round((outW - boxW) / 2);
+          const y = titleH + cropH - boxH - 8;
+          octx.fillStyle = 'rgba(255,255,255,0.95)';
+          octx.fillRect(x, y, boxW, boxH);
+          octx.strokeStyle = '#cfd6e4';
+          octx.lineWidth = 1;
+          octx.strokeRect(x, y, boxW, boxH);
+          octx.fillStyle = '#102a43';
+          octx.font = '11px Segoe UI, sans-serif';
+          octx.textAlign = 'center';
+          octx.textBaseline = 'middle';
+          octx.fillText(scaleText, x + Math.round(boxW / 2), y + Math.round(boxH / 2));
+        }
+
+        if (legendEntries.length) {
+          const legendTitle = `${currentLayerName || 'Layer'}${currentAttribute ? ': ' + String(currentAttribute).toUpperCase() : ''}`;
+          let y = titleH + cropH + 8;
+          octx.fillStyle = '#222222';
+          octx.font = '600 20px Segoe UI, sans-serif';
+          octx.textAlign = 'left';
+          octx.textBaseline = 'top';
+          octx.fillText(legendTitle, 6, y);
+          y += 28;
+          octx.font = '400 15px Segoe UI, sans-serif';
+          legendEntries.forEach((entry) => {
+            octx.fillStyle = entry.color || '#cccccc';
+            octx.beginPath();
+            octx.arc(14, y + 8, 8, 0, Math.PI * 2);
+            octx.fill();
+            octx.fillStyle = '#333333';
+            octx.fillText(String(entry.label || ''), 36, y - 2);
+            y += legendRowH;
+          });
+        }
+
+        cb(out);
+      });
+    }
+
     function exportMap() {
+      if (isEdgeBrowser()) {
+        showLoading("Exporting map as PNG...");
+        buildEdgeDirectExportCanvas(
+          (canvas) => {
+            const a = document.createElement('a');
+            a.href = canvas.toDataURL('image/png');
+            a.download = 'map.png';
+            a.rel = 'noopener';
+            a.click();
+            hideLoading();
+          },
+          (err) => {
+            console.error("Edge PNG export failed:", err);
+            hideLoading();
+          }
+        );
+        return;
+      }
       showLoading("Exporting map as PNG...");
       compositeExportElement(wrapper => {
         html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
@@ -4347,6 +4534,28 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
       function exportPDF() {
+        if (isEdgeBrowser()) {
+          showLoading("Exporting map as PDF...");
+          buildEdgeDirectExportCanvas(
+            (canvas) => {
+              const imgData = canvas.toDataURL('image/png');
+              const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+              const pdf = new jspdf.jsPDF({
+                orientation,
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+              });
+              pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+              pdf.save('map.pdf');
+              hideLoading();
+            },
+            (err) => {
+              console.error("Edge PDF export failed:", err);
+              hideLoading();
+            }
+          );
+          return;
+        }
         showLoading("Exporting map as PDF...");
         compositeExportElement(wrapper => {
             html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
