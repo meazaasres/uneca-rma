@@ -1778,6 +1778,8 @@ function makeControlDraggable(control, initial) {
   // Move to map root so the control can be freely positioned.
   mapEl.appendChild(el);
   el.classList.add("draggable-map-control");
+  el.setAttribute("contenteditable", "false");
+  el.setAttribute("draggable", "false");
   const initialResolver = typeof initial === "function"
     ? initial
     : () => (initial || { left: 0, top: 0 });
@@ -1821,7 +1823,8 @@ function makeControlDraggable(control, initial) {
   };
 
   el.addEventListener("pointerdown", (evt) => {
-    if (evt.button !== 0) return;
+    if (!evt.isPrimary) return;
+    if (evt.pointerType === "mouse" && evt.button !== 0) return;
     evt.preventDefault();
     dragging = true;
     el.classList.add("is-dragging");
@@ -2169,21 +2172,6 @@ function initDisclaimerDrag() {
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
   };
 
-  const onPointerDown = (e) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    const mapRect = mapEl.getBoundingClientRect();
-    const discRect = disc.getBoundingClientRect();
-    dragging = true;
-    offsetX = e.clientX - discRect.left;
-    offsetY = e.clientY - discRect.top;
-    disc.classList.add('is-dragging');
-    if (disc.setPointerCapture) disc.setPointerCapture(e.pointerId);
-    if (map.dragging && map.dragging.enabled && map.dragging.enabled()) map.dragging.disable();
-    e.preventDefault();
-    e.stopPropagation();
-    clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
-  };
-
   const onPointerMove = (e) => {
     if (!dragging) return;
     const mapRect = mapEl.getBoundingClientRect();
@@ -2201,12 +2189,31 @@ function initDisclaimerDrag() {
       try { disc.releasePointerCapture(e.pointerId); } catch (err) {}
     }
     if (map.dragging && map.dragging.enabled && !map.dragging.enabled()) map.dragging.enable();
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
+  };
+
+  const onPointerDown = (e) => {
+    if (!e.isPrimary) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const mapRect = mapEl.getBoundingClientRect();
+    const discRect = disc.getBoundingClientRect();
+    dragging = true;
+    offsetX = e.clientX - discRect.left;
+    offsetY = e.clientY - discRect.top;
+    disc.classList.add('is-dragging');
+    if (disc.setPointerCapture) disc.setPointerCapture(e.pointerId);
+    if (map.dragging && map.dragging.enabled && map.dragging.enabled()) map.dragging.disable();
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    e.preventDefault();
+    e.stopPropagation();
+    clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
   };
 
   disc.addEventListener('pointerdown', onPointerDown);
-  window.addEventListener('pointermove', onPointerMove, { passive: false });
-  window.addEventListener('pointerup', onPointerUp);
-  window.addEventListener('pointercancel', onPointerUp);
 }
 
 function runMapUiReflowPasses() {
