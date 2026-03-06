@@ -13,9 +13,6 @@ const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
 const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
-const EXEC_TRACE_TOKEN = "20260306-92-temp-trace";
-const EXEC_TRACE_QUERY_KEY = "execTrace";
-const EXEC_TRACE_STORAGE_KEY = "execTrace";
 const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
 const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
@@ -128,46 +125,6 @@ function setDynamicStyle(el, styleObj) {
   });
   if (parts.length) upsertDynamicRule(el, parts.join(";"));
 }
-
-function isExecTraceEnabled() {
-  try {
-    const params = new URLSearchParams(window.location.search || "");
-    const q = params.get(EXEC_TRACE_QUERY_KEY);
-    if (q === "1" || q === "true") {
-      if (window.localStorage) window.localStorage.setItem(EXEC_TRACE_STORAGE_KEY, "1");
-      return true;
-    }
-    if (q === "0" || q === "false") {
-      if (window.localStorage) window.localStorage.removeItem(EXEC_TRACE_STORAGE_KEY);
-      return false;
-    }
-    const stored = window.localStorage ? window.localStorage.getItem(EXEC_TRACE_STORAGE_KEY) : null;
-    return stored === "1" || stored === "true";
-  } catch (e) {
-    return false;
-  }
-}
-
-function traceExec(stage, payload) {
-  if (!isExecTraceEnabled()) return;
-  const details = payload || {};
-  try {
-    window.__RMA_EXEC_TRACE = {
-      token: EXEC_TRACE_TOKEN,
-      stage: String(stage || ""),
-      payload: details,
-      at: new Date().toISOString()
-    };
-  } catch (e) {}
-  try {
-    console.info(`[exec-trace ${EXEC_TRACE_TOKEN}] ${stage}`, details);
-  } catch (e) {}
-}
-
-traceExec("script-evaluated", {
-  ua: navigator.userAgent || "",
-  href: window.location.href || ""
-});
 
 function sanitizeId(str) {
   return String(str).replace(/[^\w\-]/g, "_");
@@ -1625,10 +1582,6 @@ function applyMaxBoundsSafely() {
 }
 
 function applyHomeView() {
-  traceExec("applyHomeView.enter", {
-    retries: homeViewRetryCount,
-    hasViewport: hasUsableMapViewport()
-  });
   const homePadY = HOME_VERTICAL_PADDING_PX + (isEdgeBrowser() ? EDGE_HOME_VERTICAL_PADDING_EXTRA_PX : 0);
   if (!hasUsableMapViewport()) {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
@@ -3669,10 +3622,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const tbl  = document.getElementById('table-container');
   const wrap = document.getElementById('classification-wrapper');
 
-  traceExec("dom-content-loaded", {
-    edge: /edg\//i.test(navigator.userAgent || "")
-  });
-
   if (wrap && btnClassTable) {
     setDynamicStyle(wrap, { display: "block" });
     btnClassTable.classList.add('active');
@@ -4016,6 +3965,23 @@ window.addEventListener('load', resetInitialScrollPositions);
     return 0;
     }
 
+    function reportEdgeExportSpaceReduction(formatLabel, sideCropPx, baseCropW, cropW) {
+    if (!isEdgeBrowser()) return;
+    const fmt = String(formatLabel || "export").toUpperCase();
+    const reducedBy = Math.max(0, (baseCropW | 0) - (cropW | 0));
+    const msg = `Edge ${fmt} side-space reduction | each:${sideCropPx}px total:${reducedBy}px`;
+    logEdgeExportDebug("space-reduction", {
+      format: fmt,
+      sideCropPx,
+      baseCropW,
+      cropW,
+      reducedBy
+    });
+    if (isEdgeExportDebugEnabled()) {
+      try { showPopup(msg, "success"); } catch (e) {}
+    }
+    }
+
     function compositeExportElement(cb) {
     leafletImage(map, (err, mapCanvas) => {
       if (err) {
@@ -4054,6 +4020,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
       const cropX = Math.max(0, sideCropPx);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
+      if (isEdge) reportEdgeExportSpaceReduction("png/pdf", sideCropPx, baseCropW, cropW);
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
@@ -4585,11 +4552,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       }));
     }
 
-    function buildEdgeDirectExportCanvas(cb, onError) {
-      traceExec("edge-direct-export.enter", {
-        layer: currentLayerName || "",
-        attr: currentAttribute || ""
-      });
+    function buildEdgeDirectExportCanvas(formatLabel, cb, onError) {
       leafletImage(map, (err, mapCanvas) => {
         if (err || !mapCanvas) {
           if (typeof onError === "function") onError(err || new Error("Map canvas unavailable"));
@@ -4614,6 +4577,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
         const cropX = Math.max(0, sideCropPx);
         const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
+        reportEdgeExportSpaceReduction(formatLabel || "png/pdf", sideCropPx, baseCropW, cropW);
 
         const cropped = document.createElement('canvas');
         cropped.width = cropW;
@@ -4724,6 +4688,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (isEdgeBrowser()) {
         showLoading("Exporting map as PNG...");
         buildEdgeDirectExportCanvas(
+          "png",
           (canvas) => {
             const a = document.createElement('a');
             a.href = canvas.toDataURL('image/png');
@@ -4763,6 +4728,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         if (isEdgeBrowser()) {
           showLoading("Exporting map as PDF...");
           buildEdgeDirectExportCanvas(
+            "pdf",
             (canvas) => {
               const imgData = canvas.toDataURL('image/png');
               const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
@@ -5006,6 +4972,7 @@ function exportSVG() {
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
       const cropX = sideCropPx;
       const cropY = 0; // top-align crop
+      if (isEdge) reportEdgeExportSpaceReduction("svg", sideCropPx, baseCropW, cropW);
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
