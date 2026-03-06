@@ -2066,6 +2066,11 @@ function positionDisclaimer() {
       ? Math.max(120, Math.round(mapRect.width - left - margin))
       : preferredFixedWidth;
     const desiredWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
+    const userMoved = !!disclaimerUserPos;
+    const fixedWidth = Number(disc.dataset.fixedWidthPx);
+    const widthPx = userMoved
+      ? Math.max(120, Math.round(Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : (disc.offsetWidth || desiredWidth)))
+      : desiredWidth;
 
     disc.classList.add('clamp-5-lines');
     setDynamicStyle(disc, {
@@ -2073,8 +2078,8 @@ function positionDisclaimer() {
       left: left + "px",
       right: "auto",
       bottom: bottom + "px",
-      width: desiredWidth + "px",
-      "max-width": desiredWidth + "px"
+      width: widthPx + "px",
+      "max-width": widthPx + "px"
     });
 
     // Keep user-dragged position across resize/move while clamping to map bounds.
@@ -2146,6 +2151,10 @@ function initDisclaimerDrag() {
   disc.dataset.dragInit = '1';
   disc.setAttribute('contenteditable', 'false');
   disc.setAttribute('draggable', 'false');
+  if (window.L && L.DomEvent) {
+    L.DomEvent.disableClickPropagation(disc);
+    L.DomEvent.disableScrollPropagation(disc);
+  }
 
   let dragging = false;
   let offsetX = 0;
@@ -2169,6 +2178,7 @@ function initDisclaimerDrag() {
       left: clampedLeft + "px",
       bottom: "auto"
     });
+    disc.dataset.fixedWidthPx = String(Math.max(120, Math.round(disc.offsetWidth || 0)));
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
   };
 
@@ -2202,6 +2212,7 @@ function initDisclaimerDrag() {
     dragging = true;
     offsetX = e.clientX - discRect.left;
     offsetY = e.clientY - discRect.top;
+    disc.dataset.fixedWidthPx = String(Math.max(120, Math.round(discRect.width || disc.offsetWidth || 0)));
     disc.classList.add('is-dragging');
     if (disc.setPointerCapture) disc.setPointerCapture(e.pointerId);
     if (map.dragging && map.dragging.enabled && map.dragging.enabled()) map.dragging.disable();
@@ -2213,7 +2224,7 @@ function initDisclaimerDrag() {
     clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
   };
 
-  disc.addEventListener('pointerdown', onPointerDown);
+  disc.addEventListener('pointerdown', onPointerDown, { capture: true });
 }
 
 function runMapUiReflowPasses() {
