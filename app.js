@@ -1491,7 +1491,9 @@ const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
 const MAX_HOME_VIEW_RETRIES = 6;
+const MAX_BOUNDS_RETRIES = 10;
 let homeViewRetryCount = 0;
+let maxBoundsRetryCount = 0;
 
 function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   if (!bounds || typeof bounds.getSouthWest !== "function" || typeof bounds.getNorthEast !== "function") {
@@ -1530,6 +1532,39 @@ function safePanInsideBounds(bounds, options) {
     map.panInsideBounds(bounds, options || { animate: false });
   } catch (e) {
     console.warn("panInsideBounds skipped due to unstable map center", e);
+  }
+}
+
+function applyMaxBoundsSafely() {
+  if (!map || typeof map.setMaxBounds !== "function") return;
+  if (!hasUsableMapViewport()) {
+    if (maxBoundsRetryCount < MAX_BOUNDS_RETRIES) {
+      maxBoundsRetryCount += 1;
+      setTimeout(() => {
+        try { map.invalidateSize({ pan: false }); } catch (e) {}
+        applyMaxBoundsSafely();
+      }, 50);
+    }
+    return;
+  }
+  try {
+    const c = map.getCenter();
+    if (!c || !Number.isFinite(c.lat) || !Number.isFinite(c.lng)) {
+      throw new Error("Map center is not finite");
+    }
+    map.setMaxBounds(MAP_NAV_BOUNDS);
+    map.options.maxBoundsViscosity = 1.0;
+    maxBoundsRetryCount = 0;
+  } catch (e) {
+    if (maxBoundsRetryCount < MAX_BOUNDS_RETRIES) {
+      maxBoundsRetryCount += 1;
+      setTimeout(() => {
+        try { map.invalidateSize({ pan: false }); } catch (err) {}
+        applyMaxBoundsSafely();
+      }, 50);
+    } else {
+      console.warn("setMaxBounds skipped after repeated invalid center state", e);
+    }
   }
 }
 
@@ -1591,8 +1626,7 @@ function applyMapHorizontalLayout() {
 }
 
 applyHomeView();
-map.setMaxBounds(MAP_NAV_BOUNDS);
-map.options.maxBoundsViscosity = 1.0;
+applyMaxBoundsSafely();
 
 function goHomeView() {
   applyHomeView();
