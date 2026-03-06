@@ -11,6 +11,7 @@ const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
+const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const EXEC_TRACE_TOKEN = "20260306-92-temp-trace";
 const EXEC_TRACE_QUERY_KEY = "execTrace";
@@ -3955,6 +3956,66 @@ window.addEventListener('load', resetInitialScrollPositions);
     };
     }
 
+    function getSymmetricWhitespaceSideCropPx(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
+    if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") return 0;
+    const w = Math.max(1, Math.min(sourceCanvas.width | 0, scanW | 0));
+    const h = Math.max(1, Math.min(sourceCanvas.height | 0, scanH | 0));
+    if (w <= 2 || h <= 2) return 0;
+    const maxTrimPx = Math.max(0, Math.floor(w * Math.max(0, Math.min(0.4, maxTrimRatio))));
+    if (maxTrimPx <= 0) return 0;
+
+    const ctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return 0;
+    let imgData;
+    try {
+      imgData = ctx.getImageData(0, 0, w, h);
+    } catch (e) {
+      return 0;
+    }
+    const px = imgData.data;
+    const nonBlankThreshold = Math.max(2, Math.floor(h * 0.003));
+
+    function isMostlyBlankColumn(x) {
+      let nonBlank = 0;
+      for (let y = 0; y < h; y++) {
+        const idx = ((y * w) + x) * 4;
+        const r = px[idx];
+        const g = px[idx + 1];
+        const b = px[idx + 2];
+        const a = px[idx + 3];
+        // Transparent or near-white pixels count as blank export margin.
+        const blank = (a <= 8) || (a >= 248 && r >= 248 && g >= 248 && b >= 248);
+        if (!blank) {
+          nonBlank++;
+          if (nonBlank > nonBlankThreshold) return false;
+        }
+      }
+      return true;
+    }
+
+    let leftBlank = 0;
+    while (leftBlank < maxTrimPx && isMostlyBlankColumn(leftBlank)) leftBlank++;
+    let rightBlank = 0;
+    while (rightBlank < maxTrimPx && isMostlyBlankColumn(w - 1 - rightBlank)) rightBlank++;
+    return Math.max(0, Math.min(leftBlank, rightBlank));
+    }
+
+    function getExportSideCropPxForBrowser(sourceCanvas, baseCropW, cropH) {
+    if (isFirefoxBrowser()) {
+      return Math.max(
+        0,
+        Math.min(
+          Math.floor(baseCropW * 0.2),
+          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
+        )
+      );
+    }
+    if (isEdgeBrowser()) {
+      return getSymmetricWhitespaceSideCropPx(sourceCanvas, baseCropW, cropH, EDGE_EXPORT_SIDE_CROP_MAX_RATIO);
+    }
+    return 0;
+    }
+
     function compositeExportElement(cb) {
     leafletImage(map, (err, mapCanvas) => {
       if (err) {
@@ -3990,15 +4051,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       const expectedH = Math.round(cssH * rawScaleY);
       const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
       const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
-      const sideCropPx = isFirefoxBrowser()
-        ? Math.max(
-            0,
-            Math.min(
-              Math.floor(baseCropW * 0.2),
-              Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
-            )
-          )
-        : 0;
+      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
       const cropX = Math.max(0, sideCropPx);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
 
@@ -4556,8 +4609,11 @@ window.addEventListener('load', resetInitialScrollPositions);
         const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
         const expectedW = Math.round(cssW * rawScaleX);
         const expectedH = Math.round(cssH * rawScaleY);
-        const cropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
+        const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
         const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
+        const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
+        const cropX = Math.max(0, sideCropPx);
+        const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
 
         const cropped = document.createElement('canvas');
         cropped.width = cropW;
@@ -4567,7 +4623,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           if (typeof onError === "function") onError(new Error("Crop canvas context unavailable"));
           return;
         }
-        cctx.drawImage(adjustedMapCanvas, 0, 0, cropW, cropH, 0, 0, cropW, cropH);
+        cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const disclaimerText = (document.getElementById('disclaimer')?.textContent || '').trim();
@@ -4946,15 +5002,7 @@ function exportSVG() {
       // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
       const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
       const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
-      const sideCropPx = isFirefoxBrowser()
-        ? Math.max(
-            0,
-            Math.min(
-              Math.floor(baseCropW * 0.2),
-              Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
-            )
-          )
-        : 0;
+      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
       const cropX = sideCropPx;
       const cropY = 0; // top-align crop
