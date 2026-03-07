@@ -2065,12 +2065,18 @@ function positionDisclaimer() {
     const maxAvailableWidth = mapRect
       ? Math.max(120, Math.round(mapRect.width - left - margin))
       : preferredFixedWidth;
+    const getStableDisclaimerWidthPx = () => {
+      const fixedWidth = Number(disc.dataset.fixedWidthPx);
+      const renderedWidth = Math.round(disc.getBoundingClientRect().width || disc.offsetWidth || preferredFixedWidth);
+      const fallbackWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
+      const candidate = Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : (renderedWidth || fallbackWidth);
+      return Math.max(120, Math.min(maxAvailableWidth, Math.round(candidate)));
+    };
+
     const desiredWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
     const userMoved = !!disclaimerUserPos;
-    const fixedWidth = Number(disc.dataset.fixedWidthPx);
-    const widthPx = userMoved
-      ? Math.max(120, Math.round(Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : (disc.offsetWidth || desiredWidth)))
-      : desiredWidth;
+    const widthPx = userMoved ? getStableDisclaimerWidthPx() : desiredWidth;
+    disc.dataset.fixedWidthPx = String(widthPx);
 
     disc.classList.add('clamp-5-lines');
     setDynamicStyle(disc, {
@@ -2097,7 +2103,9 @@ function positionDisclaimer() {
       setDynamicStyle(disc, {
         top: topPx + "px",
         left: leftPx + "px",
-        bottom: "auto"
+        bottom: "auto",
+        width: widthPx + "px",
+        "max-width": widthPx + "px"
       });
       disclaimerUserPos = { left: leftPx, top: topPx };
     }
@@ -2148,6 +2156,20 @@ function initDisclaimerDrag() {
   const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
   if (!disc || !mapEl || disc.dataset.dragInit === '1') return;
 
+  const resolveDisclaimerWidthPx = () => {
+    const mapRect = mapEl.getBoundingClientRect();
+    const disclaimerInsetExtra = 40;
+    const leftInset = 12 + MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra;
+    const margin = 12;
+    const maxAvailableWidth = mapRect
+      ? Math.max(120, Math.round(mapRect.width - leftInset - margin))
+      : 252;
+    const fixedWidth = Number(disc.dataset.fixedWidthPx);
+    const renderedWidth = Math.round(disc.getBoundingClientRect().width || disc.offsetWidth || 252);
+    const candidate = Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : renderedWidth;
+    return Math.max(120, Math.min(maxAvailableWidth, Math.round(candidate || 252)));
+  };
+
   disc.dataset.dragInit = '1';
   disc.setAttribute('contenteditable', 'false');
   disc.setAttribute('draggable', 'false');
@@ -2172,13 +2194,16 @@ function initDisclaimerDrag() {
     const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
     const clampedLeft = Math.min(maxLeft, Math.max(minLeft, left));
     const clampedTop = Math.min(maxTop, Math.max(marginClamp, top));
+    const fixedWidthPx = resolveDisclaimerWidthPx();
 
     setDynamicStyle(disc, {
       top: clampedTop + "px",
       left: clampedLeft + "px",
-      bottom: "auto"
+      bottom: "auto",
+      width: fixedWidthPx + "px",
+      "max-width": fixedWidthPx + "px"
     });
-    disc.dataset.fixedWidthPx = String(Math.max(120, Math.round(disc.offsetWidth || 0)));
+    disc.dataset.fixedWidthPx = String(fixedWidthPx);
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
   };
 
@@ -2188,7 +2213,7 @@ function initDisclaimerDrag() {
     dragging = true;
     offsetX = clientX - discRect.left;
     offsetY = clientY - discRect.top;
-    disc.dataset.fixedWidthPx = String(Math.max(120, Math.round(discRect.width || disc.offsetWidth || 0)));
+    disc.dataset.fixedWidthPx = String(resolveDisclaimerWidthPx());
     disc.classList.add('is-dragging');
     if (map.dragging && map.dragging.enabled && map.dragging.enabled()) map.dragging.disable();
     clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
