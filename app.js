@@ -2181,6 +2181,7 @@ function initDisclaimerDrag() {
   let dragging = false;
   let offsetX = 0;
   let offsetY = 0;
+  let activePointerId = null;
 
   const clampAndApply = (left, top) => {
     const mW = mapEl.clientWidth || 0;
@@ -2219,6 +2220,14 @@ function initDisclaimerDrag() {
     clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
   };
 
+  const isSafeDragStart = (evt) => {
+    if (!evt) return false;
+    if (evt.isTrusted === false) return false;
+    if (evt.defaultPrevented) return false;
+    if (evt.target && !disc.contains(evt.target)) return false;
+    return true;
+  };
+
   const endDrag = () => {
     if (!dragging) return false;
     dragging = false;
@@ -2229,6 +2238,7 @@ function initDisclaimerDrag() {
 
   const onPointerMove = (e) => {
     if (!dragging) return;
+    if (activePointerId != null && e.pointerId !== activePointerId) return;
     const mapRect = mapEl.getBoundingClientRect();
     const nextLeft = e.clientX - mapRect.left - offsetX;
     const nextTop = e.clientY - mapRect.top - offsetY;
@@ -2237,7 +2247,9 @@ function initDisclaimerDrag() {
   };
 
   const onPointerUp = (e) => {
+    if (activePointerId != null && e.pointerId !== activePointerId) return;
     if (!endDrag()) return;
+    activePointerId = null;
     if (disc.releasePointerCapture) {
       try { disc.releasePointerCapture(e.pointerId); } catch (err) {}
     }
@@ -2247,9 +2259,15 @@ function initDisclaimerDrag() {
   };
 
   const onPointerDown = (e) => {
+    if (!isSafeDragStart(e)) return;
+    if (dragging) return;
+    if (!e.isPrimary) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    activePointerId = e.pointerId;
     beginDragAt(e.clientX, e.clientY);
-    if (disc.setPointerCapture) disc.setPointerCapture(e.pointerId);
+    if (disc.setPointerCapture) {
+      try { disc.setPointerCapture(e.pointerId); } catch (err) {}
+    }
     window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
@@ -2273,6 +2291,8 @@ function initDisclaimerDrag() {
   };
 
   const onMouseDown = (e) => {
+    if (!isSafeDragStart(e)) return;
+    if (dragging) return;
     if (e.button !== 0) return;
     beginDragAt(e.clientX, e.clientY);
     window.addEventListener('mousemove', onMouseMove);
@@ -2300,6 +2320,8 @@ function initDisclaimerDrag() {
   };
 
   const onTouchStart = (e) => {
+    if (!isSafeDragStart(e)) return;
+    if (dragging) return;
     const touch = e.touches && e.touches[0];
     if (!touch) return;
     beginDragAt(touch.clientX, touch.clientY);
@@ -2316,6 +2338,28 @@ function initDisclaimerDrag() {
     disc.addEventListener('mousedown', onMouseDown);
     disc.addEventListener('touchstart', onTouchStart, { passive: false });
   }
+
+  // Ensure map drag state recovers if pointer events are interrupted.
+  window.addEventListener('blur', () => {
+    if (!dragging) return;
+    activePointerId = null;
+    endDrag();
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('touchend', onTouchEnd);
+    window.removeEventListener('touchcancel', onTouchEnd);
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && dragging) {
+      activePointerId = null;
+      endDrag();
+    }
+  });
 }
 
 function runMapUiReflowPasses() {
