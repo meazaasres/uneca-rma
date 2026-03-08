@@ -33,7 +33,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-100-debug";
+const APP_BUILD_ID = "20260308-101-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -2080,14 +2080,12 @@ function positionDisclaimer() {
     disc.dataset.fixedWidthPx = String(widthPx);
 
     disc.classList.add('clamp-5-lines');
-    setDynamicStyle(disc, {
-      top: "auto",
-      left: left + "px",
-      right: "auto",
-      bottom: bottom + "px",
-      width: widthPx + "px",
-      "max-width": widthPx + "px"
-    });
+    disc.style.setProperty('top', 'auto');
+    disc.style.setProperty('left', left + 'px');
+    disc.style.setProperty('right', 'auto');
+    disc.style.setProperty('bottom', bottom + 'px');
+    disc.style.setProperty('width', widthPx + 'px');
+    disc.style.setProperty('max-width', widthPx + 'px');
 
     // Keep user-dragged position across resize/move while clamping to map bounds.
     if (disclaimerUserPos) {
@@ -2101,13 +2099,11 @@ function positionDisclaimer() {
       const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
       const leftPx = Math.min(maxLeft, Math.max(minLeft, disclaimerUserPos.left));
       const topPx = Math.min(maxTop, Math.max(marginClamp, disclaimerUserPos.top));
-      setDynamicStyle(disc, {
-        top: topPx + "px",
-        left: leftPx + "px",
-        bottom: "auto",
-        width: widthPx + "px",
-        "max-width": widthPx + "px"
-      });
+      disc.style.setProperty('top', topPx + 'px');
+      disc.style.setProperty('left', leftPx + 'px');
+      disc.style.setProperty('bottom', 'auto');
+      disc.style.setProperty('width', widthPx + 'px');
+      disc.style.setProperty('max-width', widthPx + 'px');
       disclaimerUserPos = { left: leftPx, top: topPx };
     }
   } catch (e) {
@@ -2196,13 +2192,11 @@ function initDisclaimerDrag() {
     const clampedTop = Math.min(maxTop, Math.max(marginClamp, top));
     const fixedWidthPx = resolveDisclaimerWidthPx();
 
-    setDynamicStyle(disc, {
-      top: clampedTop + "px",
-      left: clampedLeft + "px",
-      bottom: "auto",
-      width: fixedWidthPx + "px",
-      "max-width": fixedWidthPx + "px"
-    });
+    disc.style.setProperty('top', clampedTop + 'px');
+    disc.style.setProperty('left', clampedLeft + 'px');
+    disc.style.setProperty('bottom', 'auto');
+    disc.style.setProperty('width', fixedWidthPx + 'px');
+    disc.style.setProperty('max-width', fixedWidthPx + 'px');
     disc.dataset.fixedWidthPx = String(fixedWidthPx);
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
   };
