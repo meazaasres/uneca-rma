@@ -2204,7 +2204,6 @@ function initDisclaimerDrag() {
   };
 
   const beginDragAt = (clientX, clientY) => {
-    if (dragging) return;
     const mapRect = mapEl.getBoundingClientRect();
     const discRect = disc.getBoundingClientRect();
     dragging = true;
@@ -2238,20 +2237,15 @@ function initDisclaimerDrag() {
     if (disc.releasePointerCapture) {
       try { disc.releasePointerCapture(e.pointerId); } catch (err) {}
     }
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
-    window.removeEventListener('pointercancel', onPointerUp);
   };
 
   const onPointerDown = (e) => {
+    if (dragging) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     beginDragAt(e.clientX, e.clientY);
     if (disc.setPointerCapture) {
       try { disc.setPointerCapture(e.pointerId); } catch (err) {}
     }
-    window.addEventListener('pointermove', onPointerMove, { passive: false });
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
     e.preventDefault();
     e.stopPropagation();
   };
@@ -2266,16 +2260,13 @@ function initDisclaimerDrag() {
   };
 
   const onMouseUp = () => {
-    if (!endDrag()) return;
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
+    endDrag();
   };
 
   const onMouseDown = (e) => {
+    if (dragging) return;
     if (e.button !== 0) return;
     beginDragAt(e.clientX, e.clientY);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
     e.preventDefault();
     e.stopPropagation();
   };
@@ -2292,39 +2283,36 @@ function initDisclaimerDrag() {
   };
 
   const onTouchEnd = () => {
-    if (!endDrag()) return;
-    window.removeEventListener('touchmove', onTouchMove);
-    window.removeEventListener('touchend', onTouchEnd);
-    window.removeEventListener('touchcancel', onTouchEnd);
+    endDrag();
   };
 
   const onTouchStart = (e) => {
+    if (dragging) return;
     const touch = e.touches && e.touches[0];
     if (!touch) return;
     beginDragAt(touch.clientX, touch.clientY);
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', onTouchEnd);
-    window.addEventListener('touchcancel', onTouchEnd);
     e.preventDefault();
     e.stopPropagation();
   };
 
-  disc.addEventListener('pointerdown', onPointerDown, { capture: true });
-  disc.addEventListener('mousedown', onMouseDown, { capture: true });
-  disc.addEventListener('touchstart', onTouchStart, { passive: false, capture: true });
+  disc.addEventListener('pointerdown', onPointerDown);
+  disc.addEventListener('mousedown', onMouseDown);
+  disc.addEventListener('touchstart', onTouchStart, { passive: false });
+
+  // Keep listeners attached once to avoid race conditions when drag starts.
+  window.addEventListener('pointermove', onPointerMove, { passive: false });
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+  window.addEventListener('touchmove', onTouchMove, { passive: false });
+  window.addEventListener('touchend', onTouchEnd);
+  window.addEventListener('touchcancel', onTouchEnd);
 
   // Ensure map drag state recovers if pointer events are interrupted.
   window.addEventListener('blur', () => {
     if (!dragging) return;
     endDrag();
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
-    window.removeEventListener('pointercancel', onPointerUp);
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
-    window.removeEventListener('touchmove', onTouchMove);
-    window.removeEventListener('touchend', onTouchEnd);
-    window.removeEventListener('touchcancel', onTouchEnd);
   });
 
   document.addEventListener('visibilitychange', () => {

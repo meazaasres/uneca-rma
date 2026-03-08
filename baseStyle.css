@@ -99,11 +99,11 @@
       text-justify: inter-word;
       max-height: 15vh; /* cap height so it doesn't cover map */
       overflow: hidden;
-      z-index: 1060;
-      pointer-events: auto;
+      z-index: 3000;
+      pointer-events: auto !important;
       user-select: none;
       -webkit-user-select: none;
-      touch-action: none;
+      touch-action: none !important;
       cursor: grab;
     }
     #disclaimer.is-dragging {
