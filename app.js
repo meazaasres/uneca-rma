@@ -2222,8 +2222,6 @@ function initDisclaimerDrag() {
 
   const isSafeDragStart = (evt) => {
     if (!evt) return false;
-    if (evt.isTrusted === false) return false;
-    if (evt.defaultPrevented) return false;
     if (evt.target && !disc.contains(evt.target)) return false;
     return true;
   };
@@ -2261,7 +2259,6 @@ function initDisclaimerDrag() {
   const onPointerDown = (e) => {
     if (!isSafeDragStart(e)) return;
     if (dragging) return;
-    if (!e.isPrimary) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     activePointerId = e.pointerId;
     beginDragAt(e.clientX, e.clientY);
@@ -2362,6 +2359,20 @@ function initDisclaimerDrag() {
   });
 }
 
+function scheduleDisclaimerDragInit(maxAttempts = 10, delayMs = 180) {
+  let attempts = 0;
+  const tick = () => {
+    attempts += 1;
+    initDisclaimerDrag();
+    const disc = document.getElementById('disclaimer');
+    if (disc && disc.dataset.dragInit === '1') return;
+    if (attempts < maxAttempts) {
+      setTimeout(tick, delayMs);
+    }
+  };
+  tick();
+}
+
 function runMapUiReflowPasses() {
   // Browser zoom updates element metrics asynchronously; run multiple passes.
   [20, 110, 240].forEach((delayMs) => {
@@ -2399,7 +2410,7 @@ window.addEventListener('load', () => {
   setTimeout(applyHomeView, 50);
   setTimeout(syncLayoutWithHeaderHeight, 80);
   setTimeout(resetAllMapUiPositions, 300);
-  setTimeout(initDisclaimerDrag, 350);
+  setTimeout(scheduleDisclaimerDragInit, 350);
   setTimeout(repositionDraggableControls, 360);
   setTimeout(ensureScaleBarPinnedToMapBottom, 380);
   queueMapUiReflow();
