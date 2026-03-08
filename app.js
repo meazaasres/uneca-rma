@@ -2173,10 +2173,13 @@ function initDisclaimerDrag() {
   disc.dataset.dragInit = '1';
   disc.setAttribute('contenteditable', 'false');
   disc.setAttribute('draggable', 'false');
+  disc.style.pointerEvents = 'auto';
 
   let dragging = false;
-  let offsetX = 0;
-  let offsetY = 0;
+  let startX = 0;
+  let startY = 0;
+  let baseLeft = 0;
+  let baseTop = 0;
 
   const clampAndApply = (left, top) => {
     const mW = mapEl.clientWidth || 0;
@@ -2203,16 +2206,18 @@ function initDisclaimerDrag() {
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
   };
 
-  const beginDragAt = (clientX, clientY) => {
+  const beginDrag = (clientX, clientY) => {
     const mapRect = mapEl.getBoundingClientRect();
     const discRect = disc.getBoundingClientRect();
     dragging = true;
-    offsetX = clientX - discRect.left;
-    offsetY = clientY - discRect.top;
+    startX = clientX;
+    startY = clientY;
+    baseLeft = discRect.left - mapRect.left;
+    baseTop = discRect.top - mapRect.top;
     disc.dataset.fixedWidthPx = String(resolveDisclaimerWidthPx());
     disc.classList.add('is-dragging');
     if (map.dragging && map.dragging.enabled && map.dragging.enabled()) map.dragging.disable();
-    clampAndApply(discRect.left - mapRect.left, discRect.top - mapRect.top);
+    clampAndApply(baseLeft, baseTop);
   };
 
   const endDrag = () => {
@@ -2225,9 +2230,8 @@ function initDisclaimerDrag() {
 
   const onPointerMove = (e) => {
     if (!dragging) return;
-    const mapRect = mapEl.getBoundingClientRect();
-    const nextLeft = e.clientX - mapRect.left - offsetX;
-    const nextTop = e.clientY - mapRect.top - offsetY;
+    const nextLeft = baseLeft + (e.clientX - startX);
+    const nextTop = baseTop + (e.clientY - startY);
     clampAndApply(nextLeft, nextTop);
     e.preventDefault();
   };
@@ -2242,7 +2246,7 @@ function initDisclaimerDrag() {
   const onPointerDown = (e) => {
     if (dragging) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    beginDragAt(e.clientX, e.clientY);
+    beginDrag(e.clientX, e.clientY);
     if (disc.setPointerCapture) {
       try { disc.setPointerCapture(e.pointerId); } catch (err) {}
     }
@@ -2252,9 +2256,8 @@ function initDisclaimerDrag() {
 
   const onMouseMove = (e) => {
     if (!dragging) return;
-    const mapRect = mapEl.getBoundingClientRect();
-    const nextLeft = e.clientX - mapRect.left - offsetX;
-    const nextTop = e.clientY - mapRect.top - offsetY;
+    const nextLeft = baseLeft + (e.clientX - startX);
+    const nextTop = baseTop + (e.clientY - startY);
     clampAndApply(nextLeft, nextTop);
     e.preventDefault();
   };
@@ -2266,28 +2269,17 @@ function initDisclaimerDrag() {
   const onMouseDown = (e) => {
     if (dragging) return;
     if (e.button !== 0) return;
-    beginDragAt(e.clientX, e.clientY);
+    beginDrag(e.clientX, e.clientY);
     e.preventDefault();
     e.stopPropagation();
-  };
-
-  // Legacy fallback: some environments suppress addEventListener mousedown paths.
-  disc.onmousedown = (e) => {
-    if (!e) return;
-    if (dragging) return;
-    if (e.button !== 0) return;
-    beginDragAt(e.clientX, e.clientY);
-    if (typeof e.preventDefault === 'function') e.preventDefault();
-    if (typeof e.stopPropagation === 'function') e.stopPropagation();
   };
 
   const onTouchMove = (e) => {
     if (!dragging) return;
     const touch = e.touches && e.touches[0];
     if (!touch) return;
-    const mapRect = mapEl.getBoundingClientRect();
-    const nextLeft = touch.clientX - mapRect.left - offsetX;
-    const nextTop = touch.clientY - mapRect.top - offsetY;
+    const nextLeft = baseLeft + (touch.clientX - startX);
+    const nextTop = baseTop + (touch.clientY - startY);
     clampAndApply(nextLeft, nextTop);
     e.preventDefault();
   };
@@ -2300,7 +2292,7 @@ function initDisclaimerDrag() {
     if (dragging) return;
     const touch = e.touches && e.touches[0];
     if (!touch) return;
-    beginDragAt(touch.clientX, touch.clientY);
+    beginDrag(touch.clientX, touch.clientY);
     e.preventDefault();
     e.stopPropagation();
   };
@@ -2318,8 +2310,6 @@ function initDisclaimerDrag() {
   window.addEventListener('touchmove', onTouchMove, false);
   window.addEventListener('touchend', onTouchEnd);
   window.addEventListener('touchcancel', onTouchEnd);
-  document.addEventListener('mousemove', onMouseMove, false);
-  document.addEventListener('mouseup', onMouseUp, false);
 
   // Ensure map drag state recovers if pointer events are interrupted.
   window.addEventListener('blur', () => {
