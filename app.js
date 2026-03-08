@@ -33,7 +33,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-104-debug";
+const APP_BUILD_ID = "20260308-105-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -4756,6 +4756,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const disclaimerText = (document.getElementById('disclaimer')?.textContent || '').trim();
+        const disclaimerEl = document.getElementById('disclaimer');
         const scaleControlEl = document.querySelector('.leaflet-control-exact-scale, .map-bottom-scale-control');
         const northArrowEl = document.querySelector('.leaflet-control-north-arrow');
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
@@ -4829,9 +4830,12 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         if (disclaimerText) {
           const pad = 6;
-          const maxW = Math.max(120, Math.round(outW * 0.46));
           const lineH = 13;
           const maxLines = 5;
+          const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
+          const sourceDiscW = (discRect && discRect.width > 0) ? Math.round(discRect.width * rawScaleX) : Math.round(outW * 0.46);
+          const sourceDiscH = (discRect && discRect.height > 0) ? Math.round(discRect.height * rawScaleY) : Math.round(cropH * 0.15);
+          const maxW = Math.max(120, Math.min(Math.round(outW * 0.6), sourceDiscW));
           octx.font = 'italic 11px Segoe UI, sans-serif';
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
@@ -4841,9 +4845,16 @@ window.addEventListener('load', resetInitialScrollPositions);
           if (truncated && lines.length) {
             lines[lines.length - 1] = lines[lines.length - 1].replace(/[\s.,;:!?-]*$/, '') + '...';
           }
-          const boxH = (lines.length * lineH) + (pad * 2);
-          const x = 8;
-          const y = titleH + cropH - boxH - 28;
+          let boxH = (lines.length * lineH) + (pad * 2);
+          if (sourceDiscH > 0) {
+            boxH = Math.max(boxH, Math.min(Math.round(cropH * 0.32), sourceDiscH));
+          }
+          const discLeftCss = (discRect && mapRect) ? (discRect.left - mapRect.left) : 8;
+          const discTopCss = (discRect && mapRect) ? (discRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 28);
+          let x = Math.round(discLeftCss * rawScaleX) - cropX;
+          let y = titleH + Math.round(discTopCss * rawScaleY);
+          x = Math.max(0, Math.min(outW - maxW, x));
+          y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
           octx.fillStyle = 'rgba(255,255,255,0.93)';
           octx.fillRect(x, y, maxW, boxH);
           octx.fillStyle = '#333333';
