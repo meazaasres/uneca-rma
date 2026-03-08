@@ -33,7 +33,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-99-debug";
+const APP_BUILD_ID = "20260308-100-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -2302,6 +2302,10 @@ function initDisclaimerDrag() {
   disc.addEventListener('mousedown', onMouseDown);
   disc.addEventListener('touchstart', onTouchStart, false);
 
+  // Hard fallback channel: direct handlers are more resilient on locked-down browsers.
+  disc.onmousedown = onMouseDown;
+  disc.ontouchstart = onTouchStart;
+
   // Keep listeners attached once to avoid race conditions when drag starts.
   window.addEventListener('pointermove', onPointerMove, false);
   window.addEventListener('pointerup', onPointerUp);
@@ -2311,6 +2315,13 @@ function initDisclaimerDrag() {
   window.addEventListener('touchmove', onTouchMove, false);
   window.addEventListener('touchend', onTouchEnd);
   window.addEventListener('touchcancel', onTouchEnd);
+
+  // Capture-phase document listeners as final fallback if window listeners miss events.
+  document.addEventListener('mousemove', onMouseMove, true);
+  document.addEventListener('mouseup', onMouseUp, true);
+  document.addEventListener('touchmove', onTouchMove, true);
+  document.addEventListener('touchend', onTouchEnd, true);
+  document.addEventListener('touchcancel', onTouchEnd, true);
 
   // Ensure map drag state recovers if pointer events are interrupted.
   window.addEventListener('blur', () => {
