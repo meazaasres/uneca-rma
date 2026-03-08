@@ -33,7 +33,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-103-debug";
+const APP_BUILD_ID = "20260308-104-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -4322,26 +4322,6 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.transform = 'none';
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
-        if (source.id === 'disclaimer') {
-          const leftInset = Math.max(6, Math.round(8 * rawScaleX));
-          const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
-          const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
-          const exportBottom = Math.max(0, Math.min(exportBottomRaw, Math.max(0, H - exportHeight)));
-          clone.style.width = 'auto';
-          clone.style.height = 'auto';
-          clone.style.display = 'inline-block';
-          clone.style.left = leftInset + 'px';
-          clone.style.right = 'auto';
-          clone.style.maxWidth = Math.max(120, Math.min(exportWidth, W - leftInset - 8)) + 'px';
-          clone.style.maxHeight = Math.max(40, Math.round(H * 0.32)) + 'px';
-          clone.style.overflow = 'hidden';
-          clone.style.textAlign = 'left';
-          clone.style.textJustify = 'auto';
-          clone.style.whiteSpace = 'normal';
-          clone.style.top = 'auto';
-          clone.style.bottom = exportBottom + 'px';
-          clone.style.zIndex = '5';
-        }
         if (
           source.classList &&
           (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
@@ -4355,7 +4335,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
         mapWrapper.appendChild(clone);
         // Final hard clamp inside map frame to prevent spill into legend section.
-        if (source.id === 'disclaimer' || (source.classList && (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control')))) {
+        if (source.classList && (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))) {
           const maxBottom = Math.max(0, H - (clone.offsetHeight || exportHeight));
           const currentBottom = Math.max(0, parseFloat(clone.style.bottom || "0") || 0);
           clone.style.bottom = Math.max(0, Math.min(maxBottom, currentBottom)) + 'px';
