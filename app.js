@@ -2271,6 +2271,16 @@ function initDisclaimerDrag() {
     e.stopPropagation();
   };
 
+  // Legacy fallback: some environments suppress addEventListener mousedown paths.
+  disc.onmousedown = (e) => {
+    if (!e) return;
+    if (dragging) return;
+    if (e.button !== 0) return;
+    beginDragAt(e.clientX, e.clientY);
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+  };
+
   const onTouchMove = (e) => {
     if (!dragging) return;
     const touch = e.touches && e.touches[0];
@@ -2297,17 +2307,19 @@ function initDisclaimerDrag() {
 
   disc.addEventListener('pointerdown', onPointerDown);
   disc.addEventListener('mousedown', onMouseDown);
-  disc.addEventListener('touchstart', onTouchStart, { passive: false });
+  disc.addEventListener('touchstart', onTouchStart, false);
 
   // Keep listeners attached once to avoid race conditions when drag starts.
-  window.addEventListener('pointermove', onPointerMove, { passive: false });
+  window.addEventListener('pointermove', onPointerMove, false);
   window.addEventListener('pointerup', onPointerUp);
   window.addEventListener('pointercancel', onPointerUp);
   window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('mouseup', onMouseUp);
-  window.addEventListener('touchmove', onTouchMove, { passive: false });
+  window.addEventListener('touchmove', onTouchMove, false);
   window.addEventListener('touchend', onTouchEnd);
   window.addEventListener('touchcancel', onTouchEnd);
+  document.addEventListener('mousemove', onMouseMove, false);
+  document.addEventListener('mouseup', onMouseUp, false);
 
   // Ensure map drag state recovers if pointer events are interrupted.
   window.addEventListener('blur', () => {
