@@ -33,7 +33,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-101-debug";
+const APP_BUILD_ID = "20260308-102-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -2058,8 +2058,7 @@ function positionDisclaimer() {
     const mapEl = map.getContainer();
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
-  const disclaimerInsetExtra = 40;
-  const left = 12 + MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra;
+  const left = 12 + MAP_SIDE_VISIBLE_INSET_PX;
   const bottom = 30;
     const preferredFixedWidth = 252;
     const margin = 12;
@@ -2094,7 +2093,7 @@ function positionDisclaimer() {
       const dW = disc.offsetWidth || desiredWidth;
       const dH = disc.offsetHeight || 0;
       const marginClamp = 6;
-      const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra + marginClamp);
+      const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + marginClamp);
       const maxLeft = Math.max(minLeft, mW - MAP_SIDE_VISIBLE_INSET_PX - dW - marginClamp);
       const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
       const leftPx = Math.min(maxLeft, Math.max(minLeft, disclaimerUserPos.left));
@@ -2155,8 +2154,7 @@ function initDisclaimerDrag() {
 
   const resolveDisclaimerWidthPx = () => {
     const mapRect = mapEl.getBoundingClientRect();
-    const disclaimerInsetExtra = 40;
-    const leftInset = 12 + MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra;
+    const leftInset = 12 + MAP_SIDE_VISIBLE_INSET_PX;
     const margin = 12;
     const maxAvailableWidth = mapRect
       ? Math.max(120, Math.round(mapRect.width - leftInset - margin))
@@ -2183,9 +2181,8 @@ function initDisclaimerDrag() {
     const mH = mapEl.clientHeight || 0;
     const dW = disc.offsetWidth || 0;
     const dH = disc.offsetHeight || 0;
-    const disclaimerInsetExtra = 40;
     const marginClamp = 6;
-    const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + disclaimerInsetExtra + marginClamp);
+    const minLeft = Math.max(marginClamp, MAP_SIDE_VISIBLE_INSET_PX + marginClamp);
     const maxLeft = Math.max(minLeft, mW - MAP_SIDE_VISIBLE_INSET_PX - dW - marginClamp);
     const maxTop = Math.max(marginClamp, mH - dH - marginClamp);
     const clampedLeft = Math.min(maxLeft, Math.max(minLeft, left));
