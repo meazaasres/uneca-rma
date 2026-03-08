@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security Checklist Status</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      margin: 24px;
+      color: #1f2937;
+      line-height: 1.45;
+    }
+    h1, h2 {
+      margin: 0 0 10px;
+      color: #111827;
+    }
+    h1 { font-size: 24px; }
+    h2 { font-size: 18px; margin-top: 24px; }
+    p { margin: 0 0 12px; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 8px 0 18px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      vertical-align: top;
+      word-wrap: break-word;
+    }
+    th {
+      background: #f1f5f9;
+      text-align: left;
+      font-weight: 600;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #f8fafc;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    ul { margin: 8px 0 0 20px; }
+    li { margin: 4px 0; }
+    .muted { color: #475569; }
+  </style>
+</head>
+<body>
+  <h1>Security Checklist Status</h1>
+  <p class="muted">This file tracks implementation status for the UNECA Rapid Mapping security controls. It is intended to be audit-friendly and deployment-safe.</p>
+
+  <h2>Application Controls</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 8%;">ID</th>
+        <th style="width: 33%;">Control</th>
+        <th style="width: 12%;">Status</th>
+        <th style="width: 47%;">Evidence</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>HTTPS-only URL import</td><td>Complete</td><td>URL validation blocks non-HTTPS imports.</td></tr>
+      <tr><td>2</td><td>Block URL credentials and non-443 port</td><td>Complete</td><td>URL validation rejects credentials and non-default HTTPS ports.</td></tr>
+      <tr><td>3</td><td>Block private/local/intranet hosts</td><td>Complete</td><td>Host validation blocks localhost/private ranges and local-only hostnames.</td></tr>
+      <tr><td>4</td><td>Remote import timeout and max size cap</td><td>Complete</td><td>Timeout and byte cap enforced in remote import pipeline.</td></tr>
+      <tr><td>5</td><td>Local file max size cap</td><td>Complete</td><td>1 GB local file cap enforced before processing.</td></tr>
+      <tr><td>6</td><td>Local file extension allowlist (.geojson, .csv, .zip)</td><td>Complete</td><td>Extension checks run before import.</td></tr>
+      <tr><td>7</td><td>Dataset complexity limits (max features/vertices)</td><td>Complete</td><td>Limits enforced before rendering/export processing.</td></tr>
+      <tr><td>8</td><td>Safe popup rendering (no HTML sink)</td><td>Complete</td><td>Popups and dynamic UI text use text-safe paths.</td></tr>
+      <tr><td>9</td><td>contenteditable handling as plain text</td><td>Complete</td><td>Paste converted to plain text and sanitized on blur.</td></tr>
+      <tr><td>10</td><td>Redirect re-validation for URL import</td><td>Complete</td><td>Redirect target is re-validated after fetch redirection.</td></tr>
+      <tr><td>11</td><td>Remove inline JS handlers</td><td>Complete</td><td>Event listeners are wired in app code (CSP-friendly).</td></tr>
+      <tr><td>12</td><td>ZIP bomb/decompression bomb guard</td><td>Complete</td><td>ZIP entries, uncompressed total, and expansion ratio are checked.</td></tr>
+      <tr><td>13</td><td>Vendor supply-chain integrity controls</td><td>Complete</td><td>Vendor checksums tracked in <code>vendor-hashes.json</code> and verified by script.</td></tr>
+      <tr><td>14</td><td>Strict MIME/content-type enforcement (remote GeoJSON/CSV)</td><td>Complete</td><td>Remote content-type checks are enforced before parsing.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>IIS / Deployment Controls</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 8%;">ID</th>
+        <th style="width: 33%;">Control</th>
+        <th style="width: 12%;">Status</th>
+        <th style="width: 47%;">Deployment Note</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>15</td><td>CSP header with <code>frame-ancestors 'none'</code></td><td>Prepared</td><td>Defined in <code>web.config</code>; verify on deployed IIS endpoint.</td></tr>
+      <tr><td>16</td><td><code>X-Frame-Options: DENY</code></td><td>Prepared</td><td>Defined in <code>web.config</code>; verify as response header.</td></tr>
+      <tr><td>17</td><td><code>X-Content-Type-Options: nosniff</code></td><td>Prepared</td><td>Defined in <code>web.config</code>; verify as response header.</td></tr>
+      <tr><td>18</td><td><code>Referrer-Policy</code></td><td>Prepared</td><td>Defined in <code>web.config</code>; verify as response header.</td></tr>
+      <tr><td>19</td><td>Cache-control for sensitive exports/data</td><td>Prepared</td><td><code>no-store/no-cache</code> policy and IIS static cache disable are set in <code>web.config</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Verification Commands</h2>
+  <ul>
+    <li>Vendor integrity: <code>powershell -ExecutionPolicy Bypass -File .\scripts\verify-vendor-hashes.ps1</code></li>
+    <li>IIS response headers (after deployment): <code>powershell -ExecutionPolicy Bypass -File .\scripts\verify-security-headers.ps1 -Url https://&lt;your-host&gt;/</code></li>
+  </ul>
+</body>
+</html>

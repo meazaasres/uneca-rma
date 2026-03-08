@@ -32,6 +32,24 @@ No build step is required.
 - Verify vendor integrity locally with: `powershell -ExecutionPolicy Bypass -File .\scripts\verify-vendor-hashes.ps1`
 - Regenerate vendor hash baseline after approved library updates: `powershell -ExecutionPolicy Bypass -File .\scripts\generate-vendor-hashes.ps1`
 
+## Security Checklist
+- Control-by-control status is maintained in `SECURITY_CHECKLIST.md`.
+- Deployment-only controls (IIS headers/cache policy) are marked as `Prepared` and must be validated against the live IIS endpoint.
+- To generate a Word copy of the checklist:
+	- `powershell -ExecutionPolicy Bypass -File .\scripts\generate-security-checklist-docx.ps1 -InputPath .\SECURITY_CHECKLIST.md -OutputPath .\SECURITY_CHECKLIST.docx`
+
+## IIS Security Header Verification
+After deploying to IIS, validate response headers with:
+
+`powershell -ExecutionPolicy Bypass -File .\scripts\verify-security-headers.ps1 -Url https://<your-host>/`
+
+The script checks required headers/tokens including:
+- `Content-Security-Policy` tokens (including `frame-ancestors 'none'`)
+- `X-Frame-Options`, `X-Content-Type-Options`
+- `Referrer-Policy`, `Permissions-Policy`
+- `Cross-Origin-*` isolation headers
+- Cache policy headers
+
 ## Repository Notes
 - `vendor/` contains local third-party dependencies used by the app
 - `.vscode/` is ignored and not tracked
