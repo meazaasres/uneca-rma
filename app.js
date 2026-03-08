@@ -33,7 +33,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-108-debug";
+const APP_BUILD_ID = "20260308-109-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -4856,12 +4856,12 @@ window.addEventListener('load', resetInitialScrollPositions);
           const pad = 6;
           const lineH = 13;
           const maxLines = 5;
-          const edgeDiscExpandLeftPx = 32;
-          const edgeDiscExpandWidthPx = 96;
+          const edgeDiscExpandLeftPx = 8;
+          const edgeDiscExpandWidthPx = 28;
           const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
           const sourceDiscW = (discRect && discRect.width > 0) ? Math.round(discRect.width * rawScaleX) : Math.round(outW * 0.46);
           const sourceDiscH = (discRect && discRect.height > 0) ? Math.round(discRect.height * rawScaleY) : Math.round(cropH * 0.15);
-          const maxW = Math.max(140, Math.min(Math.round(outW * 0.75), sourceDiscW + edgeDiscExpandWidthPx));
+          const maxW = Math.max(130, Math.min(Math.round(outW * 0.56), sourceDiscW + edgeDiscExpandWidthPx));
           octx.font = 'italic 11px Segoe UI, sans-serif';
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
@@ -4871,7 +4871,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           if (truncated && lines.length) {
             lines[lines.length - 1] = lines[lines.length - 1].replace(/[\s.,;:!?-]*$/, '') + '...';
           }
-          let boxH = (lines.length * lineH) + (pad * 2);
+          let boxH = (maxLines * lineH) + (pad * 2);
           if (sourceDiscH > 0) {
             boxH = Math.max(boxH, Math.min(Math.round(cropH * 0.32), sourceDiscH));
           }
@@ -4884,8 +4884,38 @@ window.addEventListener('load', resetInitialScrollPositions);
           octx.fillStyle = 'rgba(255,255,255,0.93)';
           octx.fillRect(x, y, maxW, boxH);
           octx.fillStyle = '#333333';
+          const drawJustifiedLine = (ctx, line, startX, baselineY, maxTextW, isLast) => {
+            const words = String(line || '').trim().split(/\s+/).filter(Boolean);
+            if (isLast || words.length <= 1 || /\.\.\.$/.test(line)) {
+              ctx.fillText(line, startX, baselineY);
+              return;
+            }
+            const wordsWidth = words.reduce((sum, w) => sum + ctx.measureText(w).width, 0);
+            const gaps = words.length - 1;
+            const baseSpace = ctx.measureText(' ').width;
+            const minNaturalWidth = wordsWidth + (baseSpace * gaps);
+            if (minNaturalWidth >= maxTextW) {
+              ctx.fillText(line, startX, baselineY);
+              return;
+            }
+            const extraSpace = (maxTextW - minNaturalWidth) / gaps;
+            let cursor = startX;
+            for (let j = 0; j < words.length; j++) {
+              const w = words[j];
+              ctx.fillText(w, cursor, baselineY);
+              cursor += ctx.measureText(w).width;
+              if (j < gaps) cursor += baseSpace + extraSpace;
+            }
+          };
           for (let i = 0; i < lines.length; i++) {
-            octx.fillText(lines[i], x + pad, y + pad + (i * lineH));
+            drawJustifiedLine(
+              octx,
+              lines[i],
+              x + pad,
+              y + pad + (i * lineH),
+              maxW - (pad * 2),
+              i === lines.length - 1
+            );
           }
         }
 
