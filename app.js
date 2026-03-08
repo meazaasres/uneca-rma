@@ -33,7 +33,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-106-debug";
+const APP_BUILD_ID = "20260308-107-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -4334,6 +4334,28 @@ window.addEventListener('load', resetInitialScrollPositions);
           clone.style.top = 'auto';
           clone.style.bottom = exportBottom + 'px';
           clone.style.zIndex = '5';
+        }
+        if (
+          source.classList &&
+          source.classList.contains('leaflet-control-north-arrow')
+        ) {
+          // Inline centering guards against Firefox/html2canvas dropping selector-based alignment.
+          clone.style.display = 'flex';
+          clone.style.flexDirection = 'column';
+          clone.style.alignItems = 'center';
+          clone.style.justifyContent = 'center';
+          const symbol = clone.querySelector('.north-arrow-symbol');
+          if (symbol) {
+            symbol.style.display = 'block';
+            symbol.style.width = '100%';
+            symbol.style.textAlign = 'center';
+            symbol.style.paddingTop = '0';
+            symbol.style.margin = '0';
+            symbol.style.lineHeight = '1';
+            symbol.style.position = 'relative';
+            symbol.style.left = '0';
+            symbol.style.right = '0';
+          }
         }
         mapWrapper.appendChild(clone);
         // Final hard clamp inside map frame to prevent spill into legend section.
