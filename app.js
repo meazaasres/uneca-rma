@@ -33,7 +33,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-109-debug";
+const APP_BUILD_ID = "20260308-110-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -5494,7 +5494,7 @@ function exportSVG() {
         const fontSizeDisc = Math.max(8, Math.round(10 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
         const padding = Math.max(4, Math.round(5 * uiScale));
-        const maxLines = 6;
+        const maxLines = 5;
         const avgCharWidth = Math.max(5, Math.round(fontSizeDisc * 0.5));
         const maxCharsPerLine = Math.max(16, Math.floor((discWidth - (padding * 2)) / avgCharWidth));
 
@@ -5564,6 +5564,12 @@ function exportSVG() {
           const tspan = document.createElementNS(svgNS, "tspan");
           tspan.setAttribute("x", String(discX + padding));
           tspan.setAttribute("dy", idx === 0 ? "0" : String(lineHeightDisc));
+          const isLastLine = idx === lines.length - 1;
+          const shouldJustify = !isLastLine && !/\.\.\.$/.test(ln) && /\s/.test(ln);
+          if (shouldJustify) {
+            tspan.setAttribute("textLength", String(Math.max(1, discWidth - (padding * 2))));
+            tspan.setAttribute("lengthAdjust", "spacing");
+          }
           tspan.textContent = ln;
           discText.appendChild(tspan);
         });
@@ -5625,6 +5631,7 @@ function exportSVG() {
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
         let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
         let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
+        sbY -= Math.max(2, Math.round(4 * uiScale));
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
         const sbXMin = alignedContentOffsetX;
