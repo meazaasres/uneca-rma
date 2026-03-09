@@ -2382,54 +2382,6 @@ function scheduleDisclaimerDragInit(maxAttempts = 10, delayMs = 180) {
   tick();
 }
 
-function installRuntimeBuildIndicator() {
-  try {
-    const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
-    if (!mapEl) return;
-    const existing = document.getElementById('runtime-build-indicator');
-    if (existing) return;
-
-    const badge = document.createElement('div');
-    badge.id = 'runtime-build-indicator';
-    badge.setAttribute('aria-live', 'polite');
-    badge.style.position = 'absolute';
-    badge.style.top = '8px';
-    badge.style.left = (MAP_SIDE_VISIBLE_INSET_PX + 8) + 'px';
-    badge.style.zIndex = '4000';
-    badge.style.padding = '6px 8px';
-    badge.style.fontSize = '11px';
-    badge.style.lineHeight = '1.3';
-    badge.style.fontFamily = 'monospace';
-    badge.style.background = 'rgba(0,0,0,0.78)';
-    badge.style.color = '#fff';
-    badge.style.borderRadius = '4px';
-    badge.style.pointerEvents = 'none';
-    mapEl.appendChild(badge);
-
-    const update = () => {
-      const disc = document.getElementById('disclaimer');
-      const northArrowEl = document.querySelector('.leaflet-control-north-arrow');
-      const dragInit = disc && disc.dataset ? (disc.dataset.dragInit || '0') : '0';
-      const discPe = disc ? (window.getComputedStyle(disc).pointerEvents || 'unknown') : 'missing';
-      badge.textContent = [
-        `build:${APP_BUILD_ID}`,
-        `disclaimer:${disc ? 'yes' : 'no'}`,
-        `dragInit:${dragInit}`,
-        `discPE:${discPe}`,
-        `northArrow:${northArrowEl ? 'yes' : 'no'}`
-      ].join(' | ');
-    };
-
-    update();
-    setTimeout(update, 400);
-    setTimeout(update, 1200);
-    setTimeout(update, 2600);
-    window.__UNECA_BUILD__ = APP_BUILD_ID;
-  } catch (e) {
-    console.warn('installRuntimeBuildIndicator failed', e);
-  }
-}
-
 function runMapUiReflowPasses() {
   // Browser zoom updates element metrics asynchronously; run multiple passes.
   [20, 110, 240].forEach((delayMs) => {
@@ -2462,7 +2414,6 @@ function queueMapUiReflow() {
 
 // run initially and on relevant events
 window.addEventListener('load', () => {
-  installRuntimeBuildIndicator();
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
