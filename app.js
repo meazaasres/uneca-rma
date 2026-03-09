@@ -1493,7 +1493,7 @@ const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 const SIDEBAR_WIDTH_PX = 250;
 const MAP_OVERLAP_PX = 80;
 const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
-const AFRICA_FIT_BOUNDS_SIDE_PADDING_PX = 40;
+const AFRICA_HOME_SIDE_TRIM_PX = 40;
 const DISCLAIMER_LEFT_VISIBLE_INSET_PX = 50;
 const HOME_VERTICAL_PADDING_PX = 10;
 const EDGE_HOME_VERTICAL_PADDING_EXTRA_PX = 8;
@@ -1516,6 +1516,16 @@ function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   const maxTrim = Math.max(0, (spanLng / 2) - 1e-6);
   const trim = Math.min(spanLng * ratio, maxTrim);
   return L.latLngBounds([sw.lat, sw.lng + trim], [ne.lat, ne.lng - trim]);
+}
+
+function trimBoundsHorizontallyByPixels(bounds, sideTrimPx) {
+  if (!(sideTrimPx > 0) || !map || typeof map.getSize !== "function") return bounds;
+  const mapSize = map.getSize();
+  const mapWidth = Number(mapSize && mapSize.x);
+  if (!Number.isFinite(mapWidth) || mapWidth <= (sideTrimPx * 2) + 10) return bounds;
+  // Convert per-side pixel trim into a longitude trim ratio so west/east is tighter.
+  const ratio = Math.max(0, Math.min(0.45, sideTrimPx / mapWidth));
+  return trimBoundsHorizontally(bounds, ratio);
 }
 
 function hasUsableMapViewport() {
@@ -1601,11 +1611,12 @@ function applyHomeView() {
   }
   homeViewRetryCount = 0;
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
-    map.fitBounds(trimBoundsHorizontally(INITIAL_HOME_BOUNDS), {
+    const africaHomeBounds = trimBoundsHorizontallyByPixels(INITIAL_HOME_BOUNDS, AFRICA_HOME_SIDE_TRIM_PX);
+    map.fitBounds(africaHomeBounds, {
       animate: false,
       // Keep north/south stable, align east/west to visible map area.
-      paddingTopLeft: [AFRICA_FIT_BOUNDS_SIDE_PADDING_PX, homePadY],
-      paddingBottomRight: [AFRICA_FIT_BOUNDS_SIDE_PADDING_PX, homePadY]
+      paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, homePadY],
+      paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, homePadY]
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
