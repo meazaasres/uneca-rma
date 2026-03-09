@@ -1493,6 +1493,7 @@ const MAP_NAV_BOUNDS = L.latLngBounds([[-85, -180], [85, 180]]);
 const SIDEBAR_WIDTH_PX = 250;
 const MAP_OVERLAP_PX = 80;
 const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
+const AFRICA_FIT_BOUNDS_SIDE_PADDING_PX = 40;
 const DISCLAIMER_LEFT_VISIBLE_INSET_PX = 50;
 const HOME_VERTICAL_PADDING_PX = 10;
 const EDGE_HOME_VERTICAL_PADDING_EXTRA_PX = 8;
@@ -1603,8 +1604,8 @@ function applyHomeView() {
     map.fitBounds(trimBoundsHorizontally(INITIAL_HOME_BOUNDS), {
       animate: false,
       // Keep north/south stable, align east/west to visible map area.
-      paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, homePadY],
-      paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, homePadY]
+      paddingTopLeft: [AFRICA_FIT_BOUNDS_SIDE_PADDING_PX, homePadY],
+      paddingBottomRight: [AFRICA_FIT_BOUNDS_SIDE_PADDING_PX, homePadY]
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
