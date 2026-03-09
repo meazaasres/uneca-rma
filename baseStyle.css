@@ -478,6 +478,7 @@ footer {
   line-height: 1.2;
   color: #102a43;
   font-weight: 400;
+  white-space: nowrap;
 }
 
 .leaflet-control-exact-scale .exact-scale-prefix,

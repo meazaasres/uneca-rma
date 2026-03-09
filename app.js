@@ -4268,7 +4268,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
           'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
           'boxShadow', 'outline',
-          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
+          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'whiteSpace', 'wordBreak',
           'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
         ];
         props.forEach((prop) => {
@@ -4319,6 +4319,11 @@ window.addEventListener('load', resetInitialScrollPositions);
           source.classList &&
           (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
         ) {
+          clone.style.whiteSpace = 'nowrap';
+          clone.style.wordBreak = 'normal';
+          clone.style.display = 'inline-flex';
+          clone.style.alignItems = 'center';
+          clone.style.justifyContent = 'center';
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
           const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
           const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - exportHeight)));
@@ -4478,6 +4483,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         fallback.style.fontWeight = '400';
         fallback.style.color = '#102a43';
         fallback.style.textAlign = 'center';
+        fallback.style.whiteSpace = 'nowrap';
+        fallback.style.wordBreak = 'normal';
         fallback.style.pointerEvents = 'none';
         fallback.textContent = labelText;
         mapWrapper.appendChild(fallback);
@@ -4572,6 +4579,8 @@ window.addEventListener('load', resetInitialScrollPositions);
           sb.style.fontWeight = '400';
           sb.style.color = '#102a43';
           sb.style.textAlign = 'center';
+          sb.style.whiteSpace = 'nowrap';
+          sb.style.wordBreak = 'normal';
           sb.style.zIndex = '6';
           sb.textContent = String(scaleTxt || 'Scale: --').trim();
           mapWrapper.appendChild(sb);
