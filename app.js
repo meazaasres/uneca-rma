@@ -17,6 +17,8 @@ const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
 const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
+const AFRICA_VIEW_DEBUG_QUERY_KEY = "africaViewDebug";
+const AFRICA_VIEW_DEBUG_STORAGE_KEY = "africaViewDebug";
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -33,7 +35,7 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-110-debug";
+const APP_BUILD_ID = "20260309-111-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -1504,6 +1506,28 @@ const MAX_BOUNDS_RETRIES = 10;
 let homeViewRetryCount = 0;
 let maxBoundsRetryCount = 0;
 let maxBoundsDeferredHooked = false;
+let africaViewDebugSeq = 0;
+
+function isAfricaViewDebugEnabled() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const q = params.get(AFRICA_VIEW_DEBUG_QUERY_KEY);
+    if (q === "1" || q === "true") return true;
+    if (q === "0" || q === "false") return false;
+    const stored = window.localStorage ? window.localStorage.getItem(AFRICA_VIEW_DEBUG_STORAGE_KEY) : null;
+    return stored === "1" || stored === "true";
+  } catch (e) {
+    return false;
+  }
+}
+
+function logAfricaViewDebug(stepLabel, payload) {
+  if (!isAfricaViewDebugEnabled()) return;
+  africaViewDebugSeq += 1;
+  try {
+    console.info(`[africa-view-debug #${africaViewDebugSeq}] ${stepLabel}`, payload || {});
+  } catch (e) {}
+}
 
 function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   if (!bounds || typeof bounds.getSouthWest !== "function" || typeof bounds.getNorthEast !== "function") {
@@ -1525,6 +1549,11 @@ function trimBoundsHorizontallyByPixels(bounds, sideTrimPx) {
   if (!Number.isFinite(mapWidth) || mapWidth <= (sideTrimPx * 2) + 10) return bounds;
   // Convert per-side pixel trim into a longitude trim ratio so west/east is tighter.
   const ratio = Math.max(0, Math.min(0.45, sideTrimPx / mapWidth));
+  logAfricaViewDebug("02.trimBoundsHorizontallyByPixels", {
+    sideTrimPx,
+    mapWidth,
+    ratio
+  });
   return trimBoundsHorizontally(bounds, ratio);
 }
 
@@ -1598,7 +1627,16 @@ function applyMaxBoundsSafely() {
 
 function applyHomeView() {
   const homePadY = HOME_VERTICAL_PADDING_PX + (isEdgeBrowser() ? EDGE_HOME_VERTICAL_PADDING_EXTRA_PX : 0);
+  logAfricaViewDebug("01.applyHomeView.start", {
+    homePadY,
+    sideTrimPx: AFRICA_HOME_SIDE_TRIM_PX,
+    sideInsetPx: MAP_SIDE_VISIBLE_INSET_PX
+  });
   if (!hasUsableMapViewport()) {
+    logAfricaViewDebug("03.applyHomeView.viewportFallback", {
+      retry: homeViewRetryCount + 1,
+      maxRetries: MAX_HOME_VIEW_RETRIES
+    });
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
     if (homeViewRetryCount < MAX_HOME_VIEW_RETRIES) {
       homeViewRetryCount += 1;
@@ -1612,6 +1650,12 @@ function applyHomeView() {
   homeViewRetryCount = 0;
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
     const africaHomeBounds = trimBoundsHorizontallyByPixels(INITIAL_HOME_BOUNDS, AFRICA_HOME_SIDE_TRIM_PX);
+    logAfricaViewDebug("04.applyHomeView.fitBounds", {
+      southWest: africaHomeBounds && africaHomeBounds.getSouthWest ? africaHomeBounds.getSouthWest() : null,
+      northEast: africaHomeBounds && africaHomeBounds.getNorthEast ? africaHomeBounds.getNorthEast() : null,
+      padLeftRight: MAP_SIDE_VISIBLE_INSET_PX,
+      padTopBottom: homePadY
+    });
     map.fitBounds(africaHomeBounds, {
       animate: false,
       // Keep north/south stable, align east/west to visible map area.
@@ -1623,6 +1667,10 @@ function applyHomeView() {
   }
   map.panBy([0, 10], { animate: false });
   safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
+  logAfricaViewDebug("05.applyHomeView.complete", {
+    center: map && typeof map.getCenter === "function" ? map.getCenter() : null,
+    zoom: map && typeof map.getZoom === "function" ? map.getZoom() : null
+  });
 }
 
 function syncLayoutWithHeaderHeight() {
