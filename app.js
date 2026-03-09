@@ -799,11 +799,13 @@ function isAllowedRemoteContentType(ext, contentType) {
     "application/vnd.geo+json",
     "text/json"
   ]);
+  // CSV endpoints are inconsistent across hosts; keep this list explicit and deduplicated.
   const CSV_TYPES = new Set([
     "text/csv",
     "text/plain",
     "application/csv",
-    "application/vnd.ms-excel"
+    "application/vnd.ms-excel",
+    "application/octet-stream"
   ]);
   if (!ct) return false;
   if (ext === ".csv") return CSV_TYPES.has(ct);
