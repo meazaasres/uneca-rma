@@ -2672,8 +2672,10 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
     onEachFeature: bindFeaturePopup
   }).addTo(fg);
   layerGroup = fg;
-  // Keep startup/import viewport consistent with configured Africa home bounds.
-  setTimeout(() => { applyHomeView(); }, 0);
+  // Zoom to the newly added layer extent; fall back to home if bounds are unavailable.
+  setTimeout(() => {
+    if (!fitToLayerExtent(fg)) applyHomeView();
+  }, 0);
 
   overlayData[safeName] = { layerGroup: fg, geojson: geojson };
   layersControl.addOverlay(fg, safeName);
