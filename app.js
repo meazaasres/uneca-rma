@@ -1543,7 +1543,7 @@ function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
 }
 
 function trimBoundsHorizontallyByPixels(bounds, sideTrimPx, zoomLevel) {
-  if (!(sideTrimPx > 0) || !bounds || !map || typeof map.project !== "function" || typeof map.unproject !== "function") {
+  if (!(sideTrimPx > 0) || !bounds || !map || typeof map.project !== "function") {
     return bounds;
   }
   const z = Number.isFinite(zoomLevel) ? zoomLevel : (typeof map.getZoom === "function" ? map.getZoom() : NaN);
@@ -1557,20 +1557,28 @@ function trimBoundsHorizontallyByPixels(bounds, sideTrimPx, zoomLevel) {
   if (!Number.isFinite(spanPx) || spanPx <= (sideTrimPx * 2) + 2) return bounds;
   const trimPx = Math.max(0, Math.min(sideTrimPx, Math.floor((spanPx - 2) / 2)));
   if (!(trimPx > 0)) return bounds;
-  const westTrimmed = map.unproject(L.point(swPt.x + trimPx, swPt.y), z);
-  const eastTrimmed = map.unproject(L.point(nePt.x - trimPx, nePt.y), z);
-  if (!westTrimmed || !eastTrimmed || !Number.isFinite(westTrimmed.lng) || !Number.isFinite(eastTrimmed.lng)) {
-    return bounds;
-  }
+  const spanLng = ne.lng - sw.lng;
+  if (!(spanLng > 0)) return bounds;
+  const trimRatio = trimPx / spanPx;
+  const trimLng = spanLng * trimRatio;
+  const westLng = sw.lng + trimLng;
+  const eastLng = ne.lng - trimLng;
+  if (!Number.isFinite(westLng) || !Number.isFinite(eastLng) || !(eastLng > westLng)) return bounds;
   logAfricaViewDebug("02.trimBoundsHorizontallyByPixels", {
     sideTrimPx,
     zoomLevel: z,
     spanPx,
     appliedTrimPx: trimPx,
-    westLng: westTrimmed.lng,
-    eastLng: eastTrimmed.lng
+    spanLng,
+    trimLng,
+    westLng,
+    eastLng
   });
-  return L.latLngBounds([sw.lat, westTrimmed.lng], [ne.lat, eastTrimmed.lng]);
+  const trimmed = L.latLngBounds([sw.lat, westLng], [ne.lat, eastLng]);
+  const trimmedSpanLng = trimmed.getNorthEast().lng - trimmed.getSouthWest().lng;
+  // Safety guard: never return equal/wider bounds than input.
+  if (!(trimmedSpanLng > 0) || trimmedSpanLng >= spanLng) return bounds;
+  return trimmed;
 }
 
 function hasUsableMapViewport() {
