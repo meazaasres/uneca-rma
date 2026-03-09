@@ -4243,11 +4243,13 @@ window.addEventListener('load', resetInitialScrollPositions);
       mapWrapper.style.overflow = 'hidden';
       wrapper.appendChild(mapWrapper);
 
+      const exportDisclaimerLineClamp = isChromeBrowser() ? 6 : 5;
+
       const styleEl = document.createElement('style');
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;display:block !important;width:100% !important}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:-webkit-box !important;-webkit-box-orient:vertical !important;-webkit-line-clamp:${exportDisclaimerLineClamp} !important;width:auto !important;text-align:justify !important;text-justify:inter-word !important;max-height:calc(1.25em * ${exportDisclaimerLineClamp}) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-map-wrapper .export-north-arrow-clone{display:flex !important;align-items:center !important;justify-content:center !important;flex-direction:column !important}
         .export-map-wrapper .export-north-arrow-clone .north-arrow-symbol{display:block !important;width:100% !important;text-align:center !important;padding-top:0 !important;line-height:1 !important}
         .export-img{width:100%;height:auto;display:block}
@@ -4325,6 +4327,19 @@ window.addEventListener('load', resetInitialScrollPositions);
           clone.style.top = 'auto';
           clone.style.bottom = exportBottom + 'px';
           clone.style.zIndex = '5';
+        }
+        if (source.id === 'disclaimer' && isChromeBrowser()) {
+          const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
+          const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
+          const extraLinePx = Math.max(10, Math.round(1.25 * 10 * rawScaleY));
+          const grownHeight = exportHeight + extraLinePx;
+          const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - grownHeight)));
+          clone.style.top = 'auto';
+          clone.style.bottom = exportBottom + 'px';
+          clone.style.height = grownHeight + 'px';
+          clone.style.maxHeight = grownHeight + 'px';
+          clone.style.overflow = 'hidden';
+          clone.style.zIndex = '6';
         }
         if (
           source.classList &&
