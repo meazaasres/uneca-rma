@@ -4671,21 +4671,38 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
 
         const ordered = Array.isArray(layerOrder) ? layerOrder.slice() : Object.keys(overlayData || {});
-        const added = new Set();
+        const addedNames = new Set();
+        const addedBlockIds = new Set();
+
+        // 1) Prefer exactly what the sidebar currently shows, in layer order.
         ordered.forEach((name) => {
+          const sourceBlock = document.getElementById('legend-' + sanitizeId(name));
+          if (!sourceBlock) return;
+          const blockClone = sourceBlock.cloneNode(true);
+          blockClone.style.borderTop = '0';
+          blockClone.style.border = '0';
+          blockClone.style.boxShadow = 'none';
+          blockClone.style.outline = 'none';
+          blockClone.style.background = 'transparent';
+          clone.appendChild(blockClone);
+          addedNames.add(name);
+          if (sourceBlock.id) addedBlockIds.add(sourceBlock.id);
+        });
+
+        // 2) Add any remaining layer legends from saved state.
+        ordered.forEach((name) => {
+          if (addedNames.has(name)) return;
           const state = overlayData && overlayData[name];
           if (!state) return;
           if (!Array.isArray(state.vals) || !Array.isArray(state.cols) || state.vals.length === 0 || state.cols.length === 0) return;
-          if (map && state.layerGroup && typeof map.hasLayer === 'function' && !map.hasLayer(state.layerGroup)) return;
           appendLegendBlockFromState(name, state);
-          added.add(name);
+          addedNames.add(name);
         });
 
-        // Fallback for any pre-rendered legend blocks not represented in overlay state.
+        // 3) Fallback for any other rendered legend blocks not already appended.
         Array.from(legend.querySelectorAll('.legend-block')).forEach((sourceBlock) => {
           const blockId = String(sourceBlock.id || '');
-          const layerFromId = blockId.startsWith('legend-') ? blockId.slice(7) : '';
-          if (layerFromId && added.has(layerFromId)) return;
+          if (blockId && addedBlockIds.has(blockId)) return;
           const fallbackBlock = sourceBlock.cloneNode(true);
           fallbackBlock.style.borderTop = '0';
           fallbackBlock.style.border = '0';
