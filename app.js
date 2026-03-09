@@ -1542,19 +1542,35 @@ function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   return L.latLngBounds([sw.lat, sw.lng + trim], [ne.lat, ne.lng - trim]);
 }
 
-function trimBoundsHorizontallyByPixels(bounds, sideTrimPx) {
-  if (!(sideTrimPx > 0) || !map || typeof map.getSize !== "function") return bounds;
-  const mapSize = map.getSize();
-  const mapWidth = Number(mapSize && mapSize.x);
-  if (!Number.isFinite(mapWidth) || mapWidth <= (sideTrimPx * 2) + 10) return bounds;
-  // Convert per-side pixel trim into a longitude trim ratio so west/east is tighter.
-  const ratio = Math.max(0, Math.min(0.45, sideTrimPx / mapWidth));
+function trimBoundsHorizontallyByPixels(bounds, sideTrimPx, zoomLevel) {
+  if (!(sideTrimPx > 0) || !bounds || !map || typeof map.project !== "function" || typeof map.unproject !== "function") {
+    return bounds;
+  }
+  const z = Number.isFinite(zoomLevel) ? zoomLevel : (typeof map.getZoom === "function" ? map.getZoom() : NaN);
+  if (!Number.isFinite(z)) return bounds;
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  if (!sw || !ne) return bounds;
+  const swPt = map.project(sw, z);
+  const nePt = map.project(ne, z);
+  const spanPx = nePt.x - swPt.x;
+  if (!Number.isFinite(spanPx) || spanPx <= (sideTrimPx * 2) + 2) return bounds;
+  const trimPx = Math.max(0, Math.min(sideTrimPx, Math.floor((spanPx - 2) / 2)));
+  if (!(trimPx > 0)) return bounds;
+  const westTrimmed = map.unproject(L.point(swPt.x + trimPx, swPt.y), z);
+  const eastTrimmed = map.unproject(L.point(nePt.x - trimPx, nePt.y), z);
+  if (!westTrimmed || !eastTrimmed || !Number.isFinite(westTrimmed.lng) || !Number.isFinite(eastTrimmed.lng)) {
+    return bounds;
+  }
   logAfricaViewDebug("02.trimBoundsHorizontallyByPixels", {
     sideTrimPx,
-    mapWidth,
-    ratio
+    zoomLevel: z,
+    spanPx,
+    appliedTrimPx: trimPx,
+    westLng: westTrimmed.lng,
+    eastLng: eastTrimmed.lng
   });
-  return trimBoundsHorizontally(bounds, ratio);
+  return L.latLngBounds([sw.lat, westTrimmed.lng], [ne.lat, eastTrimmed.lng]);
 }
 
 function hasUsableMapViewport() {
@@ -1649,12 +1665,21 @@ function applyHomeView() {
   }
   homeViewRetryCount = 0;
   if (INITIAL_HOME_BOUNDS && typeof map.fitBounds === "function") {
-    const africaHomeBounds = trimBoundsHorizontallyByPixels(INITIAL_HOME_BOUNDS, AFRICA_HOME_SIDE_TRIM_PX);
+    const baseHomeBounds = trimBoundsHorizontally(INITIAL_HOME_BOUNDS);
+    map.fitBounds(baseHomeBounds, {
+      animate: false,
+      // Keep north/south stable, align east/west to visible map area.
+      paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, homePadY],
+      paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, homePadY]
+    });
+    const fittedZoom = typeof map.getZoom === "function" ? map.getZoom() : undefined;
+    const africaHomeBounds = trimBoundsHorizontallyByPixels(baseHomeBounds, AFRICA_HOME_SIDE_TRIM_PX, fittedZoom);
     logAfricaViewDebug("04.applyHomeView.fitBounds", {
       southWest: africaHomeBounds && africaHomeBounds.getSouthWest ? africaHomeBounds.getSouthWest() : null,
       northEast: africaHomeBounds && africaHomeBounds.getNorthEast ? africaHomeBounds.getNorthEast() : null,
       padLeftRight: MAP_SIDE_VISIBLE_INSET_PX,
-      padTopBottom: homePadY
+      padTopBottom: homePadY,
+      fittedZoom
     });
     map.fitBounds(africaHomeBounds, {
       animate: false,
