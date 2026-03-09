@@ -89,15 +89,15 @@
       left: 62px;
       bottom: 30px;
       transform: none;
-      width: 252px;
-      max-width: 40%;
+      width: 320px;
+      max-width: 46%;
       box-sizing: border-box;
       background: rgba(255,255,255,0.90);
       padding: 5px 7px;
       font-size: 0.72em;
       text-align: justify;
       text-justify: inter-word;
-      max-height: 15vh; /* cap height so it doesn't cover map */
+      max-height: calc(1.2em * 5); /* keep visible text to five lines */
       overflow: hidden;
       z-index: 3000;
       pointer-events: auto !important;
@@ -113,11 +113,11 @@
     .clamp-5-lines {
       display: -webkit-box;
       -webkit-box-orient: vertical;
-      -webkit-line-clamp: 6;
+      -webkit-line-clamp: 5;
       overflow: hidden;
       text-overflow: ellipsis;
       line-height: 1.2em;
-      max-height: calc(1.2em * 6);
+      max-height: calc(1.2em * 5);
       white-space: normal;
     }
 header .d-flex {
