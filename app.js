@@ -4247,7 +4247,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;display:block !important;width:100% !important}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:none !important;overflow:visible !important;white-space:normal !important;line-height:1.25 !important;-webkit-line-clamp:unset !important;-webkit-box-orient:initial !important}
+        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:block !important;width:auto !important;text-align:justify !important;text-justify:inter-word !important;max-height:none !important;overflow:visible !important;white-space:normal !important;line-height:1.25 !important;-webkit-line-clamp:unset !important;-webkit-box-orient:initial !important}
         .export-map-wrapper .export-north-arrow-clone{display:flex !important;align-items:center !important;justify-content:center !important;flex-direction:column !important}
         .export-map-wrapper .export-north-arrow-clone .north-arrow-symbol{display:block !important;width:100% !important;text-align:center !important;padding-top:0 !important;line-height:1 !important}
         .export-img{width:100%;height:auto;display:block}
@@ -4330,6 +4330,22 @@ window.addEventListener('load', resetInitialScrollPositions);
           clone.style.top = 'auto';
           clone.style.bottom = exportBottom + 'px';
           clone.style.zIndex = '5';
+        }
+        if (source.id === 'disclaimer') {
+          const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
+          const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
+          const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - 20)));
+          clone.style.top = 'auto';
+          clone.style.bottom = exportBottom + 'px';
+          clone.style.height = 'auto';
+          clone.style.maxHeight = 'none';
+          clone.style.overflow = 'visible';
+          clone.style.display = 'block';
+          clone.style.whiteSpace = 'normal';
+          clone.style.wordBreak = 'break-word';
+          clone.style.textAlign = 'justify';
+          clone.style.textJustify = 'inter-word';
+          clone.style.zIndex = '6';
         }
         if (
           source.classList &&
