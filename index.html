@@ -3,38 +3,7 @@
 <head>
   <meta charset="UTF-8">
       <link rel="icon" type="image/png" href="ECA-Banner.png">
-      <!-- Content-Security-Policy (meta tag) - tuned for production/static hosting -->
-    <meta http-equiv="Content-Security-Policy"
-      content="
-        default-src 'self';
-        script-src 'self';
-        style-src 'self';
-        img-src 'self' data: https:;
-        font-src 'self';
-        connect-src 'self' https:;
-        object-src 'none';
-        frame-src 'none';
-        child-src 'none';
-        base-uri 'self';
-        form-action 'none';
-        upgrade-insecure-requests;
-      ">
-<!--Production CSP (deployment)/* To be uncommented during hosting-->
-<!--<meta http-equiv="Content-Security-Policy"
-      content="
-        default-src 'self';
-        script-src 'self';
-        style-src 'self';
-        img-src 'self' data: https:;
-        font-src 'self';
-        connect-src 'self' https:;
-        object-src 'none';
-        frame-src 'none';
-        child-src 'none';
-        base-uri 'self';
-        form-action 'none';
-        upgrade-insecure-requests;
-      "> -->
+      <!-- CSP is enforced via IIS response headers in web.config. -->
         <!--Complementary Security Headers-->
         <!--
         X-Content-Type-Options: nosniff
