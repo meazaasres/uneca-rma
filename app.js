@@ -15,8 +15,6 @@ const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
-const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
-const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -3842,24 +3840,10 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
-    function isEdgeExportDebugEnabled() {
-    try {
-      const params = new URLSearchParams(window.location.search || "");
-      const q = params.get(EDGE_EXPORT_DEBUG_QUERY_KEY);
-      if (q === "1" || q === "true") return true;
-      if (q === "0" || q === "false") return false;
-      const stored = window.localStorage ? window.localStorage.getItem(EDGE_EXPORT_DEBUG_STORAGE_KEY) : null;
-      return stored === "1" || stored === "true";
-    } catch (e) {
-      return false;
-    }
-    }
-
     function logEdgeExportDebug(stage, payload) {
-    if (!isEdgeBrowser() || !isEdgeExportDebugEnabled()) return;
-    try {
-      console.info(`[edge-export-debug] ${stage}`, payload || {});
-    } catch (e) {}
+    // Execution-tracking debug logging removed intentionally.
+    void stage;
+    void payload;
     }
 
     function alignMapCanvasForEdge(mapCanvas, mapEl) {
