@@ -1496,6 +1496,7 @@ const SIDEBAR_WIDTH_PX = 250;
 const MAP_OVERLAP_PX = 80;
 const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
 const AFRICA_HOME_SIDE_TRIM_PX = 60;
+const AFRICA_HOME_FIT_SIDE_PADDING_PX = 20;
 const DISCLAIMER_LEFT_VISIBLE_INSET_PX = 50;
 const HOME_VERTICAL_PADDING_PX = 10;
 const EDGE_HOME_VERTICAL_PADDING_EXTRA_PX = 8;
@@ -1654,7 +1655,8 @@ function applyHomeView() {
   logAfricaViewDebug("01.applyHomeView.start", {
     homePadY,
     sideTrimPx: AFRICA_HOME_SIDE_TRIM_PX,
-    sideInsetPx: MAP_SIDE_VISIBLE_INSET_PX
+    sideInsetPx: MAP_SIDE_VISIBLE_INSET_PX,
+    fitSidePaddingPx: AFRICA_HOME_FIT_SIDE_PADDING_PX
   });
   if (!hasUsableMapViewport()) {
     logAfricaViewDebug("03.applyHomeView.viewportFallback", {
@@ -1677,23 +1679,23 @@ function applyHomeView() {
     map.fitBounds(baseHomeBounds, {
       animate: false,
       // Keep north/south stable, align east/west to visible map area.
-      paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, homePadY],
-      paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, homePadY]
+      paddingTopLeft: [AFRICA_HOME_FIT_SIDE_PADDING_PX, homePadY],
+      paddingBottomRight: [AFRICA_HOME_FIT_SIDE_PADDING_PX, homePadY]
     });
     const fittedZoom = typeof map.getZoom === "function" ? map.getZoom() : undefined;
     const africaHomeBounds = trimBoundsHorizontallyByPixels(baseHomeBounds, AFRICA_HOME_SIDE_TRIM_PX, fittedZoom);
     logAfricaViewDebug("04.applyHomeView.fitBounds", {
       southWest: africaHomeBounds && africaHomeBounds.getSouthWest ? africaHomeBounds.getSouthWest() : null,
       northEast: africaHomeBounds && africaHomeBounds.getNorthEast ? africaHomeBounds.getNorthEast() : null,
-      padLeftRight: MAP_SIDE_VISIBLE_INSET_PX,
+      padLeftRight: AFRICA_HOME_FIT_SIDE_PADDING_PX,
       padTopBottom: homePadY,
       fittedZoom
     });
     map.fitBounds(africaHomeBounds, {
       animate: false,
       // Keep north/south stable, align east/west to visible map area.
-      paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, homePadY],
-      paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, homePadY]
+      paddingTopLeft: [AFRICA_HOME_FIT_SIDE_PADDING_PX, homePadY],
+      paddingBottomRight: [AFRICA_HOME_FIT_SIDE_PADDING_PX, homePadY]
     });
   } else {
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
