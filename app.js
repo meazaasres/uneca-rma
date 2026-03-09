@@ -4243,7 +4243,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       mapWrapper.style.overflow = 'hidden';
       wrapper.appendChild(mapWrapper);
 
-      const exportDisclaimerLineClamp = isChromeBrowser() ? 6 : 5;
+      const exportDisclaimerLineClamp = 5;
 
       const styleEl = document.createElement('style');
       styleEl.type = 'text/css';
@@ -4331,13 +4331,17 @@ window.addEventListener('load', resetInitialScrollPositions);
         if (source.id === 'disclaimer' && isChromeBrowser()) {
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
           const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
-          const extraLinePx = Math.max(10, Math.round(1.25 * 10 * rawScaleY));
-          const grownHeight = exportHeight + extraLinePx;
-          const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - grownHeight)));
+          const extraWidthPx = Math.max(24, Math.round(48 * rawScaleX));
+          const widenedWidth = Math.min(W, exportWidth + extraWidthPx);
+          const shiftedLeft = Math.max(0, exportLeft - extraWidthPx);
+          const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - exportHeight)));
+          clone.style.left = shiftedLeft + 'px';
+          clone.style.width = widenedWidth + 'px';
+          clone.style.maxWidth = widenedWidth + 'px';
           clone.style.top = 'auto';
           clone.style.bottom = exportBottom + 'px';
-          clone.style.height = grownHeight + 'px';
-          clone.style.maxHeight = grownHeight + 'px';
+          clone.style.height = exportHeight + 'px';
+          clone.style.maxHeight = exportHeight + 'px';
           clone.style.overflow = 'hidden';
           clone.style.zIndex = '6';
         }
