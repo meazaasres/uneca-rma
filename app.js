@@ -17,8 +17,6 @@ const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
 const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
-const AFRICA_VIEW_DEBUG_QUERY_KEY = "africaViewDebug";
-const AFRICA_VIEW_DEBUG_STORAGE_KEY = "africaViewDebug";
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -1507,28 +1505,6 @@ const MAX_BOUNDS_RETRIES = 10;
 let homeViewRetryCount = 0;
 let maxBoundsRetryCount = 0;
 let maxBoundsDeferredHooked = false;
-let africaViewDebugSeq = 0;
-
-function isAfricaViewDebugEnabled() {
-  try {
-    const params = new URLSearchParams(window.location.search || "");
-    const q = params.get(AFRICA_VIEW_DEBUG_QUERY_KEY);
-    if (q === "1" || q === "true") return true;
-    if (q === "0" || q === "false") return false;
-    const stored = window.localStorage ? window.localStorage.getItem(AFRICA_VIEW_DEBUG_STORAGE_KEY) : null;
-    return stored === "1" || stored === "true";
-  } catch (e) {
-    return false;
-  }
-}
-
-function logAfricaViewDebug(stepLabel, payload) {
-  if (!isAfricaViewDebugEnabled()) return;
-  africaViewDebugSeq += 1;
-  try {
-    console.info(`[africa-view-debug #${africaViewDebugSeq}] ${stepLabel}`, payload || {});
-  } catch (e) {}
-}
 
 function trimBoundsHorizontally(bounds, ratio = HORIZONTAL_TRIM_RATIO) {
   if (!bounds || typeof bounds.getSouthWest !== "function" || typeof bounds.getNorthEast !== "function") {
@@ -1565,16 +1541,6 @@ function trimBoundsHorizontallyByPixels(bounds, sideTrimPx, zoomLevel) {
   const westLng = sw.lng + trimLng;
   const eastLng = ne.lng - trimLng;
   if (!Number.isFinite(westLng) || !Number.isFinite(eastLng) || !(eastLng > westLng)) return bounds;
-  logAfricaViewDebug("02.trimBoundsHorizontallyByPixels", {
-    sideTrimPx,
-    zoomLevel: z,
-    spanPx,
-    appliedTrimPx: trimPx,
-    spanLng,
-    trimLng,
-    westLng,
-    eastLng
-  });
   const trimmed = L.latLngBounds([sw.lat, westLng], [ne.lat, eastLng]);
   const trimmedSpanLng = trimmed.getNorthEast().lng - trimmed.getSouthWest().lng;
   // Safety guard: never return equal/wider bounds than input.
@@ -1652,17 +1618,7 @@ function applyMaxBoundsSafely() {
 
 function applyHomeView() {
   const homePadY = HOME_VERTICAL_PADDING_PX + (isEdgeBrowser() ? EDGE_HOME_VERTICAL_PADDING_EXTRA_PX : 0);
-  logAfricaViewDebug("01.applyHomeView.start", {
-    homePadY,
-    sideTrimPx: AFRICA_HOME_SIDE_TRIM_PX,
-    sideInsetPx: MAP_SIDE_VISIBLE_INSET_PX,
-    fitSidePaddingPx: AFRICA_HOME_FIT_SIDE_PADDING_PX
-  });
   if (!hasUsableMapViewport()) {
-    logAfricaViewDebug("03.applyHomeView.viewportFallback", {
-      retry: homeViewRetryCount + 1,
-      maxRetries: MAX_HOME_VIEW_RETRIES
-    });
     map.setView(INITIAL_HOME_CENTER, INITIAL_HOME_ZOOM, { animate: false });
     if (homeViewRetryCount < MAX_HOME_VIEW_RETRIES) {
       homeViewRetryCount += 1;
@@ -1684,13 +1640,6 @@ function applyHomeView() {
     });
     const fittedZoom = typeof map.getZoom === "function" ? map.getZoom() : undefined;
     const africaHomeBounds = trimBoundsHorizontallyByPixels(baseHomeBounds, AFRICA_HOME_SIDE_TRIM_PX, fittedZoom);
-    logAfricaViewDebug("04.applyHomeView.fitBounds", {
-      southWest: africaHomeBounds && africaHomeBounds.getSouthWest ? africaHomeBounds.getSouthWest() : null,
-      northEast: africaHomeBounds && africaHomeBounds.getNorthEast ? africaHomeBounds.getNorthEast() : null,
-      padLeftRight: AFRICA_HOME_FIT_SIDE_PADDING_PX,
-      padTopBottom: homePadY,
-      fittedZoom
-    });
     map.fitBounds(africaHomeBounds, {
       animate: false,
       // Keep north/south stable, align east/west to visible map area.
@@ -1702,10 +1651,6 @@ function applyHomeView() {
   }
   map.panBy([0, 10], { animate: false });
   safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
-  logAfricaViewDebug("05.applyHomeView.complete", {
-    center: map && typeof map.getCenter === "function" ? map.getCenter() : null,
-    zoom: map && typeof map.getZoom === "function" ? map.getZoom() : null
-  });
 }
 
 function syncLayoutWithHeaderHeight() {
