@@ -801,6 +801,7 @@ function isAllowedRemoteContentType(ext, contentType) {
   ]);
   const CSV_TYPES = new Set([
     "text/csv",
+    "text/plain",
     "application/csv",
     "application/vnd.ms-excel"
   ]);
@@ -2637,6 +2638,52 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   return { type: "FeatureCollection", features };
 }
 
+function validateCsvTextSecurity(csvText, sourceLabel = "CSV") {
+  const text = String(csvText || "");
+  const trimmed = text.trimStart();
+  const head = trimmed.slice(0, 256).toLowerCase();
+
+  if (!trimmed) {
+    throw new Error(`${sourceLabel} is empty.`);
+  }
+
+  // Reject obvious non-CSV payloads early.
+  if (
+    head.startsWith("{") ||
+    head.startsWith("[") ||
+    head.startsWith("<html") ||
+    head.startsWith("<!doctype")
+  ) {
+    throw new Error(`${sourceLabel} does not look like CSV content.`);
+  }
+
+  const firstLine = trimmed.split(/\r?\n/, 1)[0] || "";
+  const hasLikelyDelimiter = /[,;\t]/.test(firstLine);
+  if (!hasLikelyDelimiter) {
+    throw new Error(`${sourceLabel} header does not look like CSV.`);
+  }
+
+  if (window.Papa && typeof window.Papa.parse === "function") {
+    const preview = window.Papa.parse(text, {
+      header: true,
+      skipEmptyLines: "greedy",
+      preview: 25
+    });
+    const fields = Array.isArray(preview?.meta?.fields) ? preview.meta.fields : [];
+    if (fields.length < 2) {
+      throw new Error(`${sourceLabel} must contain at least two columns.`);
+    }
+    if (fields.length > 1000) {
+      throw new Error(`${sourceLabel} has too many columns.`);
+    }
+    const latKey = fields.find((k) => /lat/i.test(String(k)));
+    const lonKey = fields.find((k) => /lon|lng|long/i.test(String(k)));
+    if (!latKey || !lonKey) {
+      throw new Error(`${sourceLabel} must include latitude/longitude columns.`);
+    }
+  }
+}
+
 function parseImportedData(ext, bodyText, contentType = "") {
   if (ext === ".csv") {
     return parseCsvToGeojson(bodyText, "CSV");
@@ -2753,6 +2800,9 @@ async function importUrl(rawUrl) {
     assertFinalImportUrlAllowed(fetched.finalUrl);
     if (!isAllowedRemoteContentType(ext, fetched.contentType)) {
       throw new Error(`Remote content type is not allowed for ${ext} import.`);
+    }
+    if (ext === ".csv") {
+      validateCsvTextSecurity(fetched.text || "", "Remote CSV");
     }
     const geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
