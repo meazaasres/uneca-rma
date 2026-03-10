@@ -4265,6 +4265,9 @@ window.addEventListener('load', resetInitialScrollPositions);
           source.classList &&
           (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
         ) {
+          clone.style.whiteSpace = 'nowrap';
+          clone.style.overflow = 'visible';
+          clone.style.minWidth = exportWidth + 'px';
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
           const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
           const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - exportHeight)));
@@ -4535,59 +4538,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.display = 'block';
         clone.style.clear = 'both';
         clone.style.zIndex = '4';
-        clone.style.background = 'transparent';
-        clone.style.border = '0';
-        clone.style.boxShadow = 'none';
-        clone.style.outline = 'none';
-        clone.style.padding = '0';
-        clone.style.marginTop = '10px';
-        clone.style.borderRadius = '0';
+        clone.style.marginTop = '8px';
         clone.style.overflow = 'visible';
-        Array.from(clone.querySelectorAll('.legend-block')).forEach((block) => {
-          block.style.borderTop = '0';
-          block.style.border = '0';
-          block.style.boxShadow = 'none';
-          block.style.outline = 'none';
-          block.style.background = 'transparent';
-        });
-        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
-        const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
-        cloneSyms.forEach((sym, idx) => {
-          const src = sourceSyms[idx];
-          if (!src) return;
-          const cs = window.getComputedStyle(src);
-          const fillColor = (cs && cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)')
-            ? cs.backgroundColor
-            : '#ccc';
-          const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
-            ? cs.border
-            : '1px solid #333';
-          sym.style.display = 'inline-block';
-          sym.style.boxSizing = 'border-box';
-          sym.style.width = '16px';
-          sym.style.minWidth = '16px';
-          sym.style.maxWidth = '16px';
-          sym.style.height = '16px';
-          sym.style.minHeight = '16px';
-          sym.style.maxHeight = '16px';
-          sym.style.marginRight = '8px';
-          sym.style.flex = '0 0 16px';
-          sym.style.backgroundColor = fillColor;
-          sym.style.border = borderValue;
-          if (sym.classList.contains('legend-sym-line')) {
-            const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
-              ? cs.borderTopColor
-              : fillColor;
-            sym.style.height = '3px';
-            sym.style.minHeight = '3px';
-            sym.style.maxHeight = '3px';
-            sym.style.border = '0';
-            sym.style.borderTop = `3px solid ${lineColor}`;
-            sym.style.background = 'transparent';
-          } else if (sym.classList.contains('legend-sym-point')) {
-            sym.style.borderRadius = '50%';
-          }
-        });
         wrapper.appendChild(clone);
       }
 
