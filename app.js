@@ -15,8 +15,6 @@ const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
-const EDGE_EXPORT_DEBUG_QUERY_KEY = "edgeExportDebug";
-const EDGE_EXPORT_DEBUG_STORAGE_KEY = "edgeExportDebug";
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -33,7 +31,6 @@ const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/ove
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
-const APP_BUILD_ID = "20260308-110-debug";
 // Minimal global state (kept intentionally small)
 let overlayData = {};
 let currentLayerName = null;
@@ -2342,54 +2339,6 @@ function scheduleDisclaimerDragInit(maxAttempts = 10, delayMs = 180) {
   tick();
 }
 
-function installRuntimeBuildIndicator() {
-  try {
-    const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
-    if (!mapEl) return;
-    const existing = document.getElementById('runtime-build-indicator');
-    if (existing) return;
-
-    const badge = document.createElement('div');
-    badge.id = 'runtime-build-indicator';
-    badge.setAttribute('aria-live', 'polite');
-    badge.style.position = 'absolute';
-    badge.style.top = '8px';
-    badge.style.left = (MAP_SIDE_VISIBLE_INSET_PX + 8) + 'px';
-    badge.style.zIndex = '4000';
-    badge.style.padding = '6px 8px';
-    badge.style.fontSize = '11px';
-    badge.style.lineHeight = '1.3';
-    badge.style.fontFamily = 'monospace';
-    badge.style.background = 'rgba(0,0,0,0.78)';
-    badge.style.color = '#fff';
-    badge.style.borderRadius = '4px';
-    badge.style.pointerEvents = 'none';
-    mapEl.appendChild(badge);
-
-    const update = () => {
-      const disc = document.getElementById('disclaimer');
-      const northArrowEl = document.querySelector('.leaflet-control-north-arrow');
-      const dragInit = disc && disc.dataset ? (disc.dataset.dragInit || '0') : '0';
-      const discPe = disc ? (window.getComputedStyle(disc).pointerEvents || 'unknown') : 'missing';
-      badge.textContent = [
-        `build:${APP_BUILD_ID}`,
-        `disclaimer:${disc ? 'yes' : 'no'}`,
-        `dragInit:${dragInit}`,
-        `discPE:${discPe}`,
-        `northArrow:${northArrowEl ? 'yes' : 'no'}`
-      ].join(' | ');
-    };
-
-    update();
-    setTimeout(update, 400);
-    setTimeout(update, 1200);
-    setTimeout(update, 2600);
-    window.__UNECA_BUILD__ = APP_BUILD_ID;
-  } catch (e) {
-    console.warn('installRuntimeBuildIndicator failed', e);
-  }
-}
-
 function runMapUiReflowPasses() {
   // Browser zoom updates element metrics asynchronously; run multiple passes.
   [20, 110, 240].forEach((delayMs) => {
@@ -2422,7 +2371,6 @@ function queueMapUiReflow() {
 
 // run initially and on relevant events
 window.addEventListener('load', () => {
-  installRuntimeBuildIndicator();
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
@@ -3842,24 +3790,10 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
     }
 
-    function isEdgeExportDebugEnabled() {
-    try {
-      const params = new URLSearchParams(window.location.search || "");
-      const q = params.get(EDGE_EXPORT_DEBUG_QUERY_KEY);
-      if (q === "1" || q === "true") return true;
-      if (q === "0" || q === "false") return false;
-      const stored = window.localStorage ? window.localStorage.getItem(EDGE_EXPORT_DEBUG_STORAGE_KEY) : null;
-      return stored === "1" || stored === "true";
-    } catch (e) {
-      return false;
-    }
-    }
-
     function logEdgeExportDebug(stage, payload) {
-    if (!isEdgeBrowser() || !isEdgeExportDebugEnabled()) return;
-    try {
-      console.info(`[edge-export-debug] ${stage}`, payload || {});
-    } catch (e) {}
+    // Execution-tracking debug logging removed intentionally.
+    void stage;
+    void payload;
     }
 
     function alignMapCanvasForEdge(mapCanvas, mapEl) {
