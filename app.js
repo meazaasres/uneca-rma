@@ -860,7 +860,6 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
   let cursor = cdOffset;
   let parsedEntries = 0;
   let totalUncompressed = 0;
-  const entryNames = [];
   while (parsedEntries < totalEntries) {
     if (cursor + 46 > view.byteLength) {
       throw new Error("ZIP central directory entry is truncated.");
@@ -879,16 +878,6 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
     if (uncompressedSize === 0xffffffff) {
       throw new Error("ZIP64 entry sizes are not supported for security reasons.");
     }
-
-    const fileNameStart = cursor + 46;
-    const fileNameEnd = fileNameStart + fileNameLen;
-    if (fileNameEnd > view.byteLength) {
-      throw new Error("ZIP entry filename exceeds file bounds.");
-    }
-    const rawNameBytes = new Uint8Array(arrayBuffer, fileNameStart, fileNameLen);
-    const entryName = new TextDecoder("utf-8").decode(rawNameBytes);
-    entryNames.push(entryName);
-
     totalUncompressed += uncompressedSize;
     if (totalUncompressed > MAX_ZIP_UNCOMPRESSED_BYTES) {
       const maxMb = Math.round(MAX_ZIP_UNCOMPRESSED_BYTES / (1024 * 1024));
@@ -903,69 +892,6 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
   if (expansionRatio > MAX_ZIP_EXPANSION_RATIO) {
     throw new Error(`ZIP expansion ratio is too high (${expansionRatio.toFixed(1)}x).`);
   }
-
-  return {
-    totalEntries,
-    totalUncompressed,
-    entryNames
-  };
-}
-
-function normalizeZipEntryPath(name) {
-  return String(name || "").replace(/\\/g, "/").trim().toLowerCase();
-}
-
-function assertZipContainsShapefileParts(zipInfo) {
-  const names = Array.isArray(zipInfo?.entryNames) ? zipInfo.entryNames : [];
-  const normalized = names.map(normalizeZipEntryPath).filter(Boolean);
-  const shpEntries = normalized.filter(n => n.endsWith(".shp"));
-
-  if (!shpEntries.length) {
-    throw new Error("ZIP must contain at least one .shp file.");
-  }
-
-  // Defensive path traversal guard even though archive is read in-memory only.
-  const hasUnsafePath = normalized.some(n => n.includes("../") || n.startsWith("/"));
-  if (hasUnsafePath) {
-    throw new Error("ZIP contains unsafe entry paths.");
-  }
-}
-
-function normalizeShapefileZipGeojson(result) {
-  const isFeatureCollection = (obj) => {
-    return !!obj && obj.type === "FeatureCollection" && Array.isArray(obj.features);
-  };
-
-  if (isFeatureCollection(result)) {
-    return result;
-  }
-
-  const merged = {
-    type: "FeatureCollection",
-    features: []
-  };
-
-  if (Array.isArray(result)) {
-    result.forEach(item => {
-      if (isFeatureCollection(item)) {
-        merged.features.push(...item.features);
-      }
-    });
-    if (merged.features.length) return merged;
-    throw new Error("ZIP did not contain readable shapefile features.");
-  }
-
-  if (result && typeof result === "object") {
-    Object.keys(result).forEach(key => {
-      const value = result[key];
-      if (isFeatureCollection(value)) {
-        merged.features.push(...value.features);
-      }
-    });
-    if (merged.features.length) return merged;
-  }
-
-  throw new Error("Unsupported shapefile ZIP structure.");
 }
 
 async function fetchTextWithFallback(localUrl, remoteUrl, label) {
@@ -2797,15 +2723,8 @@ async function importFile(file) {
     let geojson;
     if (ext === ".zip") {
       const bytes = await readFileAsArrayBuffer(file);
-      if (!(bytes instanceof ArrayBuffer) || bytes.byteLength === 0) {
-        throw new Error("Failed to read ZIP file data.");
-      }
-
-      const zipInfo = inspectZipSafety(bytes, file.size);
-      assertZipContainsShapefileParts(zipInfo);
-
-      const shpResult = await shp(bytes);
-      geojson = normalizeShapefileZipGeojson(shpResult);
+      inspectZipSafety(bytes, file.size);
+      geojson = await shp(bytes);
     } else {
       const text = await readFileAsText(file);
       geojson = parseImportedData(ext, text, ext === ".geojson" ? "application/json" : "text/csv");
