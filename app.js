@@ -9,6 +9,17 @@ const SCALE_BAR_OFFSET_Y_PX = 7;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
+const ALLOWED_SHAPEFILE_ZIP_EXTENSIONS = new Set([
+  ".shp",
+  ".shx",
+  ".dbf",
+  ".prj",
+  ".cpg",
+  ".qix",
+  ".sbn",
+  ".sbx",
+  ".fix"
+]);
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
 const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
@@ -819,6 +830,56 @@ function getUint32LE(view, offset) {
   return view.getUint32(offset, true);
 }
 
+function getZipEntryExtension(pathLike) {
+  const clean = String(pathLike || "").trim();
+  if (!clean || clean.endsWith("/")) return "";
+  const lastSegment = clean.split("/").pop() || "";
+  const dotIdx = lastSegment.lastIndexOf(".");
+  if (dotIdx < 0) return "";
+  return lastSegment.slice(dotIdx).toLowerCase();
+}
+
+function getZipEntryBasename(pathLike) {
+  const clean = String(pathLike || "").trim();
+  if (!clean || clean.endsWith("/")) return "";
+  const lastSegment = clean.split("/").pop() || "";
+  const dotIdx = lastSegment.lastIndexOf(".");
+  if (dotIdx < 0) return lastSegment.toLowerCase();
+  return lastSegment.slice(0, dotIdx).toLowerCase();
+}
+
+function assertZipContainsOnlyShapefileContent(entryNames) {
+  const names = Array.isArray(entryNames) ? entryNames : [];
+  const invalidEntries = [];
+  const shapefilePartsByBase = new Map();
+
+  names.forEach((name) => {
+    const ext = getZipEntryExtension(name);
+    if (!ext) return;
+    if (!ALLOWED_SHAPEFILE_ZIP_EXTENSIONS.has(ext)) {
+      invalidEntries.push(name);
+      return;
+    }
+    const base = getZipEntryBasename(name);
+    if (!base) return;
+    if (!shapefilePartsByBase.has(base)) shapefilePartsByBase.set(base, new Set());
+    shapefilePartsByBase.get(base).add(ext);
+  });
+
+  if (invalidEntries.length > 0) {
+    throw new Error(
+      "ZIP must contain shapefile files only (.shp, .shx, .dbf and optional sidecar files)."
+    );
+  }
+
+  const hasValidSet = Array.from(shapefilePartsByBase.values()).some((parts) => (
+    parts.has(".shp") && parts.has(".shx") && parts.has(".dbf")
+  ));
+  if (!hasValidSet) {
+    throw new Error("ZIP must include at least one complete shapefile set (.shp, .shx, .dbf).");
+  }
+}
+
 function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
   const view = new DataView(arrayBuffer);
   const EOCD_SIGNATURE = 0x06054b50;
@@ -860,6 +921,10 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
   let cursor = cdOffset;
   let parsedEntries = 0;
   let totalUncompressed = 0;
+  const entryNames = [];
+  const utf8Decoder = typeof TextDecoder !== "undefined"
+    ? new TextDecoder("utf-8", { fatal: false })
+    : null;
   while (parsedEntries < totalEntries) {
     if (cursor + 46 > view.byteLength) {
       throw new Error("ZIP central directory entry is truncated.");
@@ -875,6 +940,18 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
     if (uncompressedSize === null || fileNameLen === null || extraLen === null || commentLen === null) {
       throw new Error("ZIP entry metadata is incomplete.");
     }
+    const fileNameOffset = cursor + 46;
+    const fileNameEnd = fileNameOffset + fileNameLen;
+    if (fileNameEnd > view.byteLength) {
+      throw new Error("ZIP file name entry is truncated.");
+    }
+    const fileNameBytes = new Uint8Array(arrayBuffer, fileNameOffset, fileNameLen);
+    const decodedName = utf8Decoder
+      ? utf8Decoder.decode(fileNameBytes)
+      : String.fromCharCode(...Array.from(fileNameBytes));
+    const normalizedName = String(decodedName || "").replace(/\\/g, "/").trim();
+    if (normalizedName) entryNames.push(normalizedName);
+
     if (uncompressedSize === 0xffffffff) {
       throw new Error("ZIP64 entry sizes are not supported for security reasons.");
     }
@@ -892,6 +969,8 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
   if (expansionRatio > MAX_ZIP_EXPANSION_RATIO) {
     throw new Error(`ZIP expansion ratio is too high (${expansionRatio.toFixed(1)}x).`);
   }
+
+  assertZipContainsOnlyShapefileContent(entryNames);
 }
 
 async function fetchTextWithFallback(localUrl, remoteUrl, label) {
@@ -1653,11 +1732,11 @@ function fitToLayerExtent(layer) {
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
   map.fitBounds(trimBoundsHorizontally(bounds), {
+    animate: false,
     paddingTopLeft: [0, 16],
     paddingBottomRight: [0, 35]
   });
   map.panBy([0, 10], { animate: false });
-  safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
   return true;
 }
 
@@ -2672,8 +2751,6 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
     onEachFeature: bindFeaturePopup
   }).addTo(fg);
   layerGroup = fg;
-  // Keep startup/import viewport consistent with configured Africa home bounds.
-  setTimeout(() => { applyHomeView(); }, 0);
 
   overlayData[safeName] = { layerGroup: fg, geojson: geojson };
   layersControl.addOverlay(fg, safeName);
@@ -2682,6 +2759,10 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
   applyLayerStackOrder();
   refreshLayerSelector();
   await setActiveLayer(safeName);
+  // New imports should zoom to their extent; keep home view fallback for invalid bounds.
+  setTimeout(() => {
+    if (!fitToLayerExtent(fg)) applyHomeView();
+  }, 0);
   initializeMapTitleFromLayer(safeName);
 
   return safeName;
@@ -3951,8 +4032,9 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     function alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
-    // Edge can need both tile-level transform and a small map-pane translation.
-    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
+    // Edge can over-shift when tile and pane translations are both applied.
+    // Keep tile scale correction, and let pane alignment handle translation.
+    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: false });
     const paneAligned = alignMapCanvasForEdge(tileAligned, mapEl);
     logEdgeExportDebug("alignMapCanvasForEdgeDisplayedState", {
       tileAlignedChanged: tileAligned !== mapCanvas,
@@ -4211,7 +4293,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
           'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
           'boxShadow', 'outline',
-          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
+          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'whiteSpace',
           'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
         ];
         props.forEach((prop) => {
@@ -4262,6 +4344,9 @@ window.addEventListener('load', resetInitialScrollPositions);
           source.classList &&
           (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
         ) {
+          clone.style.whiteSpace = 'nowrap';
+          clone.style.overflow = 'visible';
+          clone.style.minWidth = exportWidth + 'px';
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
           const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
           const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - exportHeight)));
@@ -4532,59 +4617,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.display = 'block';
         clone.style.clear = 'both';
         clone.style.zIndex = '4';
-        clone.style.background = 'transparent';
-        clone.style.border = '0';
-        clone.style.boxShadow = 'none';
-        clone.style.outline = 'none';
-        clone.style.padding = '0';
-        clone.style.marginTop = '10px';
-        clone.style.borderRadius = '0';
+        clone.style.marginTop = '8px';
         clone.style.overflow = 'visible';
-        Array.from(clone.querySelectorAll('.legend-block')).forEach((block) => {
-          block.style.borderTop = '0';
-          block.style.border = '0';
-          block.style.boxShadow = 'none';
-          block.style.outline = 'none';
-          block.style.background = 'transparent';
-        });
-        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
-        const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
-        cloneSyms.forEach((sym, idx) => {
-          const src = sourceSyms[idx];
-          if (!src) return;
-          const cs = window.getComputedStyle(src);
-          const fillColor = (cs && cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)')
-            ? cs.backgroundColor
-            : '#ccc';
-          const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
-            ? cs.border
-            : '1px solid #333';
-          sym.style.display = 'inline-block';
-          sym.style.boxSizing = 'border-box';
-          sym.style.width = '16px';
-          sym.style.minWidth = '16px';
-          sym.style.maxWidth = '16px';
-          sym.style.height = '16px';
-          sym.style.minHeight = '16px';
-          sym.style.maxHeight = '16px';
-          sym.style.marginRight = '8px';
-          sym.style.flex = '0 0 16px';
-          sym.style.backgroundColor = fillColor;
-          sym.style.border = borderValue;
-          if (sym.classList.contains('legend-sym-line')) {
-            const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
-              ? cs.borderTopColor
-              : fillColor;
-            sym.style.height = '3px';
-            sym.style.minHeight = '3px';
-            sym.style.maxHeight = '3px';
-            sym.style.border = '0';
-            sym.style.borderTop = `3px solid ${lineColor}`;
-            sym.style.background = 'transparent';
-          } else if (sym.classList.contains('legend-sym-point')) {
-            sym.style.borderRadius = '50%';
-          }
-        });
         wrapper.appendChild(clone);
       }
 
