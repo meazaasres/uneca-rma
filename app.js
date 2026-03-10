@@ -4213,7 +4213,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
           'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
           'boxShadow', 'outline',
-          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
+          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'whiteSpace',
           'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
         ];
         props.forEach((prop) => {
