@@ -4195,6 +4195,10 @@ window.addEventListener('load', resetInitialScrollPositions);
         .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-map-wrapper .export-north-arrow-clone{display:flex !important;align-items:center !important;justify-content:center !important;flex-direction:column !important}
         .export-map-wrapper .export-north-arrow-clone .north-arrow-symbol{display:block !important;width:100% !important;text-align:center !important;padding-top:0 !important;line-height:1 !important}
+        .export-map-wrapper .export-scale-clone{white-space:nowrap !important;overflow:visible !important}
+        .export-map-wrapper .export-scale-clone .exact-scale-label,
+        .export-map-wrapper .export-scale-clone .exact-scale-prefix,
+        .export-map-wrapper .export-scale-clone .exact-scale-value{white-space:nowrap !important;display:inline !important}
         .export-img{width:100%;height:auto;display:block}
       `;
       wrapper.appendChild(styleEl);
@@ -4213,7 +4217,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           'background', 'backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
           'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderColor', 'borderStyle', 'borderWidth', 'borderRadius',
           'boxShadow', 'outline',
-          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign',
+          'color', 'font', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'whiteSpace',
           'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'
         ];
         props.forEach((prop) => {
@@ -4264,6 +4268,35 @@ window.addEventListener('load', resetInitialScrollPositions);
           source.classList &&
           (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
         ) {
+          const scaleLabel = source.querySelector('.exact-scale-label');
+          const labelText = (scaleLabel?.textContent || source.textContent || '').trim();
+          clone.style.whiteSpace = 'nowrap';
+          const labelClone = clone.querySelector('.exact-scale-label');
+          const prefixClone = clone.querySelector('.exact-scale-prefix');
+          const valueClone = clone.querySelector('.exact-scale-value');
+          if (labelClone) {
+            labelClone.style.whiteSpace = 'nowrap';
+            labelClone.style.display = 'inline';
+          }
+          if (prefixClone) {
+            prefixClone.style.whiteSpace = 'nowrap';
+            prefixClone.style.display = 'inline';
+          }
+          if (valueClone) {
+            valueClone.style.whiteSpace = 'nowrap';
+            valueClone.style.display = 'inline';
+          }
+          // Guard against Chrome export rounding that can shrink width and wrap "km".
+          const padL = Math.max(0, parseFloat(clone.style.paddingLeft || '0') || 0);
+          const padR = Math.max(0, parseFloat(clone.style.paddingRight || '0') || 0);
+          const canvasMeasure = document.createElement('canvas').getContext('2d');
+          if (canvasMeasure) {
+            const labelCs = window.getComputedStyle(scaleLabel || source);
+            canvasMeasure.font = labelCs.font || `${labelCs.fontSize || '8px'} ${labelCs.fontFamily || 'Segoe UI, sans-serif'}`;
+            const measured = Math.ceil(canvasMeasure.measureText(labelText).width) + padL + padR + 8;
+            const currentW = Math.max(1, parseFloat(clone.style.width || '0') || exportWidth);
+            clone.style.width = Math.max(currentW, measured) + 'px';
+          }
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
           const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
           const exportBottom = Math.max(6, Math.min(exportBottomRaw, Math.max(6, H - exportHeight)));
@@ -4424,6 +4457,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         fallback.style.color = '#102a43';
         fallback.style.textAlign = 'center';
         fallback.style.pointerEvents = 'none';
+        fallback.style.whiteSpace = 'nowrap';
+        fallback.style.overflow = 'visible';
         fallback.textContent = labelText;
         mapWrapper.appendChild(fallback);
       }
