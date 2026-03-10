@@ -1658,7 +1658,6 @@ function applyMapHorizontalLayout() {
   }
 }
 
-goHomeView();
 applyMaxBoundsSafely();
 
 function goHomeView() {
@@ -1708,6 +1707,9 @@ setTimeout(() => {
 
 const draggableMapControls = new Set();
 const draggableControlInitialResolvers = new WeakMap();
+
+// Run initial home reset after draggable control state is initialized.
+goHomeView();
 
 function clampDraggableControl(el, mapEl) {
   const rect = mapEl.getBoundingClientRect();
