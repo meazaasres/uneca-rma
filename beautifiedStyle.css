@@ -245,6 +245,18 @@
   margin-top: 2px;
   flex: 0 0 15px;
 }
+.legend-sym-line {
+  height: 0;
+  border-top: 3px solid currentColor;
+  background-color: transparent !important;
+  margin-top: 8px;
+}
+.legend-sym-point {
+  border-radius: 50%;
+}
+.legend-sym-polygon {
+  border: 1px solid #333;
+}
 
 /* Disclaimer */
 #disclaimer {

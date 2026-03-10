@@ -2467,6 +2467,16 @@ if (layersContainer) {
 }
 //Legend Update
 // --- Legend update ---
+function getLegendSymbolKindFromGeometryType(geometryType) {
+  const t = String(geometryType || "").toLowerCase();
+  if (!t) return "polygon";
+  if (t.includes("line")) return "line";
+  if (t.includes("point")) return "point";
+  if (t.includes("polygon")) return "polygon";
+  if (t.includes("curve")) return "line";
+  return "polygon";
+}
+
 function updateLegend(layerName, vals, cols, isNumeric, geojson) {
   const leg = document.getElementById('legend-items');
   if (!leg) return;
@@ -2520,6 +2530,7 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
     return 'Polygon';
   };
   const geom = detectLegendGeomType();
+  const symbolKind = getLegendSymbolKindFromGeometryType(geom);
 
   const makeRow = (label, color) => {
     const row = document.createElement('div');
@@ -2527,12 +2538,16 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
 
     const sym = document.createElement('div');
     sym.className = 'legend-sym';
-    if (/LineString/.test(geom)) sym.classList.add('legend-sym-line');
-    if (/Point/.test(geom)) sym.classList.add('legend-sym-point');
-    if (/Polygon/.test(geom)) sym.classList.add('legend-sym-polygon');
+    if (symbolKind === 'line') sym.classList.add('legend-sym-line');
+    else if (symbolKind === 'point') sym.classList.add('legend-sym-point');
+    else sym.classList.add('legend-sym-polygon');
 
     if (/^#[0-9A-Fa-f]{3,6}$/.test(color) || /^[a-zA-Z]+$/.test(color)) {
-      setDynamicStyle(sym, { "background-color": color });
+      if (symbolKind === 'line') {
+        setDynamicStyle(sym, { "color": color, "background-color": "transparent" });
+      } else {
+        setDynamicStyle(sym, { "background-color": color, "color": "inherit" });
+      }
     } else {
       setDynamicStyle(sym, { "background-color": "#ccc" });
       console.warn("Invalid color blocked:", color);
@@ -3506,7 +3521,7 @@ function updateClassificationTableDefaultSymbol(label, color) {
   tbody.textContent = "";
 
   const headerRow = document.createElement('tr');
-  ["Label", "Color"].forEach((title) => {
+  ["Symbol", "Label", "Color"].forEach((title) => {
     const th = document.createElement('th');
     th.textContent = title;
     headerRow.appendChild(th);
@@ -3514,6 +3529,24 @@ function updateClassificationTableDefaultSymbol(label, color) {
   thead.appendChild(headerRow);
 
   const row = document.createElement('tr');
+
+  const tdSym = document.createElement('td');
+  const sym = document.createElement('div');
+  sym.className = 'legend-sym';
+  const geomType = overlayData[currentLayerName]?.legendGeomType || geojsonData?.features?.[0]?.geometry?.type || 'Polygon';
+  const symbolKind = getLegendSymbolKindFromGeometryType(geomType);
+  if (symbolKind === 'line') sym.classList.add('legend-sym-line');
+  else if (symbolKind === 'point') sym.classList.add('legend-sym-point');
+  else sym.classList.add('legend-sym-polygon');
+  if (symbolKind === 'line') {
+    setDynamicStyle(sym, {
+      "color": /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#ccc',
+      "background-color": "transparent"
+    });
+  } else {
+    setDynamicStyle(sym, { "background-color": /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#ccc' });
+  }
+  tdSym.appendChild(sym);
 
   const tdLabel = document.createElement('td');
   tdLabel.contentEditable = 'true';
@@ -3552,7 +3585,7 @@ function updateClassificationTableDefaultSymbol(label, color) {
   });
   tdColor.appendChild(inputCol);
 
-  row.append(tdLabel, tdColor);
+  row.append(tdSym, tdLabel, tdColor);
   tbody.appendChild(row);
   if (tbl) setDynamicStyle(tbl, { display: "block" });
 }

@@ -315,7 +315,10 @@ footer {
   background-color: #ccc;
 }
 .legend-sym-line {
-  height: 3px;
+  height: 0;
+  border-top: 3px solid currentColor;
+  background-color: transparent !important;
+  margin-top: 9px;
 }
 .legend-sym-point {
   border-radius: 50%;
