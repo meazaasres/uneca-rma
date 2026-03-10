@@ -4652,27 +4652,40 @@ window.addEventListener('load', resetInitialScrollPositions);
       return lines;
     }
 
-    function getExportLegendEntries() {
-      const overlay = overlayData[currentLayerName] || {};
-      const vals = Array.isArray(overlay.vals) ? overlay.vals : [];
-      const cols = Array.isArray(overlay.cols) ? overlay.cols : [];
-      if (!vals.length || !cols.length) return [];
-      if (overlay.isNumeric) {
-        const rows = [];
-        for (let i = 0; i < vals.length - 1; i++) {
-          const a = vals[i];
-          const b = vals[i + 1];
-          rows.push({
-            color: cols[i] || "#cccccc",
-            label: `${a} - ${b}`
-          });
-        }
-        return rows;
-      }
-      return vals.map((v, i) => ({
-        color: cols[i] || "#cccccc",
-        label: String(v)
-      }));
+    function getExportLegendBlocks() {
+      const legendRoot = document.getElementById('legend-items');
+      if (!legendRoot) return [];
+
+      const isVisible = (el) => {
+        if (!el) return false;
+        const cs = window.getComputedStyle(el);
+        return cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity || '1') > 0;
+      };
+
+      const blocks = Array.from(legendRoot.querySelectorAll('.legend-block'))
+        .filter((block) => isVisible(block));
+
+      return blocks.map((block) => {
+        const headerEl = block.querySelector('.legend-header');
+        const title = (headerEl?.textContent || '').trim() || 'Legend';
+        const rows = Array.from(block.querySelectorAll('.legend-row')).map((row) => {
+          const symEl = row.querySelector('.legend-sym');
+          const labelEl = row.querySelector('span');
+          const cs = symEl ? window.getComputedStyle(symEl) : null;
+          const isLine = !!(symEl && symEl.classList.contains('legend-sym-line'));
+          const isPoint = !!(symEl && symEl.classList.contains('legend-sym-point'));
+          const color = isLine
+            ? (cs?.borderTopColor || cs?.borderColor || '#cccccc')
+            : (cs?.backgroundColor || '#cccccc');
+          return {
+            color,
+            label: (labelEl?.textContent || '').trim(),
+            symbolType: isLine ? 'line' : (isPoint ? 'point' : 'polygon')
+          };
+        }).filter((row) => row.label);
+
+        return { title, rows };
+      }).filter((block) => block.rows.length > 0);
     }
 
     function buildEdgeDirectExportCanvas(formatLabel, cb, onError) {
@@ -4721,12 +4734,20 @@ window.addEventListener('load', resetInitialScrollPositions);
         const scaleText = (document.querySelector('.leaflet-control-exact-scale .exact-scale-label')?.textContent
           || document.querySelector('.map-bottom-scale-control .exact-scale-label')?.textContent
           || '').trim();
-        const legendEntries = getExportLegendEntries();
+        const legendBlocks = getExportLegendBlocks();
 
         const titleH = 36;
-        const legendHeaderH = legendEntries.length ? 24 : 0;
+        const legendHeaderH = 24;
         const legendRowH = 20;
-        const legendH = legendEntries.length ? (legendHeaderH + (legendEntries.length * legendRowH) + 10) : 0;
+        const legendBlockGap = 10;
+        const legendTopPad = 8;
+        const legendBottomPad = 8;
+        const legendH = legendBlocks.length
+          ? (legendTopPad + legendBottomPad + legendBlocks.reduce((sum, block, idx) => {
+              const blockH = legendHeaderH + (block.rows.length * legendRowH);
+              return sum + blockH + (idx > 0 ? legendBlockGap : 0);
+            }, 0))
+          : 0;
         const outW = cropW;
         const outH = titleH + cropH + legendH;
 
@@ -4879,24 +4900,51 @@ window.addEventListener('load', resetInitialScrollPositions);
           octx.fillText(scaleText, x + Math.round(boxW / 2), y + Math.round(boxH / 2));
         }
 
-        if (legendEntries.length) {
-          const legendTitle = `${currentLayerName || 'Layer'}${currentAttribute ? ': ' + String(currentAttribute).toUpperCase() : ''}`;
-          let y = titleH + cropH + 8;
-          octx.fillStyle = '#222222';
-          octx.font = '600 20px Segoe UI, sans-serif';
+        if (legendBlocks.length) {
+          let y = titleH + cropH + legendTopPad;
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
-          octx.fillText(legendTitle, 6, y);
-          y += 28;
-          octx.font = '400 15px Segoe UI, sans-serif';
-          legendEntries.forEach((entry) => {
-            octx.fillStyle = entry.color || '#cccccc';
-            octx.beginPath();
-            octx.arc(14, y + 8, 8, 0, Math.PI * 2);
-            octx.fill();
-            octx.fillStyle = '#333333';
-            octx.fillText(String(entry.label || ''), 36, y - 2);
-            y += legendRowH;
+
+          legendBlocks.forEach((block, blockIdx) => {
+            if (blockIdx > 0) y += legendBlockGap;
+
+            octx.fillStyle = '#222222';
+            octx.font = '600 20px Segoe UI, sans-serif';
+            octx.fillText(String(block.title || 'Legend'), 6, y);
+            y += legendHeaderH;
+
+            octx.font = '400 15px Segoe UI, sans-serif';
+            block.rows.forEach((entry) => {
+              const color = entry.color || '#cccccc';
+              const symbolType = entry.symbolType || 'polygon';
+              const symbolX = 6;
+              const symbolY = y;
+              const symbolSize = 16;
+
+              if (symbolType === 'line') {
+                octx.strokeStyle = color;
+                octx.lineWidth = 3;
+                octx.beginPath();
+                octx.moveTo(symbolX, symbolY + 8);
+                octx.lineTo(symbolX + symbolSize, symbolY + 8);
+                octx.stroke();
+              } else if (symbolType === 'point') {
+                octx.fillStyle = color;
+                octx.beginPath();
+                octx.arc(symbolX + 8, symbolY + 8, 7, 0, Math.PI * 2);
+                octx.fill();
+              } else {
+                octx.fillStyle = color;
+                octx.fillRect(symbolX, symbolY, symbolSize, symbolSize);
+                octx.strokeStyle = '#333333';
+                octx.lineWidth = 1;
+                octx.strokeRect(symbolX, symbolY, symbolSize, symbolSize);
+              }
+
+              octx.fillStyle = '#333333';
+              octx.fillText(String(entry.label || ''), 30, y - 2);
+              y += legendRowH;
+            });
           });
         }
 
