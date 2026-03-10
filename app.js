@@ -294,9 +294,9 @@ function validateImportUrl(rawUrl) {
   if (ENFORCE_IMPORT_HOST_ALLOWLIST && !ALLOWED_IMPORT_HOSTS.has(host)) {
     throw new Error("URL host is not allowed by security policy.");
   }
-  const ext = parsed.pathname.slice(parsed.pathname.lastIndexOf('.')).toLowerCase();
-  if (![".csv", ".geojson", ".json"].includes(ext)) {
-    throw new Error("Only .csv, .geojson, or .json URLs are allowed.");
+  const ext = getDataExtension(parsed.pathname);
+  if (ext && ![".csv", ".geojson", ".json"].includes(ext)) {
+    throw new Error("Only .csv, .geojson, or .json URLs are allowed when an extension is provided.");
   }
   return { parsed, ext };
 }
@@ -819,8 +819,30 @@ function isAllowedRemoteContentType(ext, contentType) {
     "application/vnd.ms-excel"
   ]);
   if (!ct) return false;
+  if (!ext) return CSV_TYPES.has(ct) || JSON_TYPES.has(ct);
   if (ext === ".csv") return CSV_TYPES.has(ct);
   return JSON_TYPES.has(ct);
+}
+
+function resolveRemoteImportExtension(initialExt, finalUrl, contentType) {
+  const firstChoice = String(initialExt || "").toLowerCase();
+  if (firstChoice === ".csv" || firstChoice === ".geojson" || firstChoice === ".json") {
+    return firstChoice;
+  }
+
+  const finalExt = getDataExtension(finalUrl || "");
+  if (finalExt === ".csv" || finalExt === ".geojson" || finalExt === ".json") {
+    return finalExt;
+  }
+
+  const ct = detectContentType(contentType);
+  if (ct === "text/csv" || ct === "application/csv" || ct === "application/vnd.ms-excel") {
+    return ".csv";
+  }
+  if (ct === "application/json" || ct === "application/geo+json" || ct === "application/vnd.geo+json" || ct === "text/json") {
+    return ".json";
+  }
+  return "";
 }
 
 function getUint16LE(view, offset) {
@@ -2718,7 +2740,12 @@ function refreshStyles() {
 }
 //File Upload and URL Add Handlers
 function getDataExtension(nameOrPath) {
-  return String(nameOrPath || "").slice(String(nameOrPath || "").lastIndexOf(".")).toLowerCase();
+  const raw = String(nameOrPath || "").split(/[?#]/)[0];
+  const lastSlash = raw.lastIndexOf("/");
+  const segment = lastSlash >= 0 ? raw.slice(lastSlash + 1) : raw;
+  const dot = segment.lastIndexOf(".");
+  if (dot <= 0 || dot === segment.length - 1) return "";
+  return segment.slice(dot).toLowerCase();
 }
 
 function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
@@ -2875,9 +2902,13 @@ async function importUrl(rawUrl) {
   showLoading("Loading data from URL...");
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
-    const { parsed, ext } = validateImportUrl(rawUrl);
+    const { parsed, ext: requestedExt } = validateImportUrl(rawUrl);
     const fetched = await fetchWithLimits(parsed.href);
-    assertFinalImportUrlAllowed(fetched.finalUrl);
+    const finalParsed = assertFinalImportUrlAllowed(fetched.finalUrl);
+    const ext = resolveRemoteImportExtension(requestedExt, finalParsed?.pathname || fetched.finalUrl || "", fetched.contentType);
+    if (!ext) {
+      throw new Error("Could not determine URL import type. Use a .csv/.geojson URL or a correct JSON/CSV content type.");
+    }
     if (!isAllowedRemoteContentType(ext, fetched.contentType)) {
       throw new Error(`Remote content type is not allowed for ${ext} import.`);
     }
