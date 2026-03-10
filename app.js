@@ -4774,6 +4774,13 @@ window.addEventListener('load', resetInitialScrollPositions);
           block.style.outline = 'none';
           block.style.background = 'transparent';
         });
+        if (isFirefoxBrowser()) {
+          Array.from(clone.querySelectorAll('.legend-row')).forEach((row) => {
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.minHeight = '18px';
+          });
+        }
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
         const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
         cloneSyms.forEach((sym, idx) => {
@@ -4802,12 +4809,27 @@ window.addEventListener('load', resetInitialScrollPositions);
             const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
               ? cs.borderTopColor
               : fillColor;
-            sym.style.height = '3px';
-            sym.style.minHeight = '3px';
-            sym.style.maxHeight = '3px';
             sym.style.border = '0';
-            sym.style.borderTop = `3px solid ${lineColor}`;
             sym.style.background = 'transparent';
+            sym.style.marginTop = '0';
+            sym.style.height = '16px';
+            sym.style.minHeight = '16px';
+            sym.style.maxHeight = '16px';
+            if (isFirefoxBrowser()) {
+              sym.style.display = 'inline-flex';
+              sym.style.alignItems = 'center';
+              sym.style.justifyContent = 'center';
+              sym.style.color = lineColor;
+              sym.textContent = '';
+              const lineStroke = document.createElement('span');
+              lineStroke.style.display = 'block';
+              lineStroke.style.width = '100%';
+              lineStroke.style.borderTop = `3px solid ${lineColor}`;
+              lineStroke.style.boxSizing = 'border-box';
+              sym.appendChild(lineStroke);
+            } else {
+              sym.style.borderTop = `3px solid ${lineColor}`;
+            }
           } else if (sym.classList.contains('legend-sym-point')) {
             sym.style.borderRadius = '50%';
           }
