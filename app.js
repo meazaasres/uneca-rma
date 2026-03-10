@@ -3077,8 +3077,18 @@ function renderDefaultFilteredLayer() {
     onEachFeature: bindFeaturePopup
   }).addTo(layerGroup);
 
-  const block = document.getElementById('legend-' + sanitizeId(currentLayerName));
-  if (block) block.remove();
+  const geomType = filtered?.features?.[0]?.geometry?.type || geojsonData?.features?.[0]?.geometry?.type || "Polygon";
+  const defaultLegendColor = /LineString/.test(geomType) ? "#007aff" : "#ccc";
+  const defaultLegendLabel = "Features";
+
+  if (overlayData[currentLayerName]) {
+    overlayData[currentLayerName].vals = [defaultLegendLabel];
+    overlayData[currentLayerName].cols = [defaultLegendColor];
+    overlayData[currentLayerName].isNumeric = false;
+    overlayData[currentLayerName].legendLabels = [defaultLegendLabel];
+  }
+
+  updateLegend(currentLayerName, [defaultLegendLabel], [defaultLegendColor], false, filtered);
 }
 
 // --- Activate a layer securely ---
