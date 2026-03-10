@@ -824,6 +824,18 @@ function isAllowedRemoteContentType(ext, contentType) {
   return JSON_TYPES.has(ct);
 }
 
+function isLikelyCsvPayload(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+  const lines = raw.split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return false;
+  const header = String(lines[0] || "").toLowerCase();
+  const hasDelimiter = /,|;|\t/.test(header);
+  const hasLatField = /(latitude|lat)\b/.test(header);
+  const hasLonField = /(longitude|lon|lng)\b/.test(header);
+  return hasDelimiter && hasLatField && hasLonField;
+}
+
 function resolveRemoteImportExtension(initialExt, finalUrl, contentType) {
   const firstChoice = String(initialExt || "").toLowerCase();
   if (firstChoice === ".csv" || firstChoice === ".geojson" || firstChoice === ".json") {
@@ -2909,7 +2921,9 @@ async function importUrl(rawUrl) {
     if (!ext) {
       throw new Error("Could not determine URL import type. Use a .csv/.geojson URL or a correct JSON/CSV content type.");
     }
-    if (!isAllowedRemoteContentType(ext, fetched.contentType)) {
+    const hasAllowedContentType = isAllowedRemoteContentType(ext, fetched.contentType);
+    const csvPayloadFallbackAllowed = ext === ".csv" && isLikelyCsvPayload(fetched.text || "");
+    if (!hasAllowedContentType && !csvPayloadFallbackAllowed) {
       throw new Error(`Remote content type is not allowed for ${ext} import.`);
     }
     const geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
