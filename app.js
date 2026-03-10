@@ -2590,16 +2590,24 @@ function getLineWidth() {
 
 function defaultStyle(feature) {
   const t = feature?.geometry?.type || "";
-  if (/Polygon/.test(t)) return { weight: 0, fillColor: '#ccc', fillOpacity: 0.6 };
-  if (/LineString/.test(t)) return { color: '#007aff', weight: getLineWidth() };
-  return { color: '#000', weight: 1, fillColor: '#ccc', fillOpacity: 0.6 };
+  const activeLayerState = currentLayerName ? overlayData[currentLayerName] : null;
+  const defaultColor = /^#[0-9A-Fa-f]{6}$/.test(activeLayerState?.defaultSymbolColor || "")
+    ? activeLayerState.defaultSymbolColor
+    : (/LineString/.test(t) ? '#007aff' : '#ccc');
+  if (/Polygon/.test(t)) return { weight: 0, fillColor: defaultColor, fillOpacity: 0.6 };
+  if (/LineString/.test(t)) return { color: defaultColor, weight: getLineWidth() };
+  return { color: '#000', weight: 1, fillColor: defaultColor, fillOpacity: 0.6 };
 }
 
 function defaultPoint(feature, latlng) {
   const size = getPointRadius();
+  const activeLayerState = currentLayerName ? overlayData[currentLayerName] : null;
+  const defaultColor = /^#[0-9A-Fa-f]{6}$/.test(activeLayerState?.defaultSymbolColor || "")
+    ? activeLayerState.defaultSymbolColor
+    : '#ccc';
   return L.circleMarker(latlng, {
     radius: size,
-    fillColor: '#ccc',
+    fillColor: defaultColor,
     color: '#000',
     weight: 1,
     fillOpacity: 0.6,
@@ -3078,17 +3086,23 @@ function renderDefaultFilteredLayer() {
   }).addTo(layerGroup);
 
   const geomType = filtered?.features?.[0]?.geometry?.type || geojsonData?.features?.[0]?.geometry?.type || "Polygon";
-  const defaultLegendColor = /LineString/.test(geomType) ? "#007aff" : "#ccc";
-  const defaultLegendLabel = "Features";
+  const state = overlayData[currentLayerName] || null;
+  const defaultLegendColor = /^#[0-9A-Fa-f]{6}$/.test(state?.defaultSymbolColor || "")
+    ? state.defaultSymbolColor
+    : (/LineString/.test(geomType) ? "#007aff" : "#ccc");
+  const defaultLegendLabel = sanitizePlainText(state?.defaultSymbolLabel || "Features", "Features");
 
   if (overlayData[currentLayerName]) {
     overlayData[currentLayerName].vals = [defaultLegendLabel];
     overlayData[currentLayerName].cols = [defaultLegendColor];
     overlayData[currentLayerName].isNumeric = false;
     overlayData[currentLayerName].legendLabels = [defaultLegendLabel];
+    overlayData[currentLayerName].defaultSymbolColor = defaultLegendColor;
+    overlayData[currentLayerName].defaultSymbolLabel = defaultLegendLabel;
   }
 
   updateLegend(currentLayerName, [defaultLegendLabel], [defaultLegendColor], false, filtered);
+  updateClassificationTableDefaultSymbol(defaultLegendLabel, defaultLegendColor);
 }
 
 // --- Activate a layer securely ---
@@ -3467,6 +3481,67 @@ function updateClassificationTableNumeric(brks, cols) {
     tr.append(tdC, tdR, tdCol);
     tbody.append(tr);
   });
+}
+
+function updateClassificationTableDefaultSymbol(label, color) {
+  const thead = document.querySelector('#table-container thead');
+  const tbody = document.getElementById('classification-table');
+  const tbl = document.getElementById('table-container');
+  if (!thead || !tbody || !currentLayerName) return;
+
+  thead.textContent = "";
+  tbody.textContent = "";
+
+  const headerRow = document.createElement('tr');
+  ["Label", "Color"].forEach((title) => {
+    const th = document.createElement('th');
+    th.textContent = title;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+
+  const row = document.createElement('tr');
+
+  const tdLabel = document.createElement('td');
+  tdLabel.contentEditable = 'true';
+  tdLabel.setAttribute('role', 'textbox');
+  tdLabel.setAttribute('aria-label', 'Legend label');
+  tdLabel.spellcheck = false;
+  tdLabel.textContent = sanitizePlainText(label, 'Features');
+  tdLabel.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+    insertTextAtCaret(tdLabel, text);
+  });
+  tdLabel.addEventListener('blur', () => {
+    const next = sanitizePlainText(tdLabel.textContent, 'Features');
+    tdLabel.textContent = next;
+    const state = overlayData[currentLayerName];
+    if (!state) return;
+    state.defaultSymbolLabel = next;
+    state.legendLabels = [next];
+    state.vals = [next];
+    updateLegend(currentLayerName, state.vals, state.cols || [color], false, state.geojson);
+  });
+
+  const tdColor = document.createElement('td');
+  const inputCol = document.createElement('input');
+  inputCol.type = 'color';
+  inputCol.value = /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#cccccc';
+  inputCol.setAttribute('aria-label', 'Legend color');
+  inputCol.addEventListener('change', () => {
+    const nextColor = inputCol.value;
+    const state = overlayData[currentLayerName];
+    if (!state) return;
+    state.defaultSymbolColor = nextColor;
+    state.cols = [nextColor];
+    renderDefaultFilteredLayer();
+  });
+  tdColor.appendChild(inputCol);
+
+  row.append(tdLabel, tdColor);
+  tbody.appendChild(row);
+  if (tbl) setDynamicStyle(tbl, { display: "block" });
 }
 
 function updateClassificationTableCategorical(uniques, cols) {
