@@ -40,9 +40,7 @@
       width: 250px;
       height: calc(100vh - var(--app-header-height));
       padding-top: 5px;
-      overflow-y: scroll;
-      overflow-x: hidden;
-      scrollbar-gutter: stable;
+      overflow-y: auto;
       background: #f8f9fa;
       border-left: 1px solid #ddd;
       z-index: 1000;

@@ -799,13 +799,10 @@ function isAllowedRemoteContentType(ext, contentType) {
     "application/vnd.geo+json",
     "text/json"
   ]);
-  // CSV endpoints are inconsistent across hosts; keep this list explicit and deduplicated.
   const CSV_TYPES = new Set([
     "text/csv",
-    "text/plain",
     "application/csv",
-    "application/vnd.ms-excel",
-    "application/octet-stream"
+    "application/vnd.ms-excel"
   ]);
   if (!ct) return false;
   if (ext === ".csv") return CSV_TYPES.has(ct);
@@ -1613,21 +1610,6 @@ function applyHomeView() {
   safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
 }
 
-// TEMP: Tracker log to verify startup/home path execution during debugging.
-function debugHomeTracker(source) {
-  try {
-    const center = map && typeof map.getCenter === "function" ? map.getCenter() : null;
-    const zoom = map && typeof map.getZoom === "function" ? map.getZoom() : null;
-    console.debug(`[TEMP_TRACKER] ${source} executed`, {
-      at: new Date().toISOString(),
-      center: center ? { lat: center.lat, lng: center.lng } : null,
-      zoom
-    });
-  } catch (e) {
-    console.debug(`[TEMP_TRACKER] ${source} executed (state unavailable)`);
-  }
-}
-
 function syncLayoutWithHeaderHeight() {
   const header = document.querySelector('header.fixed-top');
   if (!header || !document.documentElement) return;
@@ -1658,10 +1640,10 @@ function applyMapHorizontalLayout() {
   }
 }
 
+applyHomeView();
 applyMaxBoundsSafely();
 
 function goHomeView() {
-  debugHomeTracker("goHomeView");
   applyHomeView();
   resetAllMapUiPositions();
 }
@@ -1707,9 +1689,6 @@ setTimeout(() => {
 
 const draggableMapControls = new Set();
 const draggableControlInitialResolvers = new WeakMap();
-
-// Run initial home reset after draggable control state is initialized.
-goHomeView();
 
 function clampDraggableControl(el, mapEl) {
   const rect = mapEl.getBoundingClientRect();
@@ -2392,13 +2371,9 @@ function queueMapUiReflow() {
 
 // run initially and on relevant events
 window.addEventListener('load', () => {
-  debugHomeTracker("window.load");
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
-  setTimeout(() => {
-    debugHomeTracker("window.load.setTimeout(50)");
-    goHomeView();
-  }, 50);
+  setTimeout(applyHomeView, 50);
   setTimeout(syncLayoutWithHeaderHeight, 80);
   setTimeout(resetAllMapUiPositions, 300);
   setTimeout(scheduleDisclaimerDragInit, 350);
@@ -2662,52 +2637,6 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   return { type: "FeatureCollection", features };
 }
 
-function validateCsvTextSecurity(csvText, sourceLabel = "CSV") {
-  const text = String(csvText || "");
-  const trimmed = text.trimStart();
-  const head = trimmed.slice(0, 256).toLowerCase();
-
-  if (!trimmed) {
-    throw new Error(`${sourceLabel} is empty.`);
-  }
-
-  // Reject obvious non-CSV payloads early.
-  if (
-    head.startsWith("{") ||
-    head.startsWith("[") ||
-    head.startsWith("<html") ||
-    head.startsWith("<!doctype")
-  ) {
-    throw new Error(`${sourceLabel} does not look like CSV content.`);
-  }
-
-  const firstLine = trimmed.split(/\r?\n/, 1)[0] || "";
-  const hasLikelyDelimiter = /[,;\t]/.test(firstLine);
-  if (!hasLikelyDelimiter) {
-    throw new Error(`${sourceLabel} header does not look like CSV.`);
-  }
-
-  if (window.Papa && typeof window.Papa.parse === "function") {
-    const preview = window.Papa.parse(text, {
-      header: true,
-      skipEmptyLines: "greedy",
-      preview: 25
-    });
-    const fields = Array.isArray(preview?.meta?.fields) ? preview.meta.fields : [];
-    if (fields.length < 2) {
-      throw new Error(`${sourceLabel} must contain at least two columns.`);
-    }
-    if (fields.length > 1000) {
-      throw new Error(`${sourceLabel} has too many columns.`);
-    }
-    const latKey = fields.find((k) => /lat/i.test(String(k)));
-    const lonKey = fields.find((k) => /lon|lng|long/i.test(String(k)));
-    if (!latKey || !lonKey) {
-      throw new Error(`${sourceLabel} must include latitude/longitude columns.`);
-    }
-  }
-}
-
 function parseImportedData(ext, bodyText, contentType = "") {
   if (ext === ".csv") {
     return parseCsvToGeojson(bodyText, "CSV");
@@ -2824,9 +2753,6 @@ async function importUrl(rawUrl) {
     assertFinalImportUrlAllowed(fetched.finalUrl);
     if (!isAllowedRemoteContentType(ext, fetched.contentType)) {
       throw new Error(`Remote content type is not allowed for ${ext} import.`);
-    }
-    if (ext === ".csv") {
-      validateCsvTextSecurity(fetched.text || "", "Remote CSV");
     }
     const geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
@@ -4599,63 +4525,6 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       ensureFirefoxGuaranteedOverlays();
 
-      function applyLegendSymbolStyleFromSource(sourceSym, targetSym) {
-        if (!targetSym) return;
-        const srcStyle = sourceSym ? window.getComputedStyle(sourceSym) : null;
-        const dstStyle = window.getComputedStyle(targetSym);
-        const getVal = (prop, fallback) => {
-          const fromSrc = srcStyle ? srcStyle[prop] : "";
-          return (fromSrc && fromSrc !== 'auto' && fromSrc !== 'initial') ? fromSrc : (fallback || "");
-        };
-
-        const bg = getVal('backgroundColor', dstStyle.backgroundColor || '#cccccc');
-        const border = getVal('border', dstStyle.border || '1px solid rgb(51, 51, 51)');
-        const borderRadius = getVal('borderRadius', dstStyle.borderRadius || '0px');
-        const width = getVal('width', dstStyle.width || '20px');
-        const height = getVal('height', dstStyle.height || '20px');
-        const marginRight = getVal('marginRight', dstStyle.marginRight || '8px');
-
-        targetSym.style.display = 'inline-block';
-        targetSym.style.boxSizing = 'border-box';
-        targetSym.style.width = width;
-        targetSym.style.minWidth = width;
-        targetSym.style.maxWidth = width;
-        targetSym.style.height = height;
-        targetSym.style.minHeight = height;
-        targetSym.style.maxHeight = height;
-        targetSym.style.marginRight = marginRight;
-        targetSym.style.flex = `0 0 ${width}`;
-        targetSym.style.backgroundColor = bg;
-        targetSym.style.border = border;
-        targetSym.style.borderRadius = borderRadius;
-
-        if (targetSym.classList.contains('legend-sym-line')) {
-          const lineColor = bg || '#555555';
-          targetSym.style.height = '3px';
-          targetSym.style.minHeight = '3px';
-          targetSym.style.maxHeight = '3px';
-          targetSym.style.border = '0';
-          targetSym.style.borderTop = `3px solid ${lineColor}`;
-          targetSym.style.background = 'transparent';
-          targetSym.style.borderRadius = '0';
-        }
-      }
-
-      function normalizeLegendBlockClone(sourceBlock, blockClone) {
-        if (!blockClone) return;
-        const cloneRows = Array.from(blockClone.querySelectorAll('.legend-row'));
-        const sourceRows = sourceBlock ? Array.from(sourceBlock.querySelectorAll('.legend-row')) : [];
-        for (let i = 0; i < cloneRows.length; i++) {
-          const cloneRow = cloneRows[i];
-          const sourceRow = sourceRows[i] || null;
-          cloneRow.style.display = 'flex';
-          cloneRow.style.alignItems = 'center';
-          const cloneSym = cloneRow.querySelector('.legend-sym');
-          const sourceSym = sourceRow ? sourceRow.querySelector('.legend-sym') : null;
-          applyLegendSymbolStyleFromSource(sourceSym, cloneSym);
-        }
-      }
-
       const legend = document.querySelector('#legend-items');
       if (legend) {
         const clone = document.createElement('div');
@@ -4750,48 +4619,27 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
 
         const ordered = Array.isArray(layerOrder) ? layerOrder.slice() : Object.keys(overlayData || {});
-        const addedNames = new Set();
-        const addedBlockIds = new Set();
-
-        // 1) Prefer exactly what the sidebar currently shows, in layer order.
+        const added = new Set();
         ordered.forEach((name) => {
-          const sourceBlock = document.getElementById('legend-' + sanitizeId(name));
-          if (!sourceBlock) return;
-          const blockClone = sourceBlock.cloneNode(true);
-          copyVisualStylesRecursive(sourceBlock, blockClone);
-          blockClone.style.borderTop = '0';
-          blockClone.style.border = '0';
-          blockClone.style.boxShadow = 'none';
-          blockClone.style.outline = 'none';
-          blockClone.style.background = 'transparent';
-          normalizeLegendBlockClone(sourceBlock, blockClone);
-          clone.appendChild(blockClone);
-          addedNames.add(name);
-          if (sourceBlock.id) addedBlockIds.add(sourceBlock.id);
-        });
-
-        // 2) Add any remaining layer legends from saved state.
-        ordered.forEach((name) => {
-          if (addedNames.has(name)) return;
           const state = overlayData && overlayData[name];
           if (!state) return;
           if (!Array.isArray(state.vals) || !Array.isArray(state.cols) || state.vals.length === 0 || state.cols.length === 0) return;
+          if (map && state.layerGroup && typeof map.hasLayer === 'function' && !map.hasLayer(state.layerGroup)) return;
           appendLegendBlockFromState(name, state);
-          addedNames.add(name);
+          added.add(name);
         });
 
-        // 3) Fallback for any other rendered legend blocks not already appended.
+        // Fallback for any pre-rendered legend blocks not represented in overlay state.
         Array.from(legend.querySelectorAll('.legend-block')).forEach((sourceBlock) => {
           const blockId = String(sourceBlock.id || '');
-          if (blockId && addedBlockIds.has(blockId)) return;
+          const layerFromId = blockId.startsWith('legend-') ? blockId.slice(7) : '';
+          if (layerFromId && added.has(layerFromId)) return;
           const fallbackBlock = sourceBlock.cloneNode(true);
-          copyVisualStylesRecursive(sourceBlock, fallbackBlock);
           fallbackBlock.style.borderTop = '0';
           fallbackBlock.style.border = '0';
           fallbackBlock.style.boxShadow = 'none';
           fallbackBlock.style.outline = 'none';
           fallbackBlock.style.background = 'transparent';
-          normalizeLegendBlockClone(sourceBlock, fallbackBlock);
           clone.appendChild(fallbackBlock);
         });
 
@@ -4864,76 +4712,27 @@ window.addEventListener('load', resetInitialScrollPositions);
       return lines;
     }
 
-    function collectExportLegendBlocks() {
-      const legendEl = document.getElementById('legend-items');
-      const blocks = [];
-
-      if (legendEl) {
-        const domBlocks = Array.from(legendEl.querySelectorAll('.legend-block'));
-        domBlocks.forEach((blockEl) => {
-          const titleEl = blockEl.querySelector('.legend-header');
-          const title = sanitizePlainText(titleEl ? titleEl.textContent : '', 'Legend');
-          const rows = [];
-          Array.from(blockEl.querySelectorAll('.legend-row')).forEach((rowEl) => {
-            const sym = rowEl.querySelector('.legend-sym');
-            const labelEl = rowEl.querySelector('span');
-            const cs = sym ? window.getComputedStyle(sym) : null;
-            rows.push({
-              label: sanitizePlainText(labelEl ? labelEl.textContent : rowEl.textContent, ''),
-              color: cs ? (cs.backgroundColor || '#cccccc') : '#cccccc',
-              isLine: !!(sym && sym.classList.contains('legend-sym-line')),
-              isPoint: !!(sym && sym.classList.contains('legend-sym-point')),
-              borderColor: cs ? (cs.borderTopColor || cs.borderColor || '#333333') : '#333333'
-            });
-          });
-          if (rows.length) blocks.push({ title, rows });
-        });
-      }
-
-      if (blocks.length) return blocks;
-
-      // Fallback when legend DOM is not available.
-      const ordered = Array.isArray(layerOrder) ? layerOrder.slice() : Object.keys(overlayData || {});
-      ordered.forEach((name) => {
-        const state = overlayData && overlayData[name];
-        if (!state) return;
-        const vals = Array.isArray(state.vals) ? state.vals : [];
-        const cols = Array.isArray(state.cols) ? state.cols : [];
-        if (!vals.length || !cols.length) return;
-
-        const geom = state?.geojson?.features?.[0]?.geometry?.type || 'Polygon';
-        const isLine = /LineString/.test(geom);
-        const isPoint = /Point/.test(geom);
-        const title = sanitizePlainText(state.legendTitle, sanitizePlainText(humanizeLabel(name), name));
+    function getExportLegendEntries() {
+      const overlay = overlayData[currentLayerName] || {};
+      const vals = Array.isArray(overlay.vals) ? overlay.vals : [];
+      const cols = Array.isArray(overlay.cols) ? overlay.cols : [];
+      if (!vals.length || !cols.length) return [];
+      if (overlay.isNumeric) {
         const rows = [];
-
-        if (state.isNumeric) {
-          for (let i = 0; i < vals.length - 1; i++) {
-            rows.push({
-              label: `${formatLegendClassValue(vals[i])} - ${formatLegendClassValue(vals[i + 1])}`,
-              color: String(cols[i] || '#cccccc'),
-              isLine,
-              isPoint,
-              borderColor: '#333333'
-            });
-          }
-        } else {
-          const labels = Array.isArray(state.legendLabels) ? state.legendLabels : null;
-          vals.forEach((v, i) => {
-            rows.push({
-              label: sanitizePlainText(labels && labels[i] != null ? labels[i] : v, String(v)),
-              color: String(cols[i] || '#cccccc'),
-              isLine,
-              isPoint,
-              borderColor: '#333333'
-            });
+        for (let i = 0; i < vals.length - 1; i++) {
+          const a = vals[i];
+          const b = vals[i + 1];
+          rows.push({
+            color: cols[i] || "#cccccc",
+            label: `${a} - ${b}`
           });
         }
-
-        if (rows.length) blocks.push({ title, rows });
-      });
-
-      return blocks;
+        return rows;
+      }
+      return vals.map((v, i) => ({
+        color: cols[i] || "#cccccc",
+        label: String(v)
+      }));
     }
 
     function buildEdgeDirectExportCanvas(formatLabel, cb, onError) {
@@ -4982,22 +4781,12 @@ window.addEventListener('load', resetInitialScrollPositions);
         const scaleText = (document.querySelector('.leaflet-control-exact-scale .exact-scale-label')?.textContent
           || document.querySelector('.map-bottom-scale-control .exact-scale-label')?.textContent
           || '').trim();
-        const legendBlocks = collectExportLegendBlocks();
+        const legendEntries = getExportLegendEntries();
 
         const titleH = 36;
-        const legendHeaderH = 22;
+        const legendHeaderH = legendEntries.length ? 24 : 0;
         const legendRowH = 20;
-        const legendBlockGap = 8;
-        let legendH = 0;
-        if (legendBlocks.length) {
-          legendH = 8;
-          legendBlocks.forEach((block, idx) => {
-            legendH += legendHeaderH;
-            legendH += Math.max(0, (block.rows || []).length) * legendRowH;
-            if (idx < legendBlocks.length - 1) legendH += legendBlockGap;
-          });
-          legendH += 8;
-        }
+        const legendH = legendEntries.length ? (legendHeaderH + (legendEntries.length * legendRowH) + 10) : 0;
         const outW = cropW;
         const outH = titleH + cropH + legendH;
 
@@ -5150,48 +4939,24 @@ window.addEventListener('load', resetInitialScrollPositions);
           octx.fillText(scaleText, x + Math.round(boxW / 2), y + Math.round(boxH / 2));
         }
 
-        if (legendBlocks.length) {
+        if (legendEntries.length) {
+          const legendTitle = `${currentLayerName || 'Layer'}${currentAttribute ? ': ' + String(currentAttribute).toUpperCase() : ''}`;
           let y = titleH + cropH + 8;
+          octx.fillStyle = '#222222';
+          octx.font = '600 20px Segoe UI, sans-serif';
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
-          legendBlocks.forEach((block, blockIndex) => {
-            octx.fillStyle = '#222222';
-            octx.font = '600 16px Segoe UI, sans-serif';
-            octx.fillText(String(block.title || 'Legend'), 6, y);
-            y += legendHeaderH;
-
-            octx.font = '400 14px Segoe UI, sans-serif';
-            (block.rows || []).forEach((entry) => {
-              const symbolCx = 14;
-              const symbolCy = y + 8;
-              const fillColor = entry.color || '#cccccc';
-
-              if (entry.isLine) {
-                octx.strokeStyle = fillColor;
-                octx.lineWidth = 3;
-                octx.beginPath();
-                octx.moveTo(symbolCx - 8, symbolCy);
-                octx.lineTo(symbolCx + 8, symbolCy);
-                octx.stroke();
-              } else if (entry.isPoint) {
-                octx.fillStyle = fillColor;
-                octx.beginPath();
-                octx.arc(symbolCx, symbolCy, 7, 0, Math.PI * 2);
-                octx.fill();
-              } else {
-                octx.fillStyle = fillColor;
-                octx.fillRect(symbolCx - 7, symbolCy - 7, 14, 14);
-                octx.strokeStyle = entry.borderColor || '#333333';
-                octx.lineWidth = 1;
-                octx.strokeRect(symbolCx - 7, symbolCy - 7, 14, 14);
-              }
-
-              octx.fillStyle = '#333333';
-              octx.fillText(String(entry.label || ''), 36, y - 2);
-              y += legendRowH;
-            });
-
-            if (blockIndex < legendBlocks.length - 1) y += legendBlockGap;
+          octx.fillText(legendTitle, 6, y);
+          y += 28;
+          octx.font = '400 15px Segoe UI, sans-serif';
+          legendEntries.forEach((entry) => {
+            octx.fillStyle = entry.color || '#cccccc';
+            octx.beginPath();
+            octx.arc(14, y + 8, 8, 0, Math.PI * 2);
+            octx.fill();
+            octx.fillStyle = '#333333';
+            octx.fillText(String(entry.label || ''), 36, y - 2);
+            y += legendRowH;
           });
         }
 
