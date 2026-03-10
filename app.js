@@ -1653,11 +1653,11 @@ function fitToLayerExtent(layer) {
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
   map.fitBounds(trimBoundsHorizontally(bounds), {
+    animate: false,
     paddingTopLeft: [0, 16],
     paddingBottomRight: [0, 35]
   });
   map.panBy([0, 10], { animate: false });
-  safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
   return true;
 }
 
