@@ -2672,8 +2672,6 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
     onEachFeature: bindFeaturePopup
   }).addTo(fg);
   layerGroup = fg;
-  // Keep startup/import viewport consistent with configured Africa home bounds.
-  setTimeout(() => { applyHomeView(); }, 0);
 
   overlayData[safeName] = { layerGroup: fg, geojson: geojson };
   layersControl.addOverlay(fg, safeName);
@@ -2682,6 +2680,10 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
   applyLayerStackOrder();
   refreshLayerSelector();
   await setActiveLayer(safeName);
+  // New imports should zoom to their extent; keep home view fallback for invalid bounds.
+  setTimeout(() => {
+    if (!fitToLayerExtent(fg)) applyHomeView();
+  }, 0);
   initializeMapTitleFromLayer(safeName);
 
   return safeName;
