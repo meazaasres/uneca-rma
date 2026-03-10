@@ -4527,8 +4527,9 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       const legend = document.querySelector('#legend-items');
       if (legend) {
-        const clone = document.createElement('div');
+        const clone = legend.cloneNode(true);
         clone.className = 'export-legend-clone';
+        copyVisualStylesRecursive(legend, clone);
         clone.style.position = 'relative';
         clone.style.display = 'block';
         clone.style.clear = 'both';
@@ -4541,20 +4542,25 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.marginTop = '10px';
         clone.style.borderRadius = '0';
         clone.style.overflow = 'visible';
-
-        function appendLegendRow(targetBlock, geom, labelText, colorValue) {
-          const row = document.createElement('div');
-          row.className = 'legend-row';
-
-          const sym = document.createElement('div');
-          sym.className = 'legend-sym';
-          if (/LineString/.test(geom)) sym.classList.add('legend-sym-line');
-          if (/Point/.test(geom)) sym.classList.add('legend-sym-point');
-          if (/Polygon/.test(geom)) sym.classList.add('legend-sym-polygon');
-
-          const safeColor = /^#[0-9A-Fa-f]{3,8}$/.test(String(colorValue || ""))
-            ? String(colorValue)
+        Array.from(clone.querySelectorAll('.legend-block')).forEach((block) => {
+          block.style.borderTop = '0';
+          block.style.border = '0';
+          block.style.boxShadow = 'none';
+          block.style.outline = 'none';
+          block.style.background = 'transparent';
+        });
+        const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
+        const cloneSyms = Array.from(clone.querySelectorAll('.legend-sym'));
+        cloneSyms.forEach((sym, idx) => {
+          const src = sourceSyms[idx];
+          if (!src) return;
+          const cs = window.getComputedStyle(src);
+          const fillColor = (cs && cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)')
+            ? cs.backgroundColor
             : '#ccc';
+          const borderValue = (cs && cs.border && cs.border !== '0px none rgb(0, 0, 0)')
+            ? cs.border
+            : '1px solid #333';
           sym.style.display = 'inline-block';
           sym.style.boxSizing = 'border-box';
           sym.style.width = '16px';
@@ -4565,87 +4571,23 @@ window.addEventListener('load', resetInitialScrollPositions);
           sym.style.maxHeight = '16px';
           sym.style.marginRight = '8px';
           sym.style.flex = '0 0 16px';
-          sym.style.backgroundColor = safeColor;
-          sym.style.border = '1px solid #333';
+          sym.style.backgroundColor = fillColor;
+          sym.style.border = borderValue;
           if (sym.classList.contains('legend-sym-line')) {
+            const lineColor = (cs && cs.borderTopColor && cs.borderTopColor !== 'rgba(0, 0, 0, 0)')
+              ? cs.borderTopColor
+              : fillColor;
             sym.style.height = '3px';
             sym.style.minHeight = '3px';
             sym.style.maxHeight = '3px';
             sym.style.border = '0';
-            sym.style.borderTop = `3px solid ${safeColor}`;
+            sym.style.borderTop = `3px solid ${lineColor}`;
             sym.style.background = 'transparent';
           } else if (sym.classList.contains('legend-sym-point')) {
             sym.style.borderRadius = '50%';
           }
-
-          const lbl = document.createElement('span');
-          lbl.textContent = sanitizePlainText(labelText, String(labelText || ''));
-          row.append(sym, lbl);
-          targetBlock.appendChild(row);
-        }
-
-        function appendLegendBlockFromState(layerName, state) {
-          const block = document.createElement('div');
-          block.className = 'legend-block';
-          block.style.borderTop = '0';
-          block.style.border = '0';
-          block.style.boxShadow = 'none';
-          block.style.outline = 'none';
-          block.style.background = 'transparent';
-
-          const header = document.createElement('div');
-          header.className = 'legend-header';
-          const defaultTitle = sanitizePlainText(humanizeLabel(layerName), layerName);
-          header.textContent = sanitizePlainText(state?.legendTitle, defaultTitle);
-          block.appendChild(header);
-
-          const vals = Array.isArray(state?.vals) ? state.vals : [];
-          const cols = Array.isArray(state?.cols) ? state.cols : [];
-          const geom = state?.geojson?.features?.[0]?.geometry?.type || 'Polygon';
-          if (state?.isNumeric) {
-            for (let i = 0; i < vals.length - 1; i++) {
-              const label = `${formatLegendClassValue(vals[i])} – ${formatLegendClassValue(vals[i + 1])}`;
-              appendLegendRow(block, geom, label, cols[i]);
-            }
-          } else {
-            const labels = Array.isArray(state?.legendLabels) ? state.legendLabels : null;
-            vals.forEach((v, i) => {
-              const label = labels && labels[i] != null ? labels[i] : v;
-              appendLegendRow(block, geom, label, cols[i]);
-            });
-          }
-
-          clone.appendChild(block);
-        }
-
-        const ordered = Array.isArray(layerOrder) ? layerOrder.slice() : Object.keys(overlayData || {});
-        const added = new Set();
-        ordered.forEach((name) => {
-          const state = overlayData && overlayData[name];
-          if (!state) return;
-          if (!Array.isArray(state.vals) || !Array.isArray(state.cols) || state.vals.length === 0 || state.cols.length === 0) return;
-          if (map && state.layerGroup && typeof map.hasLayer === 'function' && !map.hasLayer(state.layerGroup)) return;
-          appendLegendBlockFromState(name, state);
-          added.add(name);
         });
-
-        // Fallback for any pre-rendered legend blocks not represented in overlay state.
-        Array.from(legend.querySelectorAll('.legend-block')).forEach((sourceBlock) => {
-          const blockId = String(sourceBlock.id || '');
-          const layerFromId = blockId.startsWith('legend-') ? blockId.slice(7) : '';
-          if (layerFromId && added.has(layerFromId)) return;
-          const fallbackBlock = sourceBlock.cloneNode(true);
-          fallbackBlock.style.borderTop = '0';
-          fallbackBlock.style.border = '0';
-          fallbackBlock.style.boxShadow = 'none';
-          fallbackBlock.style.outline = 'none';
-          fallbackBlock.style.background = 'transparent';
-          clone.appendChild(fallbackBlock);
-        });
-
-        if (clone.children.length > 0) {
-          wrapper.appendChild(clone);
-        }
+        wrapper.appendChild(clone);
       }
 
       const runCb = () => {
