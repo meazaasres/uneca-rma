@@ -9,6 +9,20 @@ const SCALE_BAR_OFFSET_Y_PX = 7;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
+const ALLOWED_SHAPEFILE_ZIP_EXTENSIONS = new Set([
+  ".shp",
+  ".shx",
+  ".dbf",
+  ".prj",
+  ".cpg",
+  ".sbn",
+  ".sbx",
+  ".qix",
+  ".aih",
+  ".ain",
+  ".atx",
+  ".xml"
+]);
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
 const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
@@ -819,6 +833,35 @@ function getUint32LE(view, offset) {
   return view.getUint32(offset, true);
 }
 
+function decodeZipEntryName(view, startOffset, byteLen) {
+  if (!byteLen || startOffset + byteLen > view.byteLength) return "";
+  const bytes = new Uint8Array(view.buffer, view.byteOffset + startOffset, byteLen);
+  try {
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch (e) {
+    let fallback = "";
+    for (let i = 0; i < bytes.length; i++) {
+      fallback += String.fromCharCode(bytes[i]);
+    }
+    return fallback;
+  }
+}
+
+function assertShapefileZipEntryAllowed(rawEntryName) {
+  const entryName = String(rawEntryName || "").replace(/\\/g, "/").trim();
+  if (!entryName || entryName.endsWith("/")) return;
+  if (entryName.startsWith("/") || entryName.includes("../") || entryName.includes("..\\")) {
+    throw new Error("ZIP contains an unsafe file path.");
+  }
+
+  const lowerName = entryName.toLowerCase();
+  const dotIndex = lowerName.lastIndexOf(".");
+  const ext = dotIndex >= 0 ? lowerName.slice(dotIndex) : "";
+  if (!ALLOWED_SHAPEFILE_ZIP_EXTENSIONS.has(ext)) {
+    throw new Error("ZIP uploads must contain only shapefile components.");
+  }
+}
+
 function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
   const view = new DataView(arrayBuffer);
   const EOCD_SIGNATURE = 0x06054b50;
@@ -860,6 +903,7 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
   let cursor = cdOffset;
   let parsedEntries = 0;
   let totalUncompressed = 0;
+  let hasShpFile = false;
   while (parsedEntries < totalEntries) {
     if (cursor + 46 > view.byteLength) {
       throw new Error("ZIP central directory entry is truncated.");
@@ -872,6 +916,7 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
     const fileNameLen = getUint16LE(view, cursor + 28);
     const extraLen = getUint16LE(view, cursor + 30);
     const commentLen = getUint16LE(view, cursor + 32);
+    const fileNameOffset = cursor + 46;
     if (uncompressedSize === null || fileNameLen === null || extraLen === null || commentLen === null) {
       throw new Error("ZIP entry metadata is incomplete.");
     }
@@ -883,8 +928,21 @@ function inspectZipSafety(arrayBuffer, compressedSizeBytes) {
       const maxMb = Math.round(MAX_ZIP_UNCOMPRESSED_BYTES / (1024 * 1024));
       throw new Error(`ZIP expands too large (max ${maxMb} MB).`);
     }
-    cursor += 46 + fileNameLen + extraLen + commentLen;
+    const nextCursor = cursor + 46 + fileNameLen + extraLen + commentLen;
+    if (nextCursor > view.byteLength) {
+      throw new Error("ZIP central directory entry exceeds file bounds.");
+    }
+    const entryName = decodeZipEntryName(view, fileNameOffset, fileNameLen);
+    assertShapefileZipEntryAllowed(entryName);
+    if (/\.shp$/i.test(entryName)) {
+      hasShpFile = true;
+    }
+    cursor = nextCursor;
     parsedEntries++;
+  }
+
+  if (!hasShpFile) {
+    throw new Error("ZIP must include a .shp file.");
   }
 
   const compressed = Math.max(1, Number(compressedSizeBytes) || 1);
