@@ -1613,6 +1613,21 @@ function applyHomeView() {
   safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
 }
 
+// TEMP: Tracker log to verify startup/home path execution during debugging.
+function debugHomeTracker(source) {
+  try {
+    const center = map && typeof map.getCenter === "function" ? map.getCenter() : null;
+    const zoom = map && typeof map.getZoom === "function" ? map.getZoom() : null;
+    console.debug(`[TEMP_TRACKER] ${source} executed`, {
+      at: new Date().toISOString(),
+      center: center ? { lat: center.lat, lng: center.lng } : null,
+      zoom
+    });
+  } catch (e) {
+    console.debug(`[TEMP_TRACKER] ${source} executed (state unavailable)`);
+  }
+}
+
 function syncLayoutWithHeaderHeight() {
   const header = document.querySelector('header.fixed-top');
   if (!header || !document.documentElement) return;
@@ -1643,10 +1658,11 @@ function applyMapHorizontalLayout() {
   }
 }
 
-applyHomeView();
+goHomeView();
 applyMaxBoundsSafely();
 
 function goHomeView() {
+  debugHomeTracker("goHomeView");
   applyHomeView();
   resetAllMapUiPositions();
 }
@@ -2374,9 +2390,13 @@ function queueMapUiReflow() {
 
 // run initially and on relevant events
 window.addEventListener('load', () => {
+  debugHomeTracker("window.load");
   syncLayoutWithHeaderHeight();
   // Re-apply initial home once layout settles to avoid late layout shifts.
-  setTimeout(applyHomeView, 50);
+  setTimeout(() => {
+    debugHomeTracker("window.load.setTimeout(50)");
+    goHomeView();
+  }, 50);
   setTimeout(syncLayoutWithHeaderHeight, 80);
   setTimeout(resetAllMapUiPositions, 300);
   setTimeout(scheduleDisclaimerDragInit, 350);
