@@ -2509,7 +2509,17 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
   });
   block.appendChild(header);
 
-  const geom = geojson?.features?.[0]?.geometry?.type || 'Polygon';
+  const detectLegendGeomType = () => {
+    const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    for (let i = 0; i < features.length; i++) {
+      const type = features[i]?.geometry?.type;
+      if (typeof type === 'string' && type.trim()) return type;
+    }
+    const savedType = overlayData[layerName]?.legendGeomType;
+    if (typeof savedType === 'string' && savedType.trim()) return savedType;
+    return 'Polygon';
+  };
+  const geom = detectLegendGeomType();
 
   const makeRow = (label, color) => {
     const row = document.createElement('div');
@@ -3097,6 +3107,7 @@ function renderDefaultFilteredLayer() {
     overlayData[currentLayerName].cols = [defaultLegendColor];
     overlayData[currentLayerName].isNumeric = false;
     overlayData[currentLayerName].legendLabels = [defaultLegendLabel];
+    overlayData[currentLayerName].legendGeomType = geomType;
     overlayData[currentLayerName].defaultSymbolColor = defaultLegendColor;
     overlayData[currentLayerName].defaultSymbolLabel = defaultLegendLabel;
   }
@@ -3339,6 +3350,7 @@ function applyClassification() {
       overlayData[currentLayerName].vals = uniques;
       overlayData[currentLayerName].cols = cols;
       overlayData[currentLayerName].isNumeric = false;
+      overlayData[currentLayerName].legendGeomType = filteredGeojson?.features?.[0]?.geometry?.type || overlayData[currentLayerName].legendGeomType || 'Polygon';
       if (
         !Array.isArray(overlayData[currentLayerName].legendLabels) ||
         overlayData[currentLayerName].legendLabels.length !== uniques.length
@@ -3428,6 +3440,7 @@ function applyClassification() {
       overlayData[currentLayerName].vals = breaks;
       overlayData[currentLayerName].cols = cols;
       overlayData[currentLayerName].isNumeric = true;
+      overlayData[currentLayerName].legendGeomType = filteredGeojson?.features?.[0]?.geometry?.type || overlayData[currentLayerName].legendGeomType || 'Polygon';
     }
 
     updateLegend(currentLayerName, breaks, cols, true, filteredGeojson);
