@@ -1551,6 +1551,8 @@ const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
 const DISCLAIMER_LEFT_VISIBLE_INSET_PX = 50;
 const HOME_VERTICAL_PADDING_PX = 10;
 const EDGE_HOME_VERTICAL_PADDING_EXTRA_PX = 8;
+const IMPORT_EXTENT_MAX_ZOOM = 7;
+const IMPORT_EXTENT_HOME_COVERAGE_RATIO = 0.9;
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
 const MAX_HOME_VIEW_RETRIES = 6;
@@ -1706,13 +1708,44 @@ function goHomeView() {
   resetAllMapUiPositions();
 }
 
-function fitToLayerExtent(layer) {
+function isAfricaLikeLayerExtent(bounds) {
+  if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
+  if (!INITIAL_HOME_BOUNDS || typeof INITIAL_HOME_BOUNDS.isValid !== "function" || !INITIAL_HOME_BOUNDS.isValid()) return false;
+  const bSw = bounds.getSouthWest();
+  const bNe = bounds.getNorthEast();
+  const hSw = INITIAL_HOME_BOUNDS.getSouthWest();
+  const hNe = INITIAL_HOME_BOUNDS.getNorthEast();
+  const bLatSpan = Math.max(0, bNe.lat - bSw.lat);
+  const bLngSpan = Math.max(0, bNe.lng - bSw.lng);
+  const hLatSpan = Math.max(0.0001, hNe.lat - hSw.lat);
+  const hLngSpan = Math.max(0.0001, hNe.lng - hSw.lng);
+  const latCoverage = bLatSpan / hLatSpan;
+  const lngCoverage = bLngSpan / hLngSpan;
+  const padded = bounds.pad(0.03);
+  const containsHome = padded.contains(hSw) && padded.contains(hNe);
+  return containsHome || (latCoverage >= IMPORT_EXTENT_HOME_COVERAGE_RATIO && lngCoverage >= IMPORT_EXTENT_HOME_COVERAGE_RATIO);
+}
+
+function fitToLayerExtent(layer, options = {}) {
   if (!layer || typeof layer.getBounds !== "function") return false;
   const bounds = layer.getBounds();
   if (!bounds || typeof bounds.isValid !== "function" || !bounds.isValid()) return false;
+  const maxZoom = Number.isFinite(options.maxZoom) ? options.maxZoom : undefined;
+  const shouldKeepHome = options.keepHomeWhenAfricaLike !== false;
+  if (shouldKeepHome && isAfricaLikeLayerExtent(bounds)) {
+    applyHomeView();
+    return true;
+  }
+
+  const fitOptions = {
+    animate: false,
+    paddingTopLeft: [MAP_SIDE_VISIBLE_INSET_PX, 16],
+    paddingBottomRight: [MAP_SIDE_VISIBLE_INSET_PX, 35]
+  };
+  if (Number.isFinite(maxZoom)) fitOptions.maxZoom = maxZoom;
+
   map.fitBounds(trimBoundsHorizontally(bounds), {
-    paddingTopLeft: [0, 16],
-    paddingBottomRight: [0, 35]
+    ...fitOptions
   });
   map.panBy([0, 10], { animate: false });
   safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
@@ -2763,8 +2796,13 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
     onEachFeature: bindFeaturePopup
   }).addTo(fg);
   layerGroup = fg;
-  // Keep startup/import viewport consistent with configured Africa home bounds.
-  setTimeout(() => { applyHomeView(); }, 0);
+  // Smart import viewport: fit to new layer with safe padding unless extent is Africa-wide.
+  setTimeout(() => {
+    fitToLayerExtent(fg, {
+      maxZoom: IMPORT_EXTENT_MAX_ZOOM,
+      keepHomeWhenAfricaLike: true
+    });
+  }, 0);
 
   overlayData[safeName] = { layerGroup: fg, geojson: geojson };
   layersControl.addOverlay(fg, safeName);
