@@ -4819,6 +4819,7 @@ window.addEventListener('load', resetInitialScrollPositions);
               sym.style.display = 'inline-flex';
               sym.style.alignItems = 'center';
               sym.style.justifyContent = 'center';
+              sym.style.transform = 'translateY(2px)';
               sym.style.color = lineColor;
               sym.textContent = '';
               const lineStroke = document.createElement('span');
