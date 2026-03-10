@@ -5408,59 +5408,69 @@ function exportSVG() {
         return style;
       }
 
-      // draw features
-      data.features.forEach(feature => {
-        const geom = feature.geometry;
-        if (!geom) return;
-        const style = styleForFeature(feature);
+      const visibleOrderedNames = getOrderedLayerNames().filter(name => {
+        const group = overlayData[name] && overlayData[name].layerGroup;
+        return !!(group && map && map.hasLayer(group));
+      });
+      const topVisibleName = visibleOrderedNames.length ? visibleOrderedNames[0] : null;
+      // Keep SVG stacking aligned with layer list: only redraw current vectors when current is topmost.
+      const shouldDrawCurrentVectors = !topVisibleName || topVisibleName === currentLayerName;
 
-        if (geom.type === "Polygon" || geom.type === "MultiPolygon") {
-          const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
-          polys.forEach(polygon => {
-            polygon.forEach((ring, rIdx) => {
+      // draw features
+      if (shouldDrawCurrentVectors) {
+        data.features.forEach(feature => {
+          const geom = feature.geometry;
+          if (!geom) return;
+          const style = styleForFeature(feature);
+
+          if (geom.type === "Polygon" || geom.type === "MultiPolygon") {
+            const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
+            polys.forEach(polygon => {
+              polygon.forEach((ring, rIdx) => {
+                const path = document.createElementNS(svgNS, "path");
+                const d = ring.map((coord, i) => {
+                  const [x, y] = projectCoordToCanvas(coord);
+                  return (i === 0 ? "M" : "L") + x + " " + y;
+                }).join(" ") + " Z";
+                path.setAttribute("d", d);
+                path.setAttribute("fill", rIdx === 0 ? (style.fill || "none") : "#ffffff");
+                path.setAttribute("stroke", style.stroke || "#000");
+                path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
+                path.setAttribute("fill-opacity", String(style.fillOpacity));
+                svg.appendChild(path);
+              });
+            });
+          } else if (geom.type === "LineString" || geom.type === "MultiLineString") {
+            const lines = geom.type === "LineString" ? [geom.coordinates] : geom.coordinates;
+            lines.forEach(line => {
               const path = document.createElementNS(svgNS, "path");
-              const d = ring.map((coord, i) => {
+              const d = line.map((coord, i) => {
                 const [x, y] = projectCoordToCanvas(coord);
                 return (i === 0 ? "M" : "L") + x + " " + y;
-              }).join(" ") + " Z";
+              }).join(" ");
               path.setAttribute("d", d);
-              path.setAttribute("fill", rIdx === 0 ? (style.fill || "none") : "#ffffff");
+              path.setAttribute("fill", "none");
               path.setAttribute("stroke", style.stroke || "#000");
               path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
-              path.setAttribute("fill-opacity", String(style.fillOpacity));
               svg.appendChild(path);
             });
-          });
-        } else if (geom.type === "LineString" || geom.type === "MultiLineString") {
-          const lines = geom.type === "LineString" ? [geom.coordinates] : geom.coordinates;
-          lines.forEach(line => {
-            const path = document.createElementNS(svgNS, "path");
-            const d = line.map((coord, i) => {
+          } else if (geom.type === "Point" || geom.type === "MultiPoint") {
+            const pts = geom.type === "Point" ? [geom.coordinates] : geom.coordinates;
+            pts.forEach(coord => {
               const [x, y] = projectCoordToCanvas(coord);
-              return (i === 0 ? "M" : "L") + x + " " + y;
-            }).join(" ");
-            path.setAttribute("d", d);
-            path.setAttribute("fill", "none");
-            path.setAttribute("stroke", style.stroke || "#000");
-            path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
-            svg.appendChild(path);
-          });
-        } else if (geom.type === "Point" || geom.type === "MultiPoint") {
-          const pts = geom.type === "Point" ? [geom.coordinates] : geom.coordinates;
-          pts.forEach(coord => {
-            const [x, y] = projectCoordToCanvas(coord);
-            const circle = document.createElementNS(svgNS, "circle");
-            const r = Math.max(1, Math.round(getPointRadius() * rawScaleX));
-            circle.setAttribute("cx", String(x));
-            circle.setAttribute("cy", String(y));
-            circle.setAttribute("r", String(r));
-            circle.setAttribute("fill", style.fill || "#ccc");
-            circle.setAttribute("stroke", style.stroke || "#000");
-            circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
-            svg.appendChild(circle);
-          });
-        }
-      });
+              const circle = document.createElementNS(svgNS, "circle");
+              const r = Math.max(1, Math.round(getPointRadius() * rawScaleX));
+              circle.setAttribute("cx", String(x));
+              circle.setAttribute("cy", String(y));
+              circle.setAttribute("r", String(r));
+              circle.setAttribute("fill", style.fill || "#ccc");
+              circle.setAttribute("stroke", style.stroke || "#000");
+              circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
+              svg.appendChild(circle);
+            });
+          }
+        });
+      }
 
       // disclaimer rendered as pure SVG to avoid foreignObject inconsistencies
       const safeDisclaimer = safeText(disclaimerEl);
@@ -5645,8 +5655,9 @@ function exportSVG() {
         svg.appendChild(sbTextEl);
       }
 
-            // legend below map (render from current legend DOM so all layers/symbol types are included)
+      // legend below map (follow visible layer-list order exactly; first item stays on top)
       if (legendEl && legendEl.children && legendEl.children.length) {
+        reorderLegendBlocks();
         const legendGroup = document.createElementNS(svgNS, "g");
         const legendX = alignedContentOffsetX + marginPx;
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
@@ -5655,7 +5666,18 @@ function exportSVG() {
         const rowGap = Math.max(3, Math.round(5 * uiScale));
         const blockGap = Math.max(6, Math.round(8 * uiScale));
 
-        const blocks = Array.from(legendEl.querySelectorAll('.legend-block'));
+        const orderedVisibleLegendNames = getOrderedLayerNames().filter(name => {
+          const block = document.getElementById('legend-' + sanitizeId(name));
+          if (!block) return false;
+          const group = overlayData[name] && overlayData[name].layerGroup;
+          return !!(group && map && map.hasLayer(group));
+        });
+        const orderedBlocks = orderedVisibleLegendNames
+          .map(name => document.getElementById('legend-' + sanitizeId(name)))
+          .filter(Boolean);
+        const seen = new Set(orderedBlocks.map(b => b.id));
+        const remainingBlocks = Array.from(legendEl.querySelectorAll('.legend-block')).filter(b => !seen.has(b.id));
+        const blocks = orderedBlocks.concat(remainingBlocks);
         blocks.forEach(block => {
           const blockHeader = block.querySelector('.legend-header');
           if (blockHeader) {
