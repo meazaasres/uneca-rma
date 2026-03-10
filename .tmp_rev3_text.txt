@@ -1,0 +1,107 @@
+﻿ECA Interactive Mapping Application Security Implementation Tracker
+ID
+Control
+Target
+Implementation Stage
+Remarks
+1
+HTTPS-only URL import
+Completed
+App Dev
+Enforced in URL Importing validation.
+2
+Block URL credentials and non-443 port
+Completed
+App Dev
+Enforced in URL Importing validation
+3
+Block private/local/intranet hosts (localhost,Â 10.x,Â 172.16-31,Â 192.168, IPv6 local,Â nip.io/sslip.io)
+Completed
+App Dev
+Implemented in host checks
+Browsers already enforce same-origin policies and sandboxing.
+A client-side app cannot arbitrarily reach into private networks unless the user themselves is on that network and explicitly accesses those addresses.
+Since the app is a purely client-side app, we donâ€™t need to worry about blocking private/local/intranet hosts. That protection only becomes critical if there is a backend that processes user-supplied URLs or proxies requests.
+4
+Remote import timeout and max size cap
+Completed
+App Dev
+Timeout + byte cap implemented
+5
+Local file max size cap
+Completed
+App Dev
+1 GB cap implemented.
+6
+Local file extension allowlist (.geojson,Â .csv,Â .zip)
+Completed
+App Dev
+Enforced before import.
+7
+Dataset complexity limits (max features/vertices)
+Completed
+App Dev
+Enforced before rendering
+8
+Safe popup rendering (no HTML sink/ no HTML execution from attributes)
+Completed
+App Dev
+Uses DOM node +Â textContent.
+9
+contenteditableÂ handling as plain text (paste sanitization)
+Completed
+App Dev
+Paste is converted to text, blur sanitizes title
+10
+Redirect re-validation for URL import
+Completed
+App Dev
+URL is validated pre-fetch and post-redirect host re-checkare implemented
+11
+Remove inline JS handlers (CSP-friendly)
+Completed
+App Dev
+Event handlers wired
+12
+ZIP bomb/decompression bomb guard beyond file-size cap
+Completed
+App Dev
+Zip size is capped, but decompressed expansion risk remains during parsing
+13
+Vendor supply-chain integrity checks/ Supply-chain integrity controls (vendor checksum/CI integrity monitoring)
+Completed
+App Dev
+LocalÂ vendor with checksum gate/signature verification is implemented
+14
+Strict MIME/content-type enforcement (remote GeoJSON/CSV)
+Completed
+App Dev
+Remote content-type enforcement for remote GeoJSON/CSV
+15
+CSP header withÂ frame-ancestors 'none'Â (IIS)
+To be implemented during IIS deployment
+IIS config
+Now implemented in meta tag / prepared in web config deploy/verify on IIS
+16
+X-Frame-Options: DENYÂ (IIS)
+To be implemented during IIS deployment
+IIS config
+Now configured in-meta tag and must be set asÂ HTTP response headerÂ in IIS.
+It is prepared in config and will be active after ISS deployment
+17
+X-Content-Type-Options: nosniffÂ (IIS)
+To be implemented during IIS deployment
+IIS config
+Now configured inmeta tag and must be set asÂ HTTP response headerÂ in IIS.
+It is prepared in config and will be active after ISS deployment
+18
+Referrer-PolicyÂ (IIS)
+To be implemented during IIS deployment
+IIS config
+Now configured in-meta tag and must be set asÂ HTTP response headerÂ in IIS.
+It is prepared in config and will be active after ISS deployment
+19
+IIS cache-control for sensitive exports/data on shared devices
+To be implemented during IIS deployment
+IIS config + Security
+IIS cache policy in repo is to be enforced/no-store/no-cacheÂ policy is to be set
