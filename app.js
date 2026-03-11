@@ -29,6 +29,7 @@ const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
+const NETWORK_BANNER_SUCCESS_HIDE_MS = 3500;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -2179,6 +2180,13 @@ const baseLayer = L.tileLayer(
   }
 ).addTo(map);
 
+baseLayer.on('tileerror', () => {
+  showNetworkBanner(
+    "Network issue detected: basemap tiles could not be loaded. Check internet access and try again.",
+    "warning"
+  );
+});
+
 function ensureBaseLayerAtBack() {
   if (!baseLayer || !map || !map.hasLayer(baseLayer)) return;
   try {
@@ -4048,6 +4056,45 @@ function showPopup(msg, type = "error") {
   setTimeout(() => { setDynamicStyle(popup, { display: "none" }); }, 6000);
 }
 
+function getOrCreateNetworkBanner() {
+  let banner = document.getElementById("network-status-banner");
+  if (banner) return banner;
+
+  banner = document.createElement("div");
+  banner.id = "network-status-banner";
+  banner.className = "network-status-banner";
+  banner.setAttribute("role", "status");
+  banner.setAttribute("aria-live", "polite");
+  document.body.appendChild(banner);
+  return banner;
+}
+
+function showNetworkBanner(message, type = "warning") {
+  const banner = getOrCreateNetworkBanner();
+  banner.classList.remove("network-status-warning", "network-status-success");
+  banner.classList.add(type === "success" ? "network-status-success" : "network-status-warning");
+  banner.textContent = sanitizePlainText(message);
+  setDynamicStyle(banner, { display: "block" });
+}
+
+function hideNetworkBanner() {
+  const banner = document.getElementById("network-status-banner");
+  if (!banner) return;
+  setDynamicStyle(banner, { display: "none" });
+}
+
+function updateConnectivityBannerFromNavigatorState() {
+  if (navigator.onLine) {
+    showNetworkBanner("Connection restored. Online services should be available now.", "success");
+    setTimeout(hideNetworkBanner, NETWORK_BANNER_SUCCESS_HIDE_MS);
+    return;
+  }
+  showNetworkBanner(
+    "No internet connection detected. Some map layers and URL imports may not load.",
+    "warning"
+  );
+}
+
 // --- Sidebar toggle helpers (buttons cached) ---
 const btnClassTable = document.getElementById('btnToggleClassTable');
 function toggleClassTable() {
@@ -4084,9 +4131,14 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   resetInitialScrollPositions();
+
+  // Initial connectivity state check when UI is ready.
+  updateConnectivityBannerFromNavigatorState();
 });
 
 window.addEventListener('load', resetInitialScrollPositions);
+window.addEventListener('offline', updateConnectivityBannerFromNavigatorState);
+window.addEventListener('online', updateConnectivityBannerFromNavigatorState);
 
         // --- Secure Export Helper ---
     function isFirefoxBrowser() {
