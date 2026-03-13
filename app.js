@@ -29,6 +29,11 @@ const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
+const DISCLAIMER_MIN_WIDTH_PX = 220;
+const DISCLAIMER_MAX_WIDTH_PX = 420;
+const DISCLAIMER_WIDTH_RATIO = 0.3;
+const STRICT_EXPORT_LAYOUT_ENABLED = true;
+const STRICT_PDF_A4_ENABLED = true;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -142,6 +147,16 @@ function setDynamicStyle(el, styleObj) {
 
 function sanitizeId(str) {
   return String(str).replace(/[^\w\-]/g, "_");
+}
+
+function clampNumber(value, min, max) {
+  const v = Number(value);
+  const lo = Number(min);
+  const hi = Number(max);
+  if (!Number.isFinite(v)) return Number.isFinite(lo) ? lo : 0;
+  if (Number.isFinite(lo) && v < lo) return lo;
+  if (Number.isFinite(hi) && v > hi) return hi;
+  return v;
 }
 
 function sanitizePlainText(value, fallback = "") {
@@ -2035,6 +2050,49 @@ function getTopRightPosition(el, mapEl, marginPx = 12) {
   return { left, top };
 }
 
+function getResponsiveScaleBarWidthPx() {
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
+  const mapW = mapEl ? (mapEl.clientWidth || 0) : 0;
+  if (!mapW) return 160;
+  return Math.round(clampNumber(mapW * 0.15, 120, 220));
+}
+
+function getResponsiveDisclaimerTargetWidthPx(mapWidthPx) {
+  const w = Number(mapWidthPx);
+  if (!Number.isFinite(w) || w <= 0) return 252;
+  let ratio = DISCLAIMER_WIDTH_RATIO;
+  if (w >= 1700) ratio = 0.24;
+  else if (w >= 1300) ratio = 0.28;
+  else if (w >= 1000) ratio = 0.32;
+  else ratio = 0.38;
+  return Math.round(clampNumber(w * ratio, DISCLAIMER_MIN_WIDTH_PX, 520));
+}
+
+function updateResponsiveMapControlSizing() {
+  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
+  if (!mapEl) return;
+  const mapW = Number(mapEl.clientWidth) || 0;
+  if (!mapW) return;
+
+  const northArrowW = Math.round(clampNumber(mapW * 0.024, 30, 44));
+  const northArrowH = Math.round(clampNumber(northArrowW * 1.28, 40, 56));
+  const northArrowFont = Math.round(clampNumber(northArrowW * 0.35, 10, 14));
+  const northArrowTriBase = Math.round(clampNumber(northArrowW * 0.35, 5, 8));
+  const northArrowTriHeight = Math.round(clampNumber(northArrowH * 0.28, 10, 15));
+  const scaleFontSize = Math.round(clampNumber(mapW * 0.0054, 8, 11));
+  const scalePadY = Math.round(clampNumber(scaleFontSize * 0.35, 3, 5));
+  const scalePadX = Math.round(clampNumber(scaleFontSize * 0.75, 6, 9));
+
+  mapEl.style.setProperty("--north-arrow-width", `${northArrowW}px`);
+  mapEl.style.setProperty("--north-arrow-height", `${northArrowH}px`);
+  mapEl.style.setProperty("--north-arrow-font-size", `${northArrowFont}px`);
+  mapEl.style.setProperty("--north-arrow-triangle-base", `${northArrowTriBase}px`);
+  mapEl.style.setProperty("--north-arrow-triangle-height", `${northArrowTriHeight}px`);
+  mapEl.style.setProperty("--scale-label-font-size", `${scaleFontSize}px`);
+  mapEl.style.setProperty("--scale-control-padding-y", `${scalePadY}px`);
+  mapEl.style.setProperty("--scale-control-padding-x", `${scalePadX}px`);
+}
+
 function formatScaleDistance(meters) {
   if (!isFinite(meters) || meters <= 0) return "--";
   if (meters >= 1000) {
@@ -2069,6 +2127,7 @@ const ExactScaleControl = L.Control.extend({
   },
   _update: function() {
     if (!this._map || !this._value) return;
+    this.options.widthPx = getResponsiveScaleBarWidthPx();
     const size = this._map.getSize();
     const sx = Number(size && size.x);
     const sy = Number(size && size.y);
@@ -2114,6 +2173,9 @@ function placeScaleBarOnMapBottom(control) {
     updateDraggableControlNorm(el, mapEl);
     return;
   }
+  if (control && control.options) {
+    control.options.widthPx = getResponsiveScaleBarWidthPx();
+  }
   applyDraggableControlInitialPosition(el, mapEl, true);
   clampDraggableControl(el, mapEl);
   updateDraggableControlNorm(el, mapEl);
@@ -2134,6 +2196,9 @@ function ensureScaleBarPinnedToMapBottom() {
     clampDraggableControl(el, mapEl);
     updateDraggableControlNorm(el, mapEl);
     return;
+  }
+  if (scaleControl && scaleControl.options) {
+    scaleControl.options.widthPx = getResponsiveScaleBarWidthPx();
   }
   applyDraggableControlInitialPosition(el, mapEl, true);
   clampDraggableControl(el, mapEl);
@@ -2232,20 +2297,24 @@ function positionDisclaimer() {
 
   const left = 12 + DISCLAIMER_LEFT_VISIBLE_INSET_PX;
   const bottom = 30;
-    const preferredFixedWidth = 252;
+    const preferredFixedWidth = getResponsiveDisclaimerTargetWidthPx(mapRect ? mapRect.width : 0);
     const margin = 12;
     const maxAvailableWidth = mapRect
-      ? Math.max(120, Math.round(mapRect.width - left - margin))
+      ? Math.max(140, Math.round(mapRect.width - left - margin))
       : preferredFixedWidth;
+    const minAllowedWidth = Math.min(DISCLAIMER_MIN_WIDTH_PX, maxAvailableWidth);
     const getStableDisclaimerWidthPx = () => {
       const fixedWidth = Number(disc.dataset.fixedWidthPx);
       const renderedWidth = Math.round(disc.getBoundingClientRect().width || disc.offsetWidth || preferredFixedWidth);
-      const fallbackWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
+      const fallbackWidth = Math.min(maxAvailableWidth, Math.max(minAllowedWidth, Math.min(DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)));
       const candidate = Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : (renderedWidth || fallbackWidth);
-      return Math.max(120, Math.min(maxAvailableWidth, Math.round(candidate)));
+      return Math.max(minAllowedWidth, Math.min(maxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, Math.round(candidate)));
     };
 
-    const desiredWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
+    const desiredWidth = Math.max(
+      minAllowedWidth,
+      Math.min(maxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)
+    );
     const userMoved = !!disclaimerUserPos;
     const widthPx = userMoved ? getStableDisclaimerWidthPx() : desiredWidth;
     disc.dataset.fixedWidthPx = String(widthPx);
@@ -2329,12 +2398,16 @@ function initDisclaimerDrag() {
     const leftInset = 12 + DISCLAIMER_LEFT_VISIBLE_INSET_PX;
     const margin = 12;
     const maxAvailableWidth = mapRect
-      ? Math.max(120, Math.round(mapRect.width - leftInset - margin))
+      ? Math.max(140, Math.round(mapRect.width - leftInset - margin))
       : 252;
+    const minAllowedWidth = Math.min(DISCLAIMER_MIN_WIDTH_PX, maxAvailableWidth);
     const fixedWidth = Number(disc.dataset.fixedWidthPx);
     const renderedWidth = Math.round(disc.getBoundingClientRect().width || disc.offsetWidth || 252);
     const candidate = Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : renderedWidth;
-    return Math.max(120, Math.min(maxAvailableWidth, Math.round(candidate || 252)));
+    return Math.max(
+      minAllowedWidth,
+      Math.min(maxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, Math.round(candidate || 252))
+    );
   };
 
   disc.dataset.dragInit = '1';
@@ -2520,6 +2593,7 @@ function runMapUiReflowPasses() {
       syncLayoutWithHeaderHeight();
       // Reflow after Leaflet has processed the new container size.
       setTimeout(() => {
+        updateResponsiveMapControlSizing();
         if (map && typeof map.invalidateSize === "function") {
           map.invalidateSize({ pan: false });
         }
@@ -4347,6 +4421,80 @@ window.addEventListener('load', resetInitialScrollPositions);
     };
     }
 
+    function getStrictExportMarginPx(frameW, frameH) {
+    const w = Number(frameW) || 0;
+    const h = Number(frameH) || 0;
+    const basis = Math.max(1, Math.min(w, h));
+    return Math.round(clampNumber(basis * 0.025, 10, 26));
+    }
+
+    function getStrictOverlayPlacement(kind, frameW, frameH, overlayW, overlayH) {
+    const W = Math.max(1, Number(frameW) || 1);
+    const H = Math.max(1, Number(frameH) || 1);
+    const ow = Math.max(1, Number(overlayW) || 1);
+    const oh = Math.max(1, Number(overlayH) || 1);
+    const margin = getStrictExportMarginPx(W, H);
+
+    if (kind === "north") {
+      return {
+        left: Math.max(0, W - ow - margin),
+        top: Math.max(0, margin),
+        bottom: null
+      };
+    }
+
+    if (kind === "scale") {
+      return {
+        left: Math.max(0, Math.round((W - ow) / 2)),
+        top: Math.max(0, H - oh - margin),
+        bottom: margin
+      };
+    }
+
+    // disclaimer default
+    return {
+      left: Math.max(0, margin),
+      top: Math.max(0, H - oh - margin),
+      bottom: margin
+    };
+    }
+
+    function saveCanvasToPdf(canvas, fileName = "map.pdf") {
+    const c = canvas;
+    if (!c || !c.width || !c.height) return;
+    const imgData = c.toDataURL("image/png");
+    if (!STRICT_PDF_A4_ENABLED) {
+      const orientation = c.width >= c.height ? "landscape" : "portrait";
+      const pdf = new jspdf.jsPDF({
+        orientation,
+        unit: "px",
+        format: [c.width, c.height]
+      });
+      pdf.addImage(imgData, "PNG", 0, 0, c.width, c.height);
+      pdf.save(fileName);
+      return;
+    }
+
+    const orientation = c.width >= c.height ? "landscape" : "portrait";
+    const pdf = new jspdf.jsPDF({
+      orientation,
+      unit: "pt",
+      format: "a4"
+    });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 24;
+    const maxW = Math.max(1, pageW - (margin * 2));
+    const maxH = Math.max(1, pageH - (margin * 2));
+    const scale = Math.min(maxW / c.width, maxH / c.height);
+    const renderW = Math.max(1, Math.round(c.width * scale));
+    const renderH = Math.max(1, Math.round(c.height * scale));
+    const x = Math.round((pageW - renderW) / 2);
+    const y = Math.round((pageH - renderH) / 2);
+    pdf.addImage(imgData, "PNG", x, y, renderW, renderH);
+    pdf.save(fileName);
+    }
+
     function getSymmetricWhitespaceSideCropPx(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
     if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") return 0;
     const w = Math.max(1, Math.min(sourceCanvas.width | 0, scanW | 0));
@@ -4392,21 +4540,26 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function getExportSideCropPxForBrowser(sourceCanvas, baseCropW, cropH) {
+    const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
+    const maxTrimRatio = isEdgeBrowser() ? EDGE_EXPORT_SIDE_CROP_MAX_RATIO : 0.12;
+    const autoDetectedSideCropPx = getSymmetricWhitespaceSideCropPx(sourceCanvas, baseCropW, cropH, maxTrimRatio);
+    if (autoDetectedSideCropPx > 0) {
+      return Math.min(autoDetectedSideCropPx, maxAllowedPerSide);
+    }
     if (isFirefoxBrowser()) {
       return Math.max(
         0,
         Math.min(
           Math.floor(baseCropW * 0.2),
-          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
+          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX,
+          maxAllowedPerSide
         )
       );
     }
     if (isEdgeBrowser()) {
-      const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
       return Math.min(EDGE_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
     }
     if (isChromeBrowser()) {
-      const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
       return Math.min(CHROME_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
     }
     return 0;
@@ -4566,10 +4719,12 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
-        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
-        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
-        const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
+        const baseExportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
+        const baseExportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        let exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
+        let exportLeft = baseExportLeft;
+        let exportTop = baseExportTop;
 
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
@@ -4582,9 +4737,44 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.transform = 'none';
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
+        const isScaleClone = !!(source.classList &&
+          (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control')));
+        const isNorthClone = !!(source.classList && source.classList.contains('leaflet-control-north-arrow'));
+        const isDisclaimerClone = !!(source.id === 'disclaimer');
+
+        if (STRICT_EXPORT_LAYOUT_ENABLED && (isScaleClone || isNorthClone || isDisclaimerClone)) {
+          if (isDisclaimerClone) {
+            exportWidth = Math.round(clampNumber(W * 0.34, 210, Math.max(240, Math.round(W * 0.52))));
+            clone.style.width = exportWidth + 'px';
+            clone.style.maxWidth = exportWidth + 'px';
+            clone.style.height = 'auto';
+          }
+          if (isScaleClone) {
+            exportWidth = Math.round(clampNumber(W * 0.18, 110, 240));
+            clone.style.width = exportWidth + 'px';
+            clone.style.whiteSpace = 'nowrap';
+            clone.style.overflow = 'hidden';
+            clone.style.textOverflow = 'ellipsis';
+          }
+          const p = getStrictOverlayPlacement(
+            isNorthClone ? 'north' : (isScaleClone ? 'scale' : 'disclaimer'),
+            W,
+            H,
+            exportWidth,
+            clone.offsetHeight || exportHeight
+          );
+          clone.style.left = p.left + 'px';
+          clone.style.top = p.top + 'px';
+          clone.style.right = 'auto';
+          clone.style.bottom = 'auto';
+          if (isScaleClone && p.bottom != null) {
+            clone.style.top = 'auto';
+            clone.style.bottom = p.bottom + 'px';
+          }
+        }
         if (
-          source.classList &&
-          (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
+          isScaleClone &&
+          !STRICT_EXPORT_LAYOUT_ENABLED
         ) {
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
           const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
@@ -4594,8 +4784,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           clone.style.zIndex = '5';
         }
         if (
-          source.classList &&
-          source.classList.contains('leaflet-control-north-arrow')
+          isNorthClone
         ) {
           // Inline centering guards against Firefox/html2canvas dropping selector-based alignment.
           clone.style.display = 'flex';
@@ -4617,7 +4806,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
         mapWrapper.appendChild(clone);
         // Final hard clamp inside map frame to prevent spill into legend section.
-        if (source.classList && (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))) {
+        if (isScaleClone) {
           const maxBottom = Math.max(0, H - (clone.offsetHeight || exportHeight));
           const currentBottom = Math.max(0, parseFloat(clone.style.bottom || "0") || 0);
           clone.style.bottom = Math.max(0, Math.min(maxBottom, currentBottom)) + 'px';
@@ -5122,10 +5311,13 @@ window.addEventListener('load', resetInitialScrollPositions);
           const naRect = northArrowEl ? northArrowEl.getBoundingClientRect() : null;
           const naW = (naRect && naRect.width > 0) ? Math.max(22, Math.round(naRect.width * rawScaleX)) : 34;
           const naH = (naRect && naRect.height > 0) ? Math.max(28, Math.round(naRect.height * rawScaleY)) : 44;
-          const naLeftCss = (naRect && mapRect) ? (naRect.left - mapRect.left) : (cssW - (naW / rawScaleX) - 12);
-          const naTopCss = (naRect && mapRect) ? (naRect.top - mapRect.top) : 12;
-          let naX = Math.round(naLeftCss * rawScaleX) - cropX;
-          let naY = titleH + Math.round(naTopCss * rawScaleY);
+          const strictNorthPos = getStrictOverlayPlacement("north", outW, cropH, naW, naH);
+          let naX = STRICT_EXPORT_LAYOUT_ENABLED
+            ? strictNorthPos.left
+            : (Math.round(((naRect && mapRect) ? (naRect.left - mapRect.left) : (cssW - (naW / rawScaleX) - 12)) * rawScaleX) - cropX);
+          let naY = STRICT_EXPORT_LAYOUT_ENABLED
+            ? (titleH + strictNorthPos.top)
+            : (titleH + Math.round(((naRect && mapRect) ? (naRect.top - mapRect.top) : 12) * rawScaleY));
           naX = Math.max(0, Math.min(outW - naW, naX));
           naY = Math.max(titleH, Math.min((titleH + cropH) - naH, naY));
           octx.fillStyle = '#ffffff';
@@ -5177,10 +5369,18 @@ window.addEventListener('load', resetInitialScrollPositions);
           if (sourceDiscH > 0) {
             boxH = Math.max(boxH, Math.min(Math.round(cropH * 0.32), sourceDiscH));
           }
-          const discLeftCss = (discRect && mapRect) ? (discRect.left - mapRect.left) : 8;
-          const discTopCss = (discRect && mapRect) ? (discRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 28);
-          let x = Math.round(discLeftCss * rawScaleX) - cropX - edgeDiscExpandLeftPx;
-          let y = titleH + Math.round(discTopCss * rawScaleY);
+          let x;
+          let y;
+          if (STRICT_EXPORT_LAYOUT_ENABLED) {
+            const strictDiscPos = getStrictOverlayPlacement("disclaimer", outW, cropH, maxW, boxH);
+            x = strictDiscPos.left;
+            y = titleH + strictDiscPos.top;
+          } else {
+            const discLeftCss = (discRect && mapRect) ? (discRect.left - mapRect.left) : 8;
+            const discTopCss = (discRect && mapRect) ? (discRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 28);
+            x = Math.round(discLeftCss * rawScaleX) - cropX - edgeDiscExpandLeftPx;
+            y = titleH + Math.round(discTopCss * rawScaleY);
+          }
           x = Math.max(0, Math.min(outW - maxW, x));
           y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
           octx.fillStyle = 'rgba(255,255,255,0.93)';
@@ -5229,10 +5429,18 @@ window.addEventListener('load', resetInitialScrollPositions);
           octx.font = `${scaleFontPx}px Segoe UI, sans-serif`;
           const measuredW = Math.ceil(octx.measureText(scaleText).width) + 14;
           const boxW = Math.max(sourceBoxW, measuredW);
-          const sbLeftCss = (sbRect && mapRect) ? (sbRect.left - mapRect.left) : ((cssW - (boxW / rawScaleX)) / 2);
-          const sbTopCss = (sbRect && mapRect) ? (sbRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 8);
-          let x = Math.round(sbLeftCss * rawScaleX) - cropX;
-          let y = titleH + Math.round(sbTopCss * rawScaleY) - 8;
+          let x;
+          let y;
+          if (STRICT_EXPORT_LAYOUT_ENABLED) {
+            const strictScalePos = getStrictOverlayPlacement("scale", outW, cropH, boxW, boxH);
+            x = strictScalePos.left;
+            y = titleH + strictScalePos.top;
+          } else {
+            const sbLeftCss = (sbRect && mapRect) ? (sbRect.left - mapRect.left) : ((cssW - (boxW / rawScaleX)) / 2);
+            const sbTopCss = (sbRect && mapRect) ? (sbRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 8);
+            x = Math.round(sbLeftCss * rawScaleX) - cropX;
+            y = titleH + Math.round(sbTopCss * rawScaleY) - 8;
+          }
           x = Math.max(0, Math.min(outW - boxW, x));
           y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
           octx.fillStyle = 'rgba(255,255,255,0.95)';
@@ -5345,15 +5553,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           buildEdgeDirectExportCanvas(
             "pdf",
             (canvas) => {
-              const imgData = canvas.toDataURL('image/png');
-              const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
-              const pdf = new jspdf.jsPDF({
-                orientation,
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-              });
-              pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-              pdf.save('map.pdf');
+              saveCanvasToPdf(canvas, 'map.pdf');
               hideLoading();
             },
             (err) => {
@@ -5367,15 +5567,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         compositeExportElement(wrapper => {
             html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
             .then(canvas => {
-              const imgData = canvas.toDataURL('image/png');
-              const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
-              const pdf = new jspdf.jsPDF({
-                orientation,
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-              });
-              pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-              pdf.save('map.pdf');
+              saveCanvasToPdf(canvas, 'map.pdf');
               document.body.removeChild(wrapper);
               hideLoading();
             })
@@ -5824,11 +6016,24 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = alignedContentOffsetX + Math.max(6, Math.round(8 * rawScaleX));
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
+        const strictDiscDesiredW = Math.round(clampNumber(usedCanvasWidth * 0.34, 210, Math.max(240, Math.round(usedCanvasWidth * 0.52))));
+        const strictDiscPos = getStrictOverlayPlacement(
+          "disclaimer",
+          usedCanvasWidth,
+          usedCanvasHeight,
+          strictDiscDesiredW,
+          Math.max(40, Math.round(62 * uiScale))
+        );
+        const discX = STRICT_EXPORT_LAYOUT_ENABLED
+          ? (alignedContentOffsetX + strictDiscPos.left)
+          : (alignedContentOffsetX + Math.max(6, Math.round(8 * rawScaleX)));
         let discWidth = Math.max(
           Math.round(120 * uiScale),
-          Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discX - marginPx))
+          Math.min(
+            STRICT_EXPORT_LAYOUT_ENABLED ? strictDiscDesiredW : desiredWidth,
+            Math.max(120, (alignedContentOffsetX + usedCanvasWidth) - discX - marginPx)
+          )
         );
         const fontSizeDisc = Math.max(8, Math.round(10 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
@@ -5868,16 +6073,28 @@ function exportSVG() {
         discWidth = Math.min(discWidth, tightWidth);
 
         const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
-        let discY = discRect && mapRect
-          ? (() => {
-              const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
-              const bottomPx = Math.max(0, Math.round(bottomCss * rawScaleY));
-              return Math.max(
-                titleHeightPx,
-                titleHeightPx + usedCanvasHeight - discHeight - bottomPx
-              );
-            })()
-          : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
+        let discY;
+        if (STRICT_EXPORT_LAYOUT_ENABLED) {
+          const strictDiscFinalPos = getStrictOverlayPlacement(
+            "disclaimer",
+            usedCanvasWidth,
+            usedCanvasHeight,
+            discWidth,
+            discHeight
+          );
+          discY = titleHeightPx + strictDiscFinalPos.top;
+        } else {
+          discY = discRect && mapRect
+            ? (() => {
+                const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
+                const bottomPx = Math.max(0, Math.round(bottomCss * rawScaleY));
+                return Math.max(
+                  titleHeightPx,
+                  titleHeightPx + usedCanvasHeight - discHeight - bottomPx
+                );
+              })()
+            : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
+        }
         const discYMin = titleHeightPx + 2;
         const discYMax = Math.max(discYMin, (titleHeightPx + usedCanvasHeight - discHeight - 2));
         discY = Math.max(discYMin, Math.min(discYMax, discY));
@@ -5922,8 +6139,13 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
-        let naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
+        const strictNorthPos = getStrictOverlayPlacement("north", usedCanvasWidth, usedCanvasHeight, naW, naH);
+        const naX = STRICT_EXPORT_LAYOUT_ENABLED
+          ? (alignedContentOffsetX + strictNorthPos.left)
+          : Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
+        let naY = STRICT_EXPORT_LAYOUT_ENABLED
+          ? (titleHeightPx + strictNorthPos.top)
+          : (titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY));
         const naYMin = titleHeightPx + 2;
         const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
         naY = Math.max(naYMin, Math.min(naYMax, naY));
@@ -5968,9 +6190,14 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
-        let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
-        sbY -= Math.max(2, Math.round(4 * uiScale));
+        const strictScaleWidth = Math.round(clampNumber(usedCanvasWidth * 0.18, 110, 240));
+        const strictScalePos = getStrictOverlayPlacement("scale", usedCanvasWidth, usedCanvasHeight, strictScaleWidth, sbH);
+        let sbX = STRICT_EXPORT_LAYOUT_ENABLED
+          ? (alignedContentOffsetX + strictScalePos.left)
+          : Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
+        let sbY = STRICT_EXPORT_LAYOUT_ENABLED
+          ? (titleHeightPx + strictScalePos.top)
+          : (titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY) - Math.max(2, Math.round(4 * uiScale)));
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
         const sbXMin = alignedContentOffsetX;
