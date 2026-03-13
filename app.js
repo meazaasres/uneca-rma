@@ -4601,10 +4601,10 @@ window.addEventListener('load', resetInitialScrollPositions);
     });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 24;
-    const maxW = Math.max(1, pageW - (margin * 2));
-    const maxH = Math.max(1, pageH - (margin * 2));
-    const scale = Math.min(maxW / c.width, maxH / c.height);
+    const useCoverFit = !!STRICT_EXPORT_LAYOUT_ENABLED;
+    const scale = useCoverFit
+      ? Math.max(pageW / c.width, pageH / c.height)
+      : Math.min(pageW / c.width, pageH / c.height);
     const renderW = Math.max(1, Math.round(c.width * scale));
     const renderH = Math.max(1, Math.round(c.height * scale));
     const x = Math.round((pageW - renderW) / 2);
