@@ -34,6 +34,8 @@ const DISCLAIMER_MAX_WIDTH_PX = 420;
 const DISCLAIMER_WIDTH_RATIO = 0.3;
 const STRICT_EXPORT_LAYOUT_ENABLED = true;
 const STRICT_PDF_A4_ENABLED = true;
+const STRICT_EXPORT_FRAME_WIDTH_PX = 1600;
+const STRICT_EXPORT_FRAME_HEIGHT_PX = 900;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -2093,6 +2095,25 @@ function updateResponsiveMapControlSizing() {
   mapEl.style.setProperty("--scale-control-padding-x", `${scalePadX}px`);
 }
 
+function getScaleBarBoundsInMapPx() {
+  const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
+  const scaleEl = (scaleControl && typeof scaleControl.getContainer === 'function')
+    ? scaleControl.getContainer()
+    : null;
+  if (!mapEl || !scaleEl) return null;
+  const mapRect = mapEl.getBoundingClientRect();
+  const sRect = scaleEl.getBoundingClientRect();
+  if (!mapRect || !sRect || sRect.width <= 0 || sRect.height <= 0) return null;
+  return {
+    left: sRect.left - mapRect.left,
+    right: sRect.right - mapRect.left,
+    top: sRect.top - mapRect.top,
+    bottom: sRect.bottom - mapRect.top,
+    width: sRect.width,
+    height: sRect.height
+  };
+}
+
 function formatScaleDistance(meters) {
   if (!isFinite(meters) || meters <= 0) return "--";
   if (meters >= 1000) {
@@ -2302,18 +2323,24 @@ function positionDisclaimer() {
     const maxAvailableWidth = mapRect
       ? Math.max(140, Math.round(mapRect.width - left - margin))
       : preferredFixedWidth;
+    const scaleBounds = getScaleBarBoundsInMapPx();
+    const scaleGuardGap = 10;
+    const widthLimitByScale = scaleBounds
+      ? Math.max(140, Math.floor((scaleBounds.left - scaleGuardGap) - left))
+      : maxAvailableWidth;
+    const safeMaxAvailableWidth = Math.max(140, Math.min(maxAvailableWidth, widthLimitByScale));
     const minAllowedWidth = Math.min(DISCLAIMER_MIN_WIDTH_PX, maxAvailableWidth);
     const getStableDisclaimerWidthPx = () => {
       const fixedWidth = Number(disc.dataset.fixedWidthPx);
       const renderedWidth = Math.round(disc.getBoundingClientRect().width || disc.offsetWidth || preferredFixedWidth);
-      const fallbackWidth = Math.min(maxAvailableWidth, Math.max(minAllowedWidth, Math.min(DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)));
+      const fallbackWidth = Math.min(safeMaxAvailableWidth, Math.max(minAllowedWidth, Math.min(DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)));
       const candidate = Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : (renderedWidth || fallbackWidth);
-      return Math.max(minAllowedWidth, Math.min(maxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, Math.round(candidate)));
+      return Math.max(minAllowedWidth, Math.min(safeMaxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, Math.round(candidate)));
     };
 
     const desiredWidth = Math.max(
       minAllowedWidth,
-      Math.min(maxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)
+      Math.min(safeMaxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)
     );
     const userMoved = !!disclaimerUserPos;
     const widthPx = userMoved ? getStableDisclaimerWidthPx() : desiredWidth;
@@ -2418,6 +2445,20 @@ function resolveDisclaimerScaleBarOverlap() {
     disc.style.setProperty('max-width', nextWidth + 'px');
     disc.dataset.fixedWidthPx = String(nextWidth);
     disclaimerUserPos = { left: nextLeft, top: nextTop };
+
+    const discRect2 = disc.getBoundingClientRect();
+    const overlapsAfter = (
+      discRect2.left < (scaleRect.right + gap) &&
+      discRect2.right > (scaleRect.left - gap) &&
+      discRect2.top < (scaleRect.bottom + gap) &&
+      discRect2.bottom > (scaleRect.top - gap)
+    );
+    if (overlapsAfter) {
+      const forcedTop = Math.max(6, Math.round((scaleRect.top - mapRect.top) - (discRect2.height + gap)));
+      disc.style.setProperty('top', forcedTop + 'px');
+      disc.style.setProperty('bottom', 'auto');
+      disclaimerUserPos = { left: nextLeft, top: forcedTop };
+    }
   } catch (e) {
     console.warn('resolveDisclaimerScaleBarOverlap failed', e);
   }
@@ -4508,6 +4549,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     const ow = Math.max(1, Number(overlayW) || 1);
     const oh = Math.max(1, Number(overlayH) || 1);
     const margin = getStrictExportMarginPx(W, H);
+    const reservedBottomBandPx = Math.round(clampNumber(H * 0.045, 28, 54));
 
     if (kind === "north") {
       return {
@@ -4519,7 +4561,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     if (kind === "scale") {
       return {
-        left: Math.max(0, Math.round((W - ow) / 2)),
+        left: Math.max(0, margin),
         top: Math.max(0, H - oh - margin),
         bottom: margin
       };
@@ -4528,8 +4570,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     // disclaimer default
     return {
       left: Math.max(0, margin),
-      top: Math.max(0, H - oh - margin),
-      bottom: margin
+      top: Math.max(0, H - oh - margin - reservedBottomBandPx),
+      bottom: margin + reservedBottomBandPx
     };
     }
 
@@ -4567,6 +4609,22 @@ window.addEventListener('load', resetInitialScrollPositions);
     const y = Math.round((pageH - renderH) / 2);
     pdf.addImage(imgData, "PNG", x, y, renderW, renderH);
     pdf.save(fileName);
+    }
+
+    function normalizeCanvasToStrictExportFrame(sourceCanvas) {
+    if (!sourceCanvas || !STRICT_EXPORT_LAYOUT_ENABLED) return sourceCanvas;
+    const targetW = Math.max(1, STRICT_EXPORT_FRAME_WIDTH_PX | 0);
+    const targetH = Math.max(1, STRICT_EXPORT_FRAME_HEIGHT_PX | 0);
+    if (sourceCanvas.width === targetW && sourceCanvas.height === targetH) return sourceCanvas;
+    const out = document.createElement('canvas');
+    out.width = targetW;
+    out.height = targetH;
+    const ctx = out.getContext('2d');
+    if (!ctx) return sourceCanvas;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(sourceCanvas, 0, 0, sourceCanvas.width, sourceCanvas.height, 0, 0, out.width, out.height);
+    return out;
     }
 
     function getSymmetricWhitespaceSideCropPx(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
@@ -4698,8 +4756,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cctx = cropped.getContext('2d');
       cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
-      const W = cropW;
-      const H = cropH;
+      const layoutMapCanvas = normalizeCanvasToStrictExportFrame(cropped);
+
+      const W = layoutMapCanvas.width;
+      const H = layoutMapCanvas.height;
 
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
@@ -4750,7 +4810,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       const img = document.createElement('img');
       img.className = 'export-img';
-      img.src = cropped.toDataURL("image/png");
+      img.src = layoutMapCanvas.toDataURL("image/png");
       img.alt = "Exported map image";
       mapWrapper.appendChild(img);
 
@@ -5335,6 +5395,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
         cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
+        const layoutMapCanvas = normalizeCanvasToStrictExportFrame(cropped);
+
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const disclaimerText = (document.getElementById('disclaimer')?.textContent || '').trim();
         const disclaimerEl = document.getElementById('disclaimer');
@@ -5358,8 +5420,10 @@ window.addEventListener('load', resetInitialScrollPositions);
               return sum + blockH + (idx > 0 ? legendBlockGap : 0);
             }, 0))
           : 0;
-        const outW = cropW;
-        const outH = titleH + cropH + legendH;
+        const mapFrameW = layoutMapCanvas.width;
+        const mapFrameH = layoutMapCanvas.height;
+        const outW = mapFrameW;
+        const outH = titleH + mapFrameH + legendH;
 
         const out = document.createElement('canvas');
         out.width = outW;
@@ -5378,14 +5442,14 @@ window.addEventListener('load', resetInitialScrollPositions);
         octx.textBaseline = 'middle';
         octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
 
-        octx.drawImage(cropped, 0, titleH);
+        octx.drawImage(layoutMapCanvas, 0, titleH);
 
         // Draw north arrow where it is currently placed on the live map.
         {
           const naRect = northArrowEl ? northArrowEl.getBoundingClientRect() : null;
           const naW = (naRect && naRect.width > 0) ? Math.max(22, Math.round(naRect.width * rawScaleX)) : 34;
           const naH = (naRect && naRect.height > 0) ? Math.max(28, Math.round(naRect.height * rawScaleY)) : 44;
-          const strictNorthPos = getStrictOverlayPlacement("north", outW, cropH, naW, naH);
+          const strictNorthPos = getStrictOverlayPlacement("north", outW, mapFrameH, naW, naH);
           let naX = STRICT_EXPORT_LAYOUT_ENABLED
             ? strictNorthPos.left
             : (Math.round(((naRect && mapRect) ? (naRect.left - mapRect.left) : (cssW - (naW / rawScaleX) - 12)) * rawScaleX) - cropX);
@@ -5393,7 +5457,7 @@ window.addEventListener('load', resetInitialScrollPositions);
             ? (titleH + strictNorthPos.top)
             : (titleH + Math.round(((naRect && mapRect) ? (naRect.top - mapRect.top) : 12) * rawScaleY));
           naX = Math.max(0, Math.min(outW - naW, naX));
-          naY = Math.max(titleH, Math.min((titleH + cropH) - naH, naY));
+          naY = Math.max(titleH, Math.min((titleH + mapFrameH) - naH, naY));
           octx.fillStyle = '#ffffff';
           octx.strokeStyle = '#cfd6e4';
           octx.lineWidth = 1;
@@ -5441,12 +5505,12 @@ window.addEventListener('load', resetInitialScrollPositions);
           }
           let boxH = (maxLines * lineH) + (pad * 2);
           if (sourceDiscH > 0) {
-            boxH = Math.max(boxH, Math.min(Math.round(cropH * 0.32), sourceDiscH));
+            boxH = Math.max(boxH, Math.min(Math.round(mapFrameH * 0.32), sourceDiscH));
           }
           let x;
           let y;
           if (STRICT_EXPORT_LAYOUT_ENABLED) {
-            const strictDiscPos = getStrictOverlayPlacement("disclaimer", outW, cropH, maxW, boxH);
+            const strictDiscPos = getStrictOverlayPlacement("disclaimer", outW, mapFrameH, maxW, boxH);
             x = strictDiscPos.left;
             y = titleH + strictDiscPos.top;
           } else {
@@ -5456,7 +5520,7 @@ window.addEventListener('load', resetInitialScrollPositions);
             y = titleH + Math.round(discTopCss * rawScaleY);
           }
           x = Math.max(0, Math.min(outW - maxW, x));
-          y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
+          y = Math.max(titleH, Math.min((titleH + mapFrameH) - boxH, y));
           octx.fillStyle = 'rgba(255,255,255,0.93)';
           octx.fillRect(x, y, maxW, boxH);
           octx.fillStyle = '#333333';
@@ -5506,7 +5570,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           let x;
           let y;
           if (STRICT_EXPORT_LAYOUT_ENABLED) {
-            const strictScalePos = getStrictOverlayPlacement("scale", outW, cropH, boxW, boxH);
+            const strictScalePos = getStrictOverlayPlacement("scale", outW, mapFrameH, boxW, boxH);
             x = strictScalePos.left;
             y = titleH + strictScalePos.top;
           } else {
@@ -5516,7 +5580,7 @@ window.addEventListener('load', resetInitialScrollPositions);
             y = titleH + Math.round(sbTopCss * rawScaleY) - 8;
           }
           x = Math.max(0, Math.min(outW - boxW, x));
-          y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
+          y = Math.max(titleH, Math.min((titleH + mapFrameH) - boxH, y));
           octx.fillStyle = 'rgba(255,255,255,0.95)';
           octx.fillRect(x, y, boxW, boxH);
           octx.strokeStyle = '#cfd6e4';
@@ -5912,14 +5976,18 @@ function exportSVG() {
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
       cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const trimInfo = isFirefoxBrowser()
+      const trimInfo = (STRICT_EXPORT_LAYOUT_ENABLED ? false : isFirefoxBrowser())
         ? trimHorizontalWhitespaceWithOffset(cropped, 0.4)
         : { canvas: cropped, leftTrim: 0 };
       const exportCanvas = trimInfo.canvas || cropped;
       const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
 
-      const usedCanvasWidth  = Math.max(1, exportCanvas.width);
-      const usedCanvasHeight = Math.max(1, exportCanvas.height);
+      const baseUsedCanvasWidth  = Math.max(1, exportCanvas.width);
+      const baseUsedCanvasHeight = Math.max(1, exportCanvas.height);
+      const usedCanvasWidth = STRICT_EXPORT_LAYOUT_ENABLED ? STRICT_EXPORT_FRAME_WIDTH_PX : baseUsedCanvasWidth;
+      const usedCanvasHeight = STRICT_EXPORT_LAYOUT_ENABLED ? STRICT_EXPORT_FRAME_HEIGHT_PX : baseUsedCanvasHeight;
+      const mapScaleX = usedCanvasWidth / baseUsedCanvasWidth;
+      const mapScaleY = usedCanvasHeight / baseUsedCanvasHeight;
 
       // Firefox can trim asymmetric side whitespace; center trimmed map content
       // in the original crop frame to match Chrome/Edge visual alignment.
@@ -5990,8 +6058,8 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX;
-        const y = (containerPoint.y * rawScaleY) - cropY + titleHeightPx;
+        const x = (((containerPoint.x * rawScaleX) - cropX - extraTrimX) * mapScaleX) + alignedContentOffsetX;
+        const y = (((containerPoint.y * rawScaleY) - cropY) * mapScaleY) + titleHeightPx;
         return [x, y];
       }
 
@@ -6048,7 +6116,7 @@ function exportSVG() {
                 path.setAttribute("d", d);
                 path.setAttribute("fill", rIdx === 0 ? (style.fill || "none") : "#ffffff");
                 path.setAttribute("stroke", style.stroke || "#000");
-                path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
+                path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * Math.max(mapScaleX, mapScaleY))));
                 path.setAttribute("fill-opacity", String(style.fillOpacity));
                 svg.appendChild(path);
               });
@@ -6064,7 +6132,7 @@ function exportSVG() {
               path.setAttribute("d", d);
               path.setAttribute("fill", "none");
               path.setAttribute("stroke", style.stroke || "#000");
-              path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
+              path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * Math.max(mapScaleX, mapScaleY))));
               svg.appendChild(path);
             });
           } else if (geom.type === "Point" || geom.type === "MultiPoint") {
@@ -6072,13 +6140,13 @@ function exportSVG() {
             pts.forEach(coord => {
               const [x, y] = projectCoordToCanvas(coord);
               const circle = document.createElementNS(svgNS, "circle");
-              const r = Math.max(1, Math.round(getPointRadius() * rawScaleX));
+              const r = Math.max(1, Math.round(getPointRadius() * Math.max(mapScaleX, mapScaleY)));
               circle.setAttribute("cx", String(x));
               circle.setAttribute("cy", String(y));
               circle.setAttribute("r", String(r));
               circle.setAttribute("fill", style.fill || "#ccc");
               circle.setAttribute("stroke", style.stroke || "#000");
-              circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
+              circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * Math.max(mapScaleX, mapScaleY))));
               svg.appendChild(circle);
             });
           }
