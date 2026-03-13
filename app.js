@@ -4591,7 +4591,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       return;
     }
 
-    const orientation = c.width >= c.height ? "landscape" : "portrait";
+    const orientation = "portrait";
     const pdf = new jspdf.jsPDF({
       orientation,
       unit: "pt",
@@ -4623,7 +4623,14 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (!ctx) return sourceCanvas;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, out.width, out.height);
-    ctx.drawImage(sourceCanvas, 0, 0, sourceCanvas.width, sourceCanvas.height, 0, 0, out.width, out.height);
+    const srcW = Math.max(1, sourceCanvas.width);
+    const srcH = Math.max(1, sourceCanvas.height);
+    const scale = Math.min(targetW / srcW, targetH / srcH);
+    const drawW = Math.max(1, Math.round(srcW * scale));
+    const drawH = Math.max(1, Math.round(srcH * scale));
+    const dx = Math.round((targetW - drawW) / 2);
+    const dy = Math.round((targetH - drawH) / 2);
+    ctx.drawImage(sourceCanvas, 0, 0, srcW, srcH, dx, dy, drawW, drawH);
     return out;
     }
 
