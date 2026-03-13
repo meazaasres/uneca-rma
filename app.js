@@ -4561,7 +4561,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     if (kind === "scale") {
       return {
-        left: Math.max(0, margin),
+        left: Math.max(0, W - ow - margin),
         top: Math.max(0, H - oh - margin),
         bottom: margin
       };
