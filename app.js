@@ -2346,8 +2346,80 @@ function positionDisclaimer() {
       disc.style.setProperty('max-width', widthPx + 'px');
       disclaimerUserPos = { left: leftPx, top: topPx };
     }
+    resolveDisclaimerScaleBarOverlap();
   } catch (e) {
     console.warn('positionDisclaimer failed', e);
+  }
+}
+
+function resolveDisclaimerScaleBarOverlap() {
+  try {
+    const disc = document.getElementById('disclaimer');
+    const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
+    const scaleEl = (scaleControl && typeof scaleControl.getContainer === 'function')
+      ? scaleControl.getContainer()
+      : null;
+    if (!disc || !mapEl || !scaleEl) return;
+
+    const mapRect = mapEl.getBoundingClientRect();
+    const discRect = disc.getBoundingClientRect();
+    const scaleRect = scaleEl.getBoundingClientRect();
+    if (!discRect || !scaleRect) return;
+
+    const gap = 10;
+    const d = {
+      left: discRect.left - mapRect.left,
+      right: discRect.right - mapRect.left,
+      top: discRect.top - mapRect.top,
+      bottom: discRect.bottom - mapRect.top,
+      width: discRect.width,
+      height: discRect.height
+    };
+    const s = {
+      left: scaleRect.left - mapRect.left,
+      right: scaleRect.right - mapRect.left,
+      top: scaleRect.top - mapRect.top,
+      bottom: scaleRect.bottom - mapRect.top
+    };
+
+    const overlaps = (
+      d.left < (s.right + gap) &&
+      d.right > (s.left - gap) &&
+      d.top < (s.bottom + gap) &&
+      d.bottom > (s.top - gap)
+    );
+    if (!overlaps) return;
+
+    const mapW = mapEl.clientWidth || 0;
+    const mapH = mapEl.clientHeight || 0;
+    const minLeft = Math.max(6, DISCLAIMER_LEFT_VISIBLE_INSET_PX + 6);
+    const maxTop = Math.max(6, mapH - d.height - 6);
+    let nextLeft = Math.max(minLeft, Math.round(d.left));
+    let nextTop = Math.max(6, Math.min(maxTop, Math.round(s.top - d.height - gap)));
+    let nextWidth = Math.round(d.width);
+
+    const stillOverlapsVertically = (nextTop + d.height) > (s.top - gap);
+    if (stillOverlapsVertically) {
+      const maxAllowedWidth = Math.floor((s.left - gap) - nextLeft);
+      if (maxAllowedWidth >= 140) {
+        nextWidth = Math.max(140, Math.min(nextWidth, maxAllowedWidth));
+      } else {
+        nextLeft = Math.max(minLeft, Math.round(s.left - gap - d.width));
+      }
+    }
+
+    const maxLeft = Math.max(minLeft, mapW - MAP_SIDE_VISIBLE_INSET_PX - nextWidth - 6);
+    nextLeft = Math.max(minLeft, Math.min(maxLeft, nextLeft));
+
+    disc.style.setProperty('left', nextLeft + 'px');
+    disc.style.setProperty('top', nextTop + 'px');
+    disc.style.setProperty('bottom', 'auto');
+    disc.style.setProperty('width', nextWidth + 'px');
+    disc.style.setProperty('max-width', nextWidth + 'px');
+    disc.dataset.fixedWidthPx = String(nextWidth);
+    disclaimerUserPos = { left: nextLeft, top: nextTop };
+  } catch (e) {
+    console.warn('resolveDisclaimerScaleBarOverlap failed', e);
   }
 }
 
@@ -2441,6 +2513,7 @@ function initDisclaimerDrag() {
     disc.style.setProperty('max-width', fixedWidthPx + 'px');
     disc.dataset.fixedWidthPx = String(fixedWidthPx);
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
+    resolveDisclaimerScaleBarOverlap();
   };
 
   const beginDrag = (clientX, clientY) => {
@@ -2603,6 +2676,7 @@ function runMapUiReflowPasses() {
         ensureScaleBarPinnedToMapBottom();
         positionDisclaimer();
         repositionDraggableControls();
+        resolveDisclaimerScaleBarOverlap();
       }, 40);
     }, delayMs);
   });
