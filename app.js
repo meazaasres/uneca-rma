@@ -4522,7 +4522,9 @@ window.addEventListener('load', resetInitialScrollPositions);
     const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
     const isFirefox = isFirefoxBrowser();
     return {
-      scale: isFirefox ? Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)) : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
+      scale: STRICT_EXPORT_LAYOUT_ENABLED
+        ? 1
+        : (isFirefox ? Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)) : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1))),
       useCORS: true,
       foreignObjectRendering: false,
       logging: false,
@@ -4782,7 +4784,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const expectedH = Math.round(cssH * rawScaleY);
       const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
       const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
-      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
+      // Chrome strict SVG: avoid fixed fallback side-crop to prevent lateral clipping/shift.
+      const sideCropPx = (STRICT_EXPORT_LAYOUT_ENABLED && isChromeBrowser())
+        ? 0
+        : getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
       const cropX = Math.max(0, sideCropPx);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
       if (isEdge) reportEdgeExportSpaceReduction("png/pdf", sideCropPx, baseCropW, cropW);
@@ -5011,10 +5016,15 @@ window.addEventListener('load', resetInitialScrollPositions);
         if (existing) return;
         const mapRect = mapEl.getBoundingClientRect();
         const srcRect = src.getBoundingClientRect();
-        const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
-        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
+        let left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
+        let top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
         const w = Math.max(20, Math.round(srcRect.width * rawScaleX));
         const h = Math.max(24, Math.round(srcRect.height * rawScaleY));
+        if (STRICT_EXPORT_LAYOUT_ENABLED) {
+          const p = getStrictOverlayPlacement('north', W, H, w, h);
+          left = p.left;
+          top = p.top;
+        }
 
         const fallback = document.createElement('div');
         fallback.className = 'export-north-arrow-clone';
@@ -5078,12 +5088,17 @@ window.addEventListener('load', resetInitialScrollPositions);
           topCss = Math.max(0, mapRect.height - srcHeightCss - 8);
           bottomCss = Math.max(0, mapRect.height - (topCss + srcHeightCss));
         }
-        const left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
+        let left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
         const top = Math.max(0, Math.round(topCss * rawScaleY));
         const w = Math.max(70, Math.round(srcWidthCss * rawScaleX));
         const h = Math.max(20, Math.round(srcHeightCss * rawScaleY));
         const bottomRaw = Math.max(0, Math.round((bottomCss == null ? 8 : bottomCss) * rawScaleY));
-        const bottom = Math.max(6, Math.min(bottomRaw, Math.max(6, H - h)));
+        let bottom = Math.max(6, Math.min(bottomRaw, Math.max(6, H - h)));
+        if (STRICT_EXPORT_LAYOUT_ENABLED) {
+          const p = getStrictOverlayPlacement('scale', W, H, w, h);
+          left = p.left;
+          bottom = Math.max(6, Number.isFinite(p.bottom) ? p.bottom : bottom);
+        }
         const labelText = src
           ? (src.querySelector('.exact-scale-label')?.textContent || src.textContent || 'Scale: --').trim()
           : 'Scale: --';
@@ -6038,7 +6053,9 @@ function exportSVG() {
 
       // Firefox can trim asymmetric side whitespace; center trimmed map content
       // in the original crop frame to match Chrome/Edge visual alignment.
-      const totalWidthPx  = isFirefoxBrowser() ? Math.max(usedCanvasWidth, cropW) : usedCanvasWidth;
+      const totalWidthPx  = (STRICT_EXPORT_LAYOUT_ENABLED || !isFirefoxBrowser())
+        ? usedCanvasWidth
+        : Math.max(usedCanvasWidth, cropW);
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
       const contentOffsetX = Math.max(0, Math.round((totalWidthPx - usedCanvasWidth) / 2));
       const firefoxInkCenterShiftX = isFirefoxBrowser() ? getHorizontalInkCenterShift(exportCanvas) : 0;
