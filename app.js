@@ -34,8 +34,8 @@ const DISCLAIMER_MAX_WIDTH_PX = 420;
 const DISCLAIMER_WIDTH_RATIO = 0.3;
 const STRICT_EXPORT_LAYOUT_ENABLED = true;
 const STRICT_PDF_A4_ENABLED = true;
-const STRICT_EXPORT_FRAME_WIDTH_PX = 1600;
-const STRICT_EXPORT_FRAME_HEIGHT_PX = 900;
+const STRICT_EXPORT_FRAME_WIDTH_PX = 1000;
+const STRICT_EXPORT_FRAME_HEIGHT_PX = 1414;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -4612,25 +4612,55 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function normalizeCanvasToStrictExportFrame(sourceCanvas) {
-    if (!sourceCanvas || !STRICT_EXPORT_LAYOUT_ENABLED) return sourceCanvas;
+    const src = sourceCanvas;
+    const srcW = Math.max(1, src && src.width ? src.width : 1);
+    const srcH = Math.max(1, src && src.height ? src.height : 1);
+    if (!src || !STRICT_EXPORT_LAYOUT_ENABLED) {
+      return {
+        canvas: src,
+        contentRect: { x: 0, y: 0, width: srcW, height: srcH }
+      };
+    }
     const targetW = Math.max(1, STRICT_EXPORT_FRAME_WIDTH_PX | 0);
     const targetH = Math.max(1, STRICT_EXPORT_FRAME_HEIGHT_PX | 0);
-    if (sourceCanvas.width === targetW && sourceCanvas.height === targetH) return sourceCanvas;
     const out = document.createElement('canvas');
     out.width = targetW;
     out.height = targetH;
     const ctx = out.getContext('2d');
-    if (!ctx) return sourceCanvas;
+    if (!ctx) {
+      return {
+        canvas: src,
+        contentRect: { x: 0, y: 0, width: srcW, height: srcH }
+      };
+    }
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, out.width, out.height);
-    const srcW = Math.max(1, sourceCanvas.width);
-    const srcH = Math.max(1, sourceCanvas.height);
     const scale = Math.min(targetW / srcW, targetH / srcH);
     const drawW = Math.max(1, Math.round(srcW * scale));
     const drawH = Math.max(1, Math.round(srcH * scale));
     const dx = Math.round((targetW - drawW) / 2);
     const dy = Math.round((targetH - drawH) / 2);
-    ctx.drawImage(sourceCanvas, 0, 0, srcW, srcH, dx, dy, drawW, drawH);
+    ctx.drawImage(src, 0, 0, srcW, srcH, dx, dy, drawW, drawH);
+    return {
+      canvas: out,
+      contentRect: { x: dx, y: dy, width: drawW, height: drawH }
+    };
+    }
+
+    function extractCanvasRect(sourceCanvas, rect) {
+    const src = sourceCanvas;
+    if (!src || !rect) return src;
+    const sx = Math.max(0, Math.round(rect.x || 0));
+    const sy = Math.max(0, Math.round(rect.y || 0));
+    const sw = Math.max(1, Math.min(src.width - sx, Math.round(rect.width || src.width)));
+    const sh = Math.max(1, Math.min(src.height - sy, Math.round(rect.height || src.height)));
+    if (sx === 0 && sy === 0 && sw === src.width && sh === src.height) return src;
+    const out = document.createElement('canvas');
+    out.width = sw;
+    out.height = sh;
+    const ctx = out.getContext('2d');
+    if (!ctx) return src;
+    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
     return out;
     }
 
@@ -4763,7 +4793,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cctx = cropped.getContext('2d');
       cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
-      const layoutMapCanvas = normalizeCanvasToStrictExportFrame(cropped);
+      const normalizedMap = normalizeCanvasToStrictExportFrame(cropped);
+      const layoutMapCanvas = extractCanvasRect(normalizedMap.canvas, normalizedMap.contentRect);
 
       const W = layoutMapCanvas.width;
       const H = layoutMapCanvas.height;
@@ -5402,7 +5433,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
         cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
-        const layoutMapCanvas = normalizeCanvasToStrictExportFrame(cropped);
+        const normalizedMap = normalizeCanvasToStrictExportFrame(cropped);
+        const layoutMapCanvas = extractCanvasRect(normalizedMap.canvas, normalizedMap.contentRect);
 
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const disclaimerText = (document.getElementById('disclaimer')?.textContent || '').trim();
@@ -5601,7 +5633,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
 
         if (legendBlocks.length) {
-          let y = titleH + cropH + legendTopPad;
+          let y = titleH + mapFrameH + legendTopPad;
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
 
@@ -5991,8 +6023,16 @@ function exportSVG() {
 
       const baseUsedCanvasWidth  = Math.max(1, exportCanvas.width);
       const baseUsedCanvasHeight = Math.max(1, exportCanvas.height);
-      const usedCanvasWidth = STRICT_EXPORT_LAYOUT_ENABLED ? STRICT_EXPORT_FRAME_WIDTH_PX : baseUsedCanvasWidth;
-      const usedCanvasHeight = STRICT_EXPORT_LAYOUT_ENABLED ? STRICT_EXPORT_FRAME_HEIGHT_PX : baseUsedCanvasHeight;
+      let usedCanvasWidth = baseUsedCanvasWidth;
+      let usedCanvasHeight = baseUsedCanvasHeight;
+      if (STRICT_EXPORT_LAYOUT_ENABLED) {
+        const strictScale = Math.min(
+          STRICT_EXPORT_FRAME_WIDTH_PX / baseUsedCanvasWidth,
+          STRICT_EXPORT_FRAME_HEIGHT_PX / baseUsedCanvasHeight
+        );
+        usedCanvasWidth = Math.max(1, Math.round(baseUsedCanvasWidth * strictScale));
+        usedCanvasHeight = Math.max(1, Math.round(baseUsedCanvasHeight * strictScale));
+      }
       const mapScaleX = usedCanvasWidth / baseUsedCanvasWidth;
       const mapScaleY = usedCanvasHeight / baseUsedCanvasHeight;
 
