@@ -4784,10 +4784,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       const expectedH = Math.round(cssH * rawScaleY);
       const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
       const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
-      // Chrome strict SVG: avoid fixed fallback side-crop to prevent lateral clipping/shift.
-      const sideCropPx = (STRICT_EXPORT_LAYOUT_ENABLED && isChromeBrowser())
-        ? 0
-        : getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
+      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
       const cropX = Math.max(0, sideCropPx);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
       if (isEdge) reportEdgeExportSpaceReduction("png/pdf", sideCropPx, baseCropW, cropW);
@@ -6013,7 +6010,10 @@ function exportSVG() {
       // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
       const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
       const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
-      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
+      // Chrome strict SVG: avoid fixed fallback side-crop to prevent lateral clipping/shift.
+      const sideCropPx = (STRICT_EXPORT_LAYOUT_ENABLED && isChromeBrowser())
+        ? 0
+        : getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
       const cropX = sideCropPx;
       const cropY = 0; // top-align crop
