@@ -4841,7 +4841,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;display:block !important;width:100% !important}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:#ffffff !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-map-wrapper .export-north-arrow-clone{display:flex !important;align-items:center !important;justify-content:center !important;flex-direction:column !important}
         .export-map-wrapper .export-north-arrow-clone .north-arrow-symbol{display:block !important;width:100% !important;text-align:center !important;padding-top:0 !important;line-height:1 !important}
         .export-img{width:100%;height:auto;display:block}
@@ -5140,7 +5140,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           fallbackDisc.style.left = '8px';
           fallbackDisc.style.bottom = '-2px';
           fallbackDisc.style.maxWidth = Math.max(140, Math.round(W * 0.45)) + 'px';
-          fallbackDisc.style.background = 'rgba(255,255,255,0.95)';
+          fallbackDisc.style.background = '#ffffff';
           fallbackDisc.style.padding = '6px';
           fallbackDisc.style.fontSize = '10px';
           fallbackDisc.style.lineHeight = '1.25';
@@ -5572,7 +5572,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           }
           x = Math.max(0, Math.min(outW - maxW, x));
           y = Math.max(titleH, Math.min((titleH + mapFrameH) - boxH, y));
-          octx.fillStyle = 'rgba(255,255,255,0.93)';
+          octx.fillStyle = '#ffffff';
           octx.fillRect(x, y, maxW, boxH);
           octx.fillStyle = '#333333';
           const drawJustifiedLine = (ctx, line, startX, baselineY, maxTextW, isLast) => {
@@ -5632,7 +5632,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           }
           x = Math.max(0, Math.min(outW - boxW, x));
           y = Math.max(titleH, Math.min((titleH + mapFrameH) - boxH, y));
-          octx.fillStyle = 'rgba(255,255,255,0.95)';
+          octx.fillStyle = '#ffffff';
           octx.fillRect(x, y, boxW, boxH);
           octx.strokeStyle = '#cfd6e4';
           octx.lineWidth = 1;
@@ -6311,7 +6311,7 @@ function exportSVG() {
         discBg.setAttribute("width", String(discWidth));
         discBg.setAttribute("height", String(discHeight));
         discBg.setAttribute("fill", "#ffffff");
-        discBg.setAttribute("fill-opacity", "0.95");
+        discBg.setAttribute("fill-opacity", "1");
         svg.appendChild(discBg);
 
         const discText = document.createElementNS(svgNS, "text");
