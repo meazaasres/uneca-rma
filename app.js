@@ -32,6 +32,8 @@ const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const DISCLAIMER_MIN_WIDTH_PX = 220;
 const DISCLAIMER_MAX_WIDTH_PX = 420;
 const DISCLAIMER_WIDTH_RATIO = 0.3;
+const MAP_OVERLAY_FIXED_ANCHORS_DEFAULT = true;
+const ENABLE_MAP_OVERLAY_DRAG = false;
 const STRICT_EXPORT_LAYOUT_ENABLED = true;
 const STRICT_PDF_A4_ENABLED = true;
 const STRICT_EXPORT_FRAME_WIDTH_PX = 1000;
@@ -1977,6 +1979,13 @@ function makeControlDraggable(control, initial) {
   applyDraggableControlInitialPosition(el, mapEl, true);
   draggableMapControls.add(el);
 
+  if (!ENABLE_MAP_OVERLAY_DRAG || MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) {
+    el.classList.remove("is-dragging");
+    el.dataset.userMoved = "";
+    setDynamicStyle(el, { cursor: "default" });
+    return;
+  }
+
   let dragging = false;
   let startX = 0;
   let startY = 0;
@@ -2068,6 +2077,60 @@ function getResponsiveDisclaimerTargetWidthPx(mapWidthPx) {
   else if (w >= 1000) ratio = 0.32;
   else ratio = 0.38;
   return Math.round(clampNumber(w * ratio, DISCLAIMER_MIN_WIDTH_PX, 520));
+}
+
+function getResponsiveOverlayMarginPx(frameW, frameH) {
+  const w = Number(frameW) || 0;
+  const h = Number(frameH) || 0;
+  const basis = Math.max(1, Math.min(w, h));
+  return Math.round(clampNumber(basis * 0.018, 10, 18));
+}
+
+function getUnifiedOverlayPlacement(kind, frameW, frameH, overlayW, overlayH, options = {}) {
+  const W = Math.max(1, Number(frameW) || 1);
+  const H = Math.max(1, Number(frameH) || 1);
+  const ow = Math.max(1, Number(overlayW) || 1);
+  const oh = Math.max(1, Number(overlayH) || 1);
+  const margin = Number.isFinite(Number(options.marginPx))
+    ? Math.max(0, Number(options.marginPx))
+    : getResponsiveOverlayMarginPx(W, H);
+  const leftInset = Number.isFinite(Number(options.leftInsetPx))
+    ? Math.max(0, Number(options.leftInsetPx))
+    : margin;
+  const rightInset = Number.isFinite(Number(options.rightInsetPx))
+    ? Math.max(0, Number(options.rightInsetPx))
+    : MAP_SIDE_VISIBLE_INSET_PX;
+  const reservedBottomBandPx = Number.isFinite(Number(options.reservedBottomBandPx))
+    ? Math.max(0, Number(options.reservedBottomBandPx))
+    : 0;
+
+  const minLeft = Math.max(0, Math.round(leftInset));
+  const maxLeft = Math.max(minLeft, Math.round(W - rightInset - ow - margin));
+
+  if (kind === "north") {
+    const left = Math.max(minLeft, Math.min(maxLeft, Math.round(W - rightInset - ow - margin)));
+    const top = Math.max(0, Math.min(Math.round(H - oh), Math.round(margin)));
+    return { left, top, bottom: null };
+  }
+
+  if (kind === "scale") {
+    const left = Math.max(minLeft, Math.min(maxLeft, Math.round(W - rightInset - ow - margin)));
+    const top = Math.max(0, Math.min(Math.round(H - oh), Math.round(H - oh - margin)));
+    return {
+      left,
+      top,
+      bottom: Math.max(0, Math.round(H - (top + oh)))
+    };
+  }
+
+  const discLeft = Math.max(minLeft, Math.min(maxLeft, Math.round(leftInset)));
+  const discTopBase = H - oh - margin - reservedBottomBandPx;
+  const discTop = Math.max(0, Math.min(Math.round(H - oh), Math.round(discTopBase)));
+  return {
+    left: discLeft,
+    top: discTop,
+    bottom: Math.max(0, Math.round(H - (discTop + oh)))
+  };
 }
 
 function updateResponsiveMapControlSizing() {
@@ -2188,7 +2251,7 @@ function placeScaleBarOnMapBottom(control) {
   }
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
-  const userMoved = el.dataset && el.dataset.userMoved === "1";
+  const userMoved = ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT && el.dataset && el.dataset.userMoved === "1";
   if (userMoved) {
     clampDraggableControl(el, mapEl);
     updateDraggableControlNorm(el, mapEl);
@@ -2212,7 +2275,7 @@ function ensureScaleBarPinnedToMapBottom() {
   }
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
-  const userMoved = el.dataset && el.dataset.userMoved === "1";
+  const userMoved = ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT && el.dataset && el.dataset.userMoved === "1";
   if (userMoved) {
     clampDraggableControl(el, mapEl);
     updateDraggableControlNorm(el, mapEl);
@@ -2245,13 +2308,31 @@ map.addControl(northArrowControl);
 
 // Make both controls draggable.
 makeControlDraggable(scaleControl, (el, mapEl) => {
-  const pos = getBottomCenterPosition(el, mapEl, SCALE_BAR_OFFSET_Y_PX, SCALE_BAR_OFFSET_X_PX);
-  return { left: pos.left, top: pos.top };
+  return getUnifiedOverlayPlacement(
+    "scale",
+    mapEl.clientWidth || 0,
+    mapEl.clientHeight || 0,
+    el.offsetWidth || 0,
+    el.offsetHeight || 0,
+    {
+      rightInsetPx: MAP_SIDE_VISIBLE_INSET_PX,
+      leftInsetPx: DISCLAIMER_LEFT_VISIBLE_INSET_PX + 12
+    }
+  );
 });
 placeScaleBarOnMapBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
-  const pos = getTopRightPosition(el, mapEl, 12);
-  return { left: pos.left, top: pos.top + 30 };
+  return getUnifiedOverlayPlacement(
+    "north",
+    mapEl.clientWidth || 0,
+    mapEl.clientHeight || 0,
+    el.offsetWidth || 0,
+    el.offsetHeight || 0,
+    {
+      rightInsetPx: MAP_SIDE_VISIBLE_INSET_PX,
+      leftInsetPx: DISCLAIMER_LEFT_VISIBLE_INSET_PX + 12
+    }
+  );
 });
 
 // Base layer
@@ -2317,7 +2398,6 @@ function positionDisclaimer() {
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
   const left = 12 + DISCLAIMER_LEFT_VISIBLE_INSET_PX;
-  const bottom = 30;
     const preferredFixedWidth = getResponsiveDisclaimerTargetWidthPx(mapRect ? mapRect.width : 0);
     const margin = 12;
     const maxAvailableWidth = mapRect
@@ -2342,17 +2422,33 @@ function positionDisclaimer() {
       minAllowedWidth,
       Math.min(safeMaxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)
     );
-    const userMoved = !!disclaimerUserPos;
+    const userMoved = ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT && !!disclaimerUserPos;
     const widthPx = userMoved ? getStableDisclaimerWidthPx() : desiredWidth;
     disc.dataset.fixedWidthPx = String(widthPx);
 
     disc.classList.add('clamp-5-lines');
-    disc.style.setProperty('top', 'auto');
     disc.style.setProperty('left', left + 'px');
     disc.style.setProperty('right', 'auto');
-    disc.style.setProperty('bottom', bottom + 'px');
+    disc.style.setProperty('top', 'auto');
+    disc.style.setProperty('bottom', 'auto');
     disc.style.setProperty('width', widthPx + 'px');
     disc.style.setProperty('max-width', widthPx + 'px');
+
+    const discHeight = Math.max(1, Math.round(disc.offsetHeight || disc.getBoundingClientRect().height || 1));
+    const defaultDiscPlacement = getUnifiedOverlayPlacement(
+      "disclaimer",
+      mapRect ? mapRect.width : 0,
+      mapRect ? mapRect.height : 0,
+      widthPx,
+      discHeight,
+      {
+        leftInsetPx: left,
+        rightInsetPx: MAP_SIDE_VISIBLE_INSET_PX,
+        reservedBottomBandPx: Math.round(clampNumber((mapRect ? mapRect.height : 0) * 0.02, 8, 18))
+      }
+    );
+    disc.style.setProperty('left', defaultDiscPlacement.left + 'px');
+    disc.style.setProperty('top', defaultDiscPlacement.top + 'px');
 
     // Keep user-dragged position across resize/move while clamping to map bounds.
     if (disclaimerUserPos) {
@@ -2371,7 +2467,9 @@ function positionDisclaimer() {
       disc.style.setProperty('bottom', 'auto');
       disc.style.setProperty('width', widthPx + 'px');
       disc.style.setProperty('max-width', widthPx + 'px');
-      disclaimerUserPos = { left: leftPx, top: topPx };
+      if (ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) {
+        disclaimerUserPos = { left: leftPx, top: topPx };
+      }
     }
     resolveDisclaimerScaleBarOverlap();
   } catch (e) {
@@ -2444,7 +2542,9 @@ function resolveDisclaimerScaleBarOverlap() {
     disc.style.setProperty('width', nextWidth + 'px');
     disc.style.setProperty('max-width', nextWidth + 'px');
     disc.dataset.fixedWidthPx = String(nextWidth);
-    disclaimerUserPos = { left: nextLeft, top: nextTop };
+    if (ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) {
+      disclaimerUserPos = { left: nextLeft, top: nextTop };
+    }
 
     const discRect2 = disc.getBoundingClientRect();
     const overlapsAfter = (
@@ -2457,7 +2557,9 @@ function resolveDisclaimerScaleBarOverlap() {
       const forcedTop = Math.max(6, Math.round((scaleRect.top - mapRect.top) - (discRect2.height + gap)));
       disc.style.setProperty('top', forcedTop + 'px');
       disc.style.setProperty('bottom', 'auto');
-      disclaimerUserPos = { left: nextLeft, top: forcedTop };
+      if (ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) {
+        disclaimerUserPos = { left: nextLeft, top: forcedTop };
+      }
     }
   } catch (e) {
     console.warn('resolveDisclaimerScaleBarOverlap failed', e);
@@ -2502,6 +2604,7 @@ function resetAllMapUiPositions() {
 }
 
 function initDisclaimerDrag() {
+  if (!ENABLE_MAP_OVERLAY_DRAG || MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) return;
   const disc = document.getElementById('disclaimer');
   const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
   if (!disc || !mapEl || disc.dataset.dragInit === '1') return;
@@ -2700,6 +2803,20 @@ function scheduleDisclaimerDragInit(maxAttempts = 10, delayMs = 180) {
   tick();
 }
 
+function reflowMapOverlays() {
+  updateResponsiveMapControlSizing();
+  if (map && typeof map.invalidateSize === "function") {
+    map.invalidateSize({ pan: false });
+  }
+  if (scaleControl && typeof scaleControl._update === "function") {
+    scaleControl._update();
+  }
+  ensureScaleBarPinnedToMapBottom();
+  positionDisclaimer();
+  repositionDraggableControls();
+  resolveDisclaimerScaleBarOverlap();
+}
+
 function runMapUiReflowPasses() {
   // Browser zoom updates element metrics asynchronously; run multiple passes.
   [20, 110, 240].forEach((delayMs) => {
@@ -2707,17 +2824,7 @@ function runMapUiReflowPasses() {
       syncLayoutWithHeaderHeight();
       // Reflow after Leaflet has processed the new container size.
       setTimeout(() => {
-        updateResponsiveMapControlSizing();
-        if (map && typeof map.invalidateSize === "function") {
-          map.invalidateSize({ pan: false });
-        }
-        if (scaleControl && typeof scaleControl._update === "function") {
-          scaleControl._update();
-        }
-        ensureScaleBarPinnedToMapBottom();
-        positionDisclaimer();
-        repositionDraggableControls();
-        resolveDisclaimerScaleBarOverlap();
+        reflowMapOverlays();
       }, 40);
     }, delayMs);
   });
@@ -2752,7 +2859,7 @@ if (window.visualViewport) {
 }
 map.on && map.on('resize', queueMapUiReflow);
 map.on && map.on('zoomend', queueMapUiReflow);
-map.on && map.on('moveend', () => setTimeout(positionDisclaimer, 50));
+map.on && map.on('moveend', queueMapUiReflow);
 
 // --- Layers control (moved into sidebar if present) ---
 const layersControl = L.control.layers(
@@ -4553,28 +4660,12 @@ window.addEventListener('load', resetInitialScrollPositions);
     const margin = getStrictExportMarginPx(W, H);
     const reservedBottomBandPx = Math.round(clampNumber(H * 0.045, 28, 54));
 
-    if (kind === "north") {
-      return {
-        left: Math.max(0, W - ow - margin),
-        top: Math.max(0, margin),
-        bottom: null
-      };
-    }
-
-    if (kind === "scale") {
-      return {
-        left: Math.max(0, W - ow - margin),
-        top: Math.max(0, H - oh - margin),
-        bottom: margin
-      };
-    }
-
-    // disclaimer default
-    return {
-      left: Math.max(0, margin),
-      top: Math.max(0, H - oh - margin - reservedBottomBandPx),
-      bottom: margin + reservedBottomBandPx
-    };
+    return getUnifiedOverlayPlacement(kind, W, H, ow, oh, {
+      marginPx: margin,
+      leftInsetPx: margin,
+      rightInsetPx: 0,
+      reservedBottomBandPx
+    });
     }
 
     function saveCanvasToPdf(canvas, fileName = "map.pdf") {
