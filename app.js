@@ -4571,8 +4571,9 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     function alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
-    // Edge can need both tile-level transform and a small map-pane translation.
-    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
+    // Preserve scale correction, but avoid re-applying translation that Leaflet-image
+    // has effectively already accounted for in Edge exports.
+    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: false });
     const paneAligned = alignMapCanvasForEdge(tileAligned, mapEl);
     logEdgeExportDebug("alignMapCanvasForEdgeDisplayedState", {
       tileAlignedChanged: tileAligned !== mapCanvas,
