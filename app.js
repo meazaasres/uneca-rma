@@ -5548,12 +5548,16 @@ window.addEventListener('load', resetInitialScrollPositions);
           || '').trim();
         const legendBlocks = getExportLegendBlocks();
 
-        const titleH = 36;
+        const isPdfExport = String(formatLabel || '').toLowerCase() === 'pdf';
+        const titleFontPx = 20;
+        const titleH = isPdfExport
+          ? (titleText ? (titleFontPx + 2) : 0)
+          : 36;
         const legendHeaderH = 24;
         const legendRowH = 20;
         const legendBlockGap = 10;
         const legendTopPad = 8;
-        const legendBottomPad = 8;
+        const legendBottomPad = isPdfExport ? 0 : 8;
         const legendH = legendBlocks.length
           ? (legendTopPad + legendBottomPad + legendBlocks.reduce((sum, block, idx) => {
               const blockH = legendHeaderH + (block.rows.length * legendRowH);
@@ -5576,11 +5580,17 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         octx.fillStyle = '#ffffff';
         octx.fillRect(0, 0, outW, outH);
-        octx.fillStyle = '#222222';
-        octx.font = '600 20px Segoe UI, sans-serif';
-        octx.textAlign = 'center';
-        octx.textBaseline = 'middle';
-        octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
+        if (titleH > 0 && titleText) {
+          octx.fillStyle = '#222222';
+          octx.font = `600 ${titleFontPx}px Segoe UI, sans-serif`;
+          octx.textAlign = 'center';
+          octx.textBaseline = isPdfExport ? 'top' : 'middle';
+          octx.fillText(
+            titleText,
+            Math.round(outW / 2),
+            isPdfExport ? 0 : Math.round(titleH / 2)
+          );
+        }
 
         octx.drawImage(layoutMapCanvas, 0, titleH);
 
