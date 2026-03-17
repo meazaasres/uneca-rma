@@ -5090,8 +5090,82 @@ window.addEventListener('load', resetInitialScrollPositions);
     });
     }
 
+    function getMapViewportDebugSnapshot(mapEl) {
+    const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+    return {
+      innerWidth: Number(window && window.innerWidth) || 0,
+      innerHeight: Number(window && window.innerHeight) || 0,
+      clientWidth: mapEl ? (Number(mapEl.clientWidth) || 0) : 0,
+      clientHeight: mapEl ? (Number(mapEl.clientHeight) || 0) : 0,
+      mapSizeX: mapSize ? (Number(mapSize.x) || 0) : 0,
+      mapSizeY: mapSize ? (Number(mapSize.y) || 0) : 0,
+      zoom: (map && typeof map.getZoom === 'function') ? Number(map.getZoom()) : null
+    };
+    }
+
+    function captureMapCanvasForExport(cb) {
+    if (typeof cb !== 'function') return;
+    const mapEl = document.getElementById('map');
+    const before = getMapViewportDebugSnapshot(mapEl);
+    let finished = false;
+    let loadTimeoutId = 0;
+    let onBaseLoad = null;
+
+    const cleanup = () => {
+      if (loadTimeoutId) {
+        clearTimeout(loadTimeoutId);
+        loadTimeoutId = 0;
+      }
+      if (onBaseLoad && baseLayer && typeof baseLayer.off === 'function') {
+        try { baseLayer.off('load', onBaseLoad); } catch (e) {}
+      }
+      onBaseLoad = null;
+    };
+
+    const finalize = () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      const after = getMapViewportDebugSnapshot(mapEl);
+      logEdgeExportDebug('prepareMapForExport', {
+        before,
+        after,
+        baseLayerLoading: !!(baseLayer && typeof baseLayer.isLoading === 'function' && baseLayer.isLoading())
+      });
+      leafletImage(map, cb);
+    };
+
+    const finalizeAfterFrames = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          finalize();
+        });
+      });
+    };
+
+    try { map.invalidateSize({ pan: false }); } catch (e) {}
+    try { ensureBaseLayerAtBack(); } catch (e) {}
+    try {
+      if (baseLayer && typeof baseLayer.redraw === 'function') baseLayer.redraw();
+    } catch (e) {}
+
+    try {
+      if (baseLayer && typeof baseLayer.isLoading === 'function' && baseLayer.isLoading()) {
+        onBaseLoad = () => finalizeAfterFrames();
+        if (typeof baseLayer.once === 'function') baseLayer.once('load', onBaseLoad);
+        loadTimeoutId = window.setTimeout(() => finalizeAfterFrames(), 300);
+        return;
+      }
+    } catch (e) {}
+
+    window.setTimeout(() => {
+      try { map.invalidateSize({ pan: false }); } catch (e) {}
+      finalizeAfterFrames();
+    }, 90);
+    }
+
     function compositeExportElement(cb) {
-    leafletImage(map, (err, mapCanvas) => {
+    captureMapCanvasForExport((err, mapCanvas) => {
       if (err) {
         console.error("Leaflet image export failed:", err);
         return;
@@ -5750,7 +5824,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function buildEdgeDirectExportCanvas(formatLabel, cb, onError) {
-      leafletImage(map, (err, mapCanvas) => {
+      captureMapCanvasForExport((err, mapCanvas) => {
         if (err || !mapCanvas) {
           if (typeof onError === "function") onError(err || new Error("Map canvas unavailable"));
           return;
@@ -6293,7 +6367,7 @@ function exportSVG() {
     return;
   }
 
-  leafletImage(map, (err, mapCanvas) => {
+  captureMapCanvasForExport((err, mapCanvas) => {
     if (err || !mapCanvas) {
       showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
       hideLoading();
