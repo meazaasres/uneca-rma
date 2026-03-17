@@ -2378,7 +2378,9 @@ const baseLayer = L.tileLayer(
     attribution: '© United Nations',
     crossOrigin: 'anonymous',
     maxZoom: 18,
-    tileSize: 256
+    tileSize: 256,
+    noWrap: true,
+    bounds: MAP_NAV_BOUNDS
   }
 ).addTo(map);
 
