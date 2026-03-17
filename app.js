@@ -4460,8 +4460,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     } catch (e) {}
     }
 
-    function alignMapCanvasForEdge(mapCanvas, mapEl) {
-    if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
+    function alignMapCanvasForPaneOffset(mapCanvas, mapEl) {
+    if (!mapCanvas || !mapEl) return mapCanvas;
     const paneEl = mapEl.querySelector('.leaflet-map-pane');
     if (!paneEl) return mapCanvas;
     const mapRect = mapEl.getBoundingClientRect();
@@ -4490,6 +4490,11 @@ window.addEventListener('load', resetInitialScrollPositions);
     // Apply pane offset in the same direction as on-screen map pane translation.
     actx.drawImage(mapCanvas, offsetX, offsetY);
     return aligned;
+    }
+
+    function alignMapCanvasForEdge(mapCanvas, mapEl) {
+    if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
+    return alignMapCanvasForPaneOffset(mapCanvas, mapEl);
     }
 
     function alignMapCanvasForFractionalTileZoom(mapCanvas) {
@@ -4630,6 +4635,15 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (!mapCanvas || !mapEl) return mapCanvas;
     if (isEdgeBrowser()) return alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
     const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: false });
+    const paneAligned = alignMapCanvasForPaneOffset(tileAligned, mapEl);
+    if (paneAligned !== tileAligned) {
+      logEdgeExportDebug("alignMapCanvasForDisplayedState", {
+        mode: "pane-offset",
+        tileAlignedChanged: tileAligned !== mapCanvas,
+        paneAlignedChanged: true
+      });
+      return paneAligned;
+    }
     if (tileAligned !== mapCanvas) {
       logEdgeExportDebug("alignMapCanvasForDisplayedState", {
         mode: "tile-scale-only",
