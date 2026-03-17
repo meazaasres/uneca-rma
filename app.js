@@ -5145,9 +5145,6 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     try { map.invalidateSize({ pan: false }); } catch (e) {}
     try { ensureBaseLayerAtBack(); } catch (e) {}
-    try {
-      if (baseLayer && typeof baseLayer.redraw === 'function') baseLayer.redraw();
-    } catch (e) {}
 
     try {
       if (baseLayer && typeof baseLayer.isLoading === 'function' && baseLayer.isLoading()) {
