@@ -6,6 +6,8 @@ const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
 const SCALE_BAR_OFFSET_X_PX = 43;
 const SCALE_BAR_OFFSET_Y_PX = 7;
+const SCALE_BAR_LIFT_UP_PX = 5;
+const ENABLE_TEMP_SCALE_UPDATE_TRACKER = true;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
@@ -2115,7 +2117,7 @@ function getUnifiedOverlayPlacement(kind, frameW, frameH, overlayW, overlayH, op
 
   if (kind === "scale") {
     const left = Math.max(minLeft, Math.min(maxLeft, Math.round(W - rightInset - ow - margin)));
-    const top = Math.max(0, Math.min(Math.round(H - oh), Math.round(H - oh - margin)));
+    const top = Math.max(0, Math.min(Math.round(H - oh), Math.round(H - oh - margin - SCALE_BAR_LIFT_UP_PX)));
     return {
       left,
       top,
@@ -2227,7 +2229,18 @@ const ExactScaleControl = L.Control.extend({
       const ll1 = this._map.containerPointToLatLng(p1);
       const ll2 = this._map.containerPointToLatLng(p2);
       const meters = this._map.distance(ll1, ll2);
-      this._value.textContent = formatScaleDistance(meters);
+      const label = formatScaleDistance(meters);
+      this._value.textContent = label;
+      if (ENABLE_TEMP_SCALE_UPDATE_TRACKER) {
+        window.__tempScaleUpdateCount = (window.__tempScaleUpdateCount || 0) + 1;
+        console.info("[temp-tracker] scale update executed", {
+          count: window.__tempScaleUpdateCount,
+          widthPx: this.options.widthPx,
+          sizeX: sx,
+          sizeY: sy,
+          label
+        });
+      }
     } catch (e) {
       this._value.textContent = "--";
       logEdgeExportDebug("scaleControl.updateSkipped", {
