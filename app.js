@@ -4623,20 +4623,18 @@ window.addEventListener('load', resetInitialScrollPositions);
     function alignMapCanvasForDisplayedState(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl) return mapCanvas;
     if (isEdgeBrowser()) return alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
-    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
+    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: false });
     if (tileAligned !== mapCanvas) {
       logEdgeExportDebug("alignMapCanvasForDisplayedState", {
-        mode: "tile-transform",
+        mode: "tile-scale-only",
         tileAlignedChanged: true
       });
       return tileAligned;
     }
-    const paneAligned = alignMapCanvasForEdge(mapCanvas, mapEl);
-    const zoomAligned = alignMapCanvasForFractionalTileZoom(paneAligned);
+    const zoomAligned = alignMapCanvasForFractionalTileZoom(mapCanvas);
     logEdgeExportDebug("alignMapCanvasForDisplayedState", {
       mode: "fallback-fractional",
-      paneAlignedChanged: paneAligned !== mapCanvas,
-      zoomAlignedChanged: zoomAligned !== paneAligned
+      zoomAlignedChanged: zoomAligned !== mapCanvas
     });
     return zoomAligned;
     }
