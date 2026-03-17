@@ -8,6 +8,7 @@ const SCALE_BAR_OFFSET_X_PX = 43;
 const SCALE_BAR_OFFSET_Y_PX = 7;
 const SCALE_BAR_LIFT_UP_PX = 5;
 const ENABLE_TEMP_SCALE_UPDATE_TRACKER = true;
+const ENABLE_TEMP_SCALE_PLACEMENT_TRACKER = true;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
@@ -2274,8 +2275,19 @@ function placeScaleBarOnMapBottom(control) {
     control.options.widthPx = getResponsiveScaleBarWidthPx();
   }
   applyDraggableControlInitialPosition(el, mapEl, true);
-  clampDraggableControl(el, mapEl);
+  const clamped = clampDraggableControl(el, mapEl);
   updateDraggableControlNorm(el, mapEl);
+  if (ENABLE_TEMP_SCALE_PLACEMENT_TRACKER) {
+    window.__tempScalePlacementCount = (window.__tempScalePlacementCount || 0) + 1;
+    console.info("[temp-tracker] scale placement executed", {
+      count: window.__tempScalePlacementCount,
+      source: "placeScaleBarOnMapBottom",
+      left: clamped.left,
+      top: clamped.top,
+      normX: el.dataset ? el.dataset.normX : "",
+      normY: el.dataset ? el.dataset.normY : ""
+    });
+  }
 }
 
 function ensureScaleBarPinnedToMapBottom() {
@@ -2298,8 +2310,19 @@ function ensureScaleBarPinnedToMapBottom() {
     scaleControl.options.widthPx = getResponsiveScaleBarWidthPx();
   }
   applyDraggableControlInitialPosition(el, mapEl, true);
-  clampDraggableControl(el, mapEl);
+  const clamped = clampDraggableControl(el, mapEl);
   updateDraggableControlNorm(el, mapEl);
+  if (ENABLE_TEMP_SCALE_PLACEMENT_TRACKER) {
+    window.__tempScalePlacementCount = (window.__tempScalePlacementCount || 0) + 1;
+    console.info("[temp-tracker] scale placement executed", {
+      count: window.__tempScalePlacementCount,
+      source: "ensureScaleBarPinnedToMapBottom",
+      left: clamped.left,
+      top: clamped.top,
+      normX: el.dataset ? el.dataset.normX : "",
+      normY: el.dataset ? el.dataset.normY : ""
+    });
+  }
 }
 
 // North arrow
