@@ -4755,21 +4755,64 @@ window.addEventListener('load', resetInitialScrollPositions);
     return out;
     }
 
-    function getSymmetricWhitespaceSideCropPx(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
-    if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") return 0;
+    function getHorizontalWhitespaceMargins(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
+    if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") {
+      return {
+        leftBlank: 0,
+        rightBlank: 0,
+        maxTrimPx: 0,
+        scanWidth: 0,
+        scanHeight: 0,
+        detected: false
+      };
+    }
     const w = Math.max(1, Math.min(sourceCanvas.width | 0, scanW | 0));
     const h = Math.max(1, Math.min(sourceCanvas.height | 0, scanH | 0));
-    if (w <= 2 || h <= 2) return 0;
+    if (w <= 2 || h <= 2) {
+      return {
+        leftBlank: 0,
+        rightBlank: 0,
+        maxTrimPx: 0,
+        scanWidth: w,
+        scanHeight: h,
+        detected: false
+      };
+    }
     const maxTrimPx = Math.max(0, Math.floor(w * Math.max(0, Math.min(0.4, maxTrimRatio))));
-    if (maxTrimPx <= 0) return 0;
+    if (maxTrimPx <= 0) {
+      return {
+        leftBlank: 0,
+        rightBlank: 0,
+        maxTrimPx,
+        scanWidth: w,
+        scanHeight: h,
+        detected: false
+      };
+    }
 
     const ctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return 0;
+    if (!ctx) {
+      return {
+        leftBlank: 0,
+        rightBlank: 0,
+        maxTrimPx,
+        scanWidth: w,
+        scanHeight: h,
+        detected: false
+      };
+    }
     let imgData;
     try {
       imgData = ctx.getImageData(0, 0, w, h);
     } catch (e) {
-      return 0;
+      return {
+        leftBlank: 0,
+        rightBlank: 0,
+        maxTrimPx,
+        scanWidth: w,
+        scanHeight: h,
+        detected: false
+      };
     }
     const px = imgData.data;
     const nonBlankThreshold = Math.max(2, Math.floor(h * 0.003));
@@ -4782,7 +4825,6 @@ window.addEventListener('load', resetInitialScrollPositions);
         const g = px[idx + 1];
         const b = px[idx + 2];
         const a = px[idx + 3];
-        // Transparent or near-white pixels count as blank export margin.
         const blank = (a <= 8) || (a >= 248 && r >= 248 && g >= 248 && b >= 248);
         if (!blank) {
           nonBlank++;
@@ -4796,36 +4838,176 @@ window.addEventListener('load', resetInitialScrollPositions);
     while (leftBlank < maxTrimPx && isMostlyBlankColumn(leftBlank)) leftBlank++;
     let rightBlank = 0;
     while (rightBlank < maxTrimPx && isMostlyBlankColumn(w - 1 - rightBlank)) rightBlank++;
-    return Math.max(0, Math.min(leftBlank, rightBlank));
+
+    return {
+      leftBlank,
+      rightBlank,
+      maxTrimPx,
+      scanWidth: w,
+      scanHeight: h,
+      detected: leftBlank > 0 || rightBlank > 0
+    };
     }
 
-    function getExportSideCropPxForBrowser(sourceCanvas, baseCropW, cropH) {
-    const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
-    const maxTrimRatio = isEdgeBrowser() ? EDGE_EXPORT_SIDE_CROP_MAX_RATIO : 0.12;
-    const autoDetectedSideCropPx = getSymmetricWhitespaceSideCropPx(sourceCanvas, baseCropW, cropH, maxTrimRatio);
-    if (autoDetectedSideCropPx > 0) {
-      return Math.min(autoDetectedSideCropPx, maxAllowedPerSide);
+    function getSymmetricWhitespaceSideCropPx(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
+    const margins = getHorizontalWhitespaceMargins(sourceCanvas, scanW, scanH, maxTrimRatio);
+    return Math.max(0, Math.min(margins.leftBlank || 0, margins.rightBlank || 0));
     }
+
+    function getExportHorizontalCropPlan(sourceCanvas, baseCropW, cropH, options = {}) {
+    const width = Math.max(1, baseCropW | 0);
+    const height = Math.max(1, cropH | 0);
+    const maxAllowedPerSide = Math.max(0, Math.floor((width - 1) / 2));
+    const maxTrimRatio = Number.isFinite(options.maxTrimRatio)
+      ? Math.max(0, Math.min(0.4, options.maxTrimRatio))
+      : (isEdgeBrowser() ? EDGE_EXPORT_SIDE_CROP_MAX_RATIO : 0.12);
+    const minInkRatio = Number.isFinite(options.minInkWidthRatio)
+      ? Math.max(0.2, Math.min(0.98, options.minInkWidthRatio))
+      : 0.55;
+    const minInkWidth = Math.max(1, Math.floor(width * minInkRatio));
+
+    const margins = getHorizontalWhitespaceMargins(sourceCanvas, width, height, maxTrimRatio);
+    if (margins.detected) {
+      let leftTrim = Math.max(0, Math.min(maxAllowedPerSide, margins.leftBlank | 0));
+      let rightTrim = Math.max(0, Math.min(maxAllowedPerSide, margins.rightBlank | 0));
+      let contentWidth = Math.max(1, width - leftTrim - rightTrim);
+      if (contentWidth < minInkWidth) {
+        const overflow = minInkWidth - contentWidth;
+        const trimBudget = Math.max(0, (leftTrim + rightTrim) - Math.max(0, width - minInkWidth));
+        let release = Math.min(overflow, trimBudget);
+        while (release > 0 && (leftTrim > 0 || rightTrim > 0)) {
+          if (leftTrim >= rightTrim && leftTrim > 0) {
+            leftTrim--;
+          } else if (rightTrim > 0) {
+            rightTrim--;
+          }
+          release--;
+        }
+        contentWidth = Math.max(1, width - leftTrim - rightTrim);
+      }
+      if (contentWidth >= 1 && (leftTrim > 0 || rightTrim > 0)) {
+        return {
+          cropX: leftTrim,
+          cropW: contentWidth,
+          cropY: 0,
+          cropH: height,
+          baseCropW: width,
+          sideCropPx: Math.min(leftTrim, rightTrim),
+          leftTrim,
+          rightTrim,
+          leftBlank: margins.leftBlank,
+          rightBlank: margins.rightBlank,
+          stage: "content-aware"
+        };
+      }
+    }
+
+    const autoDetectedSideCropPx = getSymmetricWhitespaceSideCropPx(sourceCanvas, width, height, maxTrimRatio);
+    if (autoDetectedSideCropPx > 0) {
+      const sideCropPx = Math.min(autoDetectedSideCropPx, maxAllowedPerSide);
+      return {
+        cropX: sideCropPx,
+        cropW: Math.max(1, width - (2 * sideCropPx)),
+        cropY: 0,
+        cropH: height,
+        baseCropW: width,
+        sideCropPx,
+        leftTrim: sideCropPx,
+        rightTrim: sideCropPx,
+        leftBlank: margins.leftBlank || 0,
+        rightBlank: margins.rightBlank || 0,
+        stage: "symmetric-auto"
+      };
+    }
+
+    if (options.disableBrowserFallback) {
+      return {
+        cropX: 0,
+        cropW: width,
+        cropY: 0,
+        cropH: height,
+        baseCropW: width,
+        sideCropPx: 0,
+        leftTrim: 0,
+        rightTrim: 0,
+        leftBlank: margins.leftBlank || 0,
+        rightBlank: margins.rightBlank || 0,
+        stage: "none"
+      };
+    }
+
+    let fallbackSideCropPx = 0;
+    let fallbackStage = "none";
     if (isFirefoxBrowser()) {
-      return Math.max(
+      fallbackSideCropPx = Math.max(
         0,
         Math.min(
-          Math.floor(baseCropW * 0.2),
-          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX,
+          Math.floor(width * 0.2),
+          Math.round(width * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX,
           maxAllowedPerSide
         )
       );
-    }
-    if (isEdgeBrowser()) {
-      return Math.min(EDGE_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
-    }
-    if (isChromeBrowser()) {
-      return Math.min(CHROME_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
-    }
-    return 0;
+      fallbackStage = fallbackSideCropPx > 0 ? "firefox-ratio" : "none";
+    } else if (isEdgeBrowser()) {
+      fallbackSideCropPx = Math.min(EDGE_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
+      fallbackStage = fallbackSideCropPx > 0 ? "edge-fixed" : "none";
+    } else if (isChromeBrowser()) {
+      fallbackSideCropPx = Math.min(CHROME_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
+      fallbackStage = fallbackSideCropPx > 0 ? "chrome-fixed" : "none";
     }
 
-    function reportEdgeExportSpaceReduction(formatLabel, sideCropPx, baseCropW, cropW) {
+    return {
+      cropX: fallbackSideCropPx,
+      cropW: Math.max(1, width - (2 * fallbackSideCropPx)),
+      cropY: 0,
+      cropH: height,
+      baseCropW: width,
+      sideCropPx: fallbackSideCropPx,
+      leftTrim: fallbackSideCropPx,
+      rightTrim: fallbackSideCropPx,
+      leftBlank: margins.leftBlank || 0,
+      rightBlank: margins.rightBlank || 0,
+      stage: fallbackStage
+    };
+    }
+
+    function computeExportMapGeometry(adjustedMapCanvas, mapEl, options = {}) {
+    const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+    const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
+    const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
+    const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
+    const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
+    const expectedW = Math.round(cssW * rawScaleX);
+    const expectedH = Math.round(cssH * rawScaleY);
+    const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
+    const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
+    const cropPlan = getExportHorizontalCropPlan(adjustedMapCanvas, baseCropW, cropH, {
+      disableBrowserFallback: !!options.disableBrowserFallback,
+      maxTrimRatio: options.maxTrimRatio,
+      minInkWidthRatio: options.minInkWidthRatio
+    });
+    return {
+      cssW,
+      cssH,
+      rawScaleX,
+      rawScaleY,
+      expectedW,
+      expectedH,
+      baseCropW,
+      cropH,
+      cropX: cropPlan.cropX,
+      cropY: cropPlan.cropY,
+      cropW: cropPlan.cropW,
+      cropPlan
+    };
+    }
+
+    function getExportSideCropPxForBrowser(sourceCanvas, baseCropW, cropH) {
+    const plan = getExportHorizontalCropPlan(sourceCanvas, baseCropW, cropH);
+    return Math.max(0, plan.sideCropPx || 0);
+    }
+
+    function reportEdgeExportSpaceReduction(formatLabel, sideCropPx, baseCropW, cropW, details = {}) {
     if (!isEdgeBrowser()) return;
     const fmt = String(formatLabel || "export").toUpperCase();
     const reducedBy = Math.max(0, (baseCropW | 0) - (cropW | 0));
@@ -4834,7 +5016,15 @@ window.addEventListener('load', resetInitialScrollPositions);
       sideCropPx,
       baseCropW,
       cropW,
-      reducedBy
+      reducedBy,
+      viewportW: Number(window && window.innerWidth) || null,
+      viewportH: Number(window && window.innerHeight) || null,
+      leftBlank: Number(details.leftBlank) || 0,
+      rightBlank: Number(details.rightBlank) || 0,
+      leftTrim: Number(details.leftTrim) || 0,
+      rightTrim: Number(details.rightTrim) || 0,
+      cropX: Number(details.cropX) || 0,
+      stage: details.stage || "unknown"
     });
     }
 
@@ -4864,25 +5054,32 @@ window.addEventListener('load', resetInitialScrollPositions);
         mode: isEdge ? "edge-tile-plus-pane" : "full"
       });
       showExportCorrectionDebugMessage(debugInfo);
-      const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
-      const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
-      const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
-      const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
-      const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
-      const expectedW = Math.round(cssW * rawScaleX);
-      const expectedH = Math.round(cssH * rawScaleY);
-      const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
-      const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
-      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
-      const cropX = Math.max(0, sideCropPx);
-      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
-      if (isEdge) reportEdgeExportSpaceReduction("png/pdf", sideCropPx, baseCropW, cropW);
+      const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl);
+      const cssW = geometry.cssW;
+      const cssH = geometry.cssH;
+      const rawScaleX = geometry.rawScaleX;
+      const rawScaleY = geometry.rawScaleY;
+      const baseCropW = geometry.baseCropW;
+      const cropH = geometry.cropH;
+      const cropX = geometry.cropX;
+      const cropY = geometry.cropY;
+      const cropW = geometry.cropW;
+      if (isEdge) {
+        reportEdgeExportSpaceReduction("png/pdf", geometry.cropPlan.sideCropPx, baseCropW, cropW, {
+          leftBlank: geometry.cropPlan.leftBlank,
+          rightBlank: geometry.cropPlan.rightBlank,
+          leftTrim: geometry.cropPlan.leftTrim,
+          rightTrim: geometry.cropPlan.rightTrim,
+          cropX,
+          stage: geometry.cropPlan.stage
+        });
+      }
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
       const normalizedMap = normalizeCanvasToStrictExportFrame(cropped);
       const layoutMapCanvas = extractCanvasRect(normalizedMap.canvas, normalizedMap.contentRect);
@@ -5510,19 +5707,24 @@ window.addEventListener('load', resetInitialScrollPositions);
         logEdgeExportDebug("pipeline.mode", { mode: "edge-direct-canvas-tile-plus-pane" });
         showExportCorrectionDebugMessage(debugInfo);
 
-        const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
-        const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
-        const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
-        const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
-        const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
-        const expectedW = Math.round(cssW * rawScaleX);
-        const expectedH = Math.round(cssH * rawScaleY);
-        const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
-        const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
-        const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
-        const cropX = Math.max(0, sideCropPx);
-        const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
-        reportEdgeExportSpaceReduction(formatLabel || "png/pdf", sideCropPx, baseCropW, cropW);
+        const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl);
+        const cssW = geometry.cssW;
+        const cssH = geometry.cssH;
+        const rawScaleX = geometry.rawScaleX;
+        const rawScaleY = geometry.rawScaleY;
+        const baseCropW = geometry.baseCropW;
+        const cropH = geometry.cropH;
+        const cropX = geometry.cropX;
+        const cropY = geometry.cropY;
+        const cropW = geometry.cropW;
+        reportEdgeExportSpaceReduction(formatLabel || "png/pdf", geometry.cropPlan.sideCropPx, baseCropW, cropW, {
+          leftBlank: geometry.cropPlan.leftBlank,
+          rightBlank: geometry.cropPlan.rightBlank,
+          leftTrim: geometry.cropPlan.leftTrim,
+          rightTrim: geometry.cropPlan.rightTrim,
+          cropX,
+          stage: geometry.cropPlan.stage
+        });
 
         const cropped = document.createElement('canvas');
         cropped.width = cropW;
@@ -5532,7 +5734,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           if (typeof onError === "function") onError(new Error("Crop canvas context unavailable"));
           return;
         }
-        cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+        cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
         const normalizedMap = normalizeCanvasToStrictExportFrame(cropped);
         const layoutMapCanvas = extractCanvasRect(normalizedMap.canvas, normalizedMap.contentRect);
@@ -6074,13 +6276,15 @@ function exportSVG() {
       const canvasPixelHeight = adjustedMapCanvas.height;
 
       // container CSS size and scale factor
-      const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
-      const containerWidth  = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl.clientWidth || canvasPixelWidth);
-      const containerHeight = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl.clientHeight || canvasPixelHeight);
+      const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
+        disableBrowserFallback: STRICT_EXPORT_LAYOUT_ENABLED && isChromeBrowser()
+      });
+      const containerWidth  = geometry.cssW || mapEl.clientWidth || canvasPixelWidth;
+      const containerHeight = geometry.cssH || mapEl.clientHeight || canvasPixelHeight;
       // clamp scale to avoid excessively large exported font sizes when
       // device or canvas ratios are large. Keep within [1,2] for stability.
-      const rawScaleX = containerWidth > 0 ? (canvasPixelWidth / containerWidth) : 1;
-      const rawScaleY = containerHeight > 0 ? (canvasPixelHeight / containerHeight) : rawScaleX;
+      const rawScaleX = geometry.rawScaleX;
+      const rawScaleY = geometry.rawScaleY;
       const uiScale = Math.min(Math.max(rawScaleX, 1), 2);
 
       // title/legend heights (CSS -> canvas px)
@@ -6103,25 +6307,32 @@ function exportSVG() {
       const legendHeightPx = Math.max(Math.round(legendHeightCss * uiScale), computedLegendHeightPx);
 
       // expected canvas pixels for visible map area
-      const expectedCanvasW = Math.round(containerWidth * rawScaleX);
-      const expectedCanvasH = Math.round(containerHeight * rawScaleY);
-
-      // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
-      const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
-      const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
-      // Chrome strict SVG: avoid fixed fallback side-crop to prevent lateral clipping/shift.
-      const sideCropPx = (STRICT_EXPORT_LAYOUT_ENABLED && isChromeBrowser())
-        ? 0
-        : getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
-      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
-      const cropX = sideCropPx;
-      const cropY = 0; // top-align crop
-      if (isEdge) reportEdgeExportSpaceReduction("svg", sideCropPx, baseCropW, cropW);
+      const expectedCanvasW = geometry.expectedW;
+      const expectedCanvasH = geometry.expectedH;
+      const baseCropW = geometry.baseCropW;
+      const cropH = geometry.cropH;
+      const cropW = geometry.cropW;
+      const cropX = geometry.cropX;
+      const cropY = geometry.cropY;
+      if (isEdge) {
+        reportEdgeExportSpaceReduction("svg", geometry.cropPlan.sideCropPx, baseCropW, cropW, {
+          leftBlank: geometry.cropPlan.leftBlank,
+          rightBlank: geometry.cropPlan.rightBlank,
+          leftTrim: geometry.cropPlan.leftTrim,
+          rightTrim: geometry.cropPlan.rightTrim,
+          cropX,
+          stage: geometry.cropPlan.stage
+        });
+      }
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
         { canvasPixelWidth, canvasPixelHeight, containerWidth, containerHeight, uiScale,
-          expectedCanvasW, expectedCanvasH, cropW, cropH, cropX, cropY, titleHeightPx, legendHeightPx });
+          expectedCanvasW, expectedCanvasH, cropW, cropH, cropX, cropY,
+          cropStage: geometry.cropPlan.stage,
+          leftTrim: geometry.cropPlan.leftTrim,
+          rightTrim: geometry.cropPlan.rightTrim,
+          titleHeightPx, legendHeightPx });
 
       // draw cropped region to offscreen canvas
       const cropped = document.createElement('canvas');
