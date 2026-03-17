@@ -4620,6 +4620,27 @@ window.addEventListener('load', resetInitialScrollPositions);
     return paneAligned;
     }
 
+    function alignMapCanvasForDisplayedState(mapCanvas, mapEl) {
+    if (!mapCanvas || !mapEl) return mapCanvas;
+    if (isEdgeBrowser()) return alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
+    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
+    if (tileAligned !== mapCanvas) {
+      logEdgeExportDebug("alignMapCanvasForDisplayedState", {
+        mode: "tile-transform",
+        tileAlignedChanged: true
+      });
+      return tileAligned;
+    }
+    const paneAligned = alignMapCanvasForEdge(mapCanvas, mapEl);
+    const zoomAligned = alignMapCanvasForFractionalTileZoom(paneAligned);
+    logEdgeExportDebug("alignMapCanvasForDisplayedState", {
+      mode: "fallback-fractional",
+      paneAlignedChanged: paneAligned !== mapCanvas,
+      zoomAlignedChanged: zoomAligned !== paneAligned
+    });
+    return zoomAligned;
+    }
+
     function getExportCorrectionDebug(mapCanvas, mapEl) {
     const info = {
       edge: isEdgeBrowser(),
@@ -5080,16 +5101,9 @@ window.addEventListener('load', resetInitialScrollPositions);
       const mapEl = document.getElementById('map');
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
-      const adjustedMapCanvas = isEdge
-        // Edge: combine tile transform with map-pane drift correction.
-        ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
-        : alignMapCanvasToDisplayedTileTransform(
-            alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
-            mapEl,
-            { allowTranslation: true }
-          );
+      const adjustedMapCanvas = alignMapCanvasForDisplayedState(mapCanvas, mapEl);
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-tile-plus-pane" : "full"
+        mode: isEdge ? "edge-tile-plus-pane" : "displayed-state"
       });
       showExportCorrectionDebugMessage(debugInfo);
       const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl);
@@ -6298,16 +6312,9 @@ function exportSVG() {
       // authoritative canvas pixels from leafletImage
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
-      const adjustedMapCanvas = isEdge
-        // Edge: combine tile transform with map-pane drift correction.
-        ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
-        : alignMapCanvasToDisplayedTileTransform(
-            alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
-            mapEl,
-            { allowTranslation: true }
-          );
+      const adjustedMapCanvas = alignMapCanvasForDisplayedState(mapCanvas, mapEl);
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-tile-plus-pane" : "full"
+        mode: isEdge ? "edge-tile-plus-pane" : "displayed-state"
       });
       showExportCorrectionDebugMessage(debugInfo);
       const canvasPixelWidth  = adjustedMapCanvas.width;
