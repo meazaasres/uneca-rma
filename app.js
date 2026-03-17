@@ -9,6 +9,7 @@ const SCALE_BAR_OFFSET_Y_PX = 7;
 const SCALE_BAR_LIFT_UP_PX = 5;
 const ENABLE_TEMP_SCALE_UPDATE_TRACKER = true;
 const ENABLE_TEMP_SCALE_PLACEMENT_TRACKER = true;
+const ENABLE_TEMP_EXPORT_DEBUG = true;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
@@ -4449,9 +4450,14 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function logEdgeExportDebug(stage, payload) {
-    // Execution-tracking debug logging removed intentionally.
-    void stage;
-    void payload;
+    if (!ENABLE_TEMP_EXPORT_DEBUG) {
+      void stage;
+      void payload;
+      return;
+    }
+    try {
+      console.info("[temp-export-debug] " + String(stage || "unknown"), payload || {});
+    } catch (e) {}
     }
 
     function alignMapCanvasForEdge(mapCanvas, mapEl) {
@@ -4631,12 +4637,11 @@ window.addEventListener('load', resetInitialScrollPositions);
       });
       return tileAligned;
     }
-    const zoomAligned = alignMapCanvasForFractionalTileZoom(mapCanvas);
     logEdgeExportDebug("alignMapCanvasForDisplayedState", {
-      mode: "fallback-fractional",
-      zoomAlignedChanged: zoomAligned !== mapCanvas
+      mode: "no-extra-correction",
+      zoomAlignedChanged: false
     });
-    return zoomAligned;
+    return mapCanvas;
     }
 
     function getExportCorrectionDebug(mapCanvas, mapEl) {
