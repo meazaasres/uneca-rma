@@ -4460,6 +4460,22 @@ window.addEventListener('load', resetInitialScrollPositions);
     } catch (e) {}
     }
 
+    function showExportCropDebugPopup(formatLabel, geometry) {
+    if (!ENABLE_TEMP_EXPORT_DEBUG) return;
+    if (!geometry || !geometry.cropPlan) return;
+    const plan = geometry.cropPlan;
+    const fmt = String(formatLabel || "export").toUpperCase();
+    const message =
+      `${fmt} crop debug | stage=${String(plan.stage || "none")}` +
+      ` | leftBlank=${Number(plan.leftBlank || 0)}` +
+      ` | rightBlank=${Number(plan.rightBlank || 0)}` +
+      ` | leftTrim=${Number(plan.leftTrim || 0)}` +
+      ` | rightTrim=${Number(plan.rightTrim || 0)}` +
+      ` | cropX=${Number(geometry.cropX || 0)}` +
+      ` | cropW=${Number(geometry.cropW || 0)}/${Number(geometry.baseCropW || 0)}`;
+    showPopup(message, "success");
+    }
+
     function alignMapCanvasForPaneOffset(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl) return mapCanvas;
     const paneEl = mapEl.querySelector('.leaflet-map-pane');
@@ -5210,6 +5226,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           stage: geometry.cropPlan.stage
         });
       }
+      showExportCropDebugPopup("png/pdf", geometry);
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
@@ -5861,6 +5878,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           cropX,
           stage: geometry.cropPlan.stage
         });
+        showExportCropDebugPopup(formatLabel || "png/pdf", geometry);
 
         const cropped = document.createElement('canvas');
         cropped.width = cropW;
@@ -6453,6 +6471,7 @@ function exportSVG() {
           stage: geometry.cropPlan.stage
         });
       }
+      showExportCropDebugPopup("svg", geometry);
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
