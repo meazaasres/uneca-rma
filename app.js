@@ -5017,45 +5017,41 @@ window.addEventListener('load', resetInitialScrollPositions);
     return Math.max(0, Math.min(margins.leftBlank || 0, margins.rightBlank || 0));
     }
 
-    function trimBasemapOnlyHorizontalWhitespaceAsymmetric(sourceCanvas, maxTrimRatio = 0.35, minRetainRatio = 0.45) {
-    if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") {
-      return { canvas: sourceCanvas, cropX: 0, cropW: sourceCanvas ? sourceCanvas.width : 0, margins: null };
-    }
-    const srcW = Math.max(1, sourceCanvas.width | 0);
-    const srcH = Math.max(1, sourceCanvas.height | 0);
-    const margins = getHorizontalWhitespaceMargins(sourceCanvas, srcW, srcH, maxTrimRatio);
-    const leftTrim = Math.max(0, margins.leftBlank | 0);
-    const rightTrim = Math.max(0, margins.rightBlank | 0);
-    if (leftTrim <= 0 && rightTrim <= 0) {
-      return { canvas: sourceCanvas, cropX: 0, cropW: srcW, margins };
+    function getBasemapTileCoverageRectPx(mapEl) {
+    if (!mapEl) return null;
+    const mapRect = mapEl.getBoundingClientRect();
+    const tiles = Array.from(mapEl.querySelectorAll('.leaflet-tile-pane .leaflet-tile'));
+    if (!tiles.length) return null;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    tiles.forEach((tile) => {
+      if (!tile || !(tile instanceof HTMLImageElement)) return;
+      if (!tile.complete || !tile.naturalWidth || !tile.naturalHeight) return;
+      const cs = window.getComputedStyle(tile);
+      if (!cs || cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity || 1) <= 0) return;
+      const r = tile.getBoundingClientRect();
+      if (!r || r.width <= 0 || r.height <= 0) return;
+      minX = Math.min(minX, r.left - mapRect.left);
+      minY = Math.min(minY, r.top - mapRect.top);
+      maxX = Math.max(maxX, r.right - mapRect.left);
+      maxY = Math.max(maxY, r.bottom - mapRect.top);
+    });
+
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+      return null;
     }
 
-    const minRetainWidth = Math.max(1, Math.floor(srcW * Math.max(0.2, Math.min(0.95, minRetainRatio))));
-    let cropX = leftTrim;
-    let cropW = Math.max(1, srcW - leftTrim - rightTrim);
-    if (cropW < minRetainWidth) {
-      const missing = minRetainWidth - cropW;
-      const restoreLeft = Math.min(leftTrim, Math.ceil(missing / 2));
-      const restoreRight = Math.min(rightTrim, Math.floor(missing / 2));
-      cropX = Math.max(0, cropX - restoreLeft);
-      cropW = Math.min(srcW - cropX, cropW + restoreLeft + restoreRight);
-      if (cropW < minRetainWidth) {
-        cropW = Math.min(srcW - cropX, minRetainWidth);
-      }
-    }
-    if (cropX <= 0 && cropW >= srcW) {
-      return { canvas: sourceCanvas, cropX: 0, cropW: srcW, margins };
-    }
-
-    const out = document.createElement('canvas');
-    out.width = cropW;
-    out.height = srcH;
-    const octx = out.getContext('2d');
-    if (!octx) {
-      return { canvas: sourceCanvas, cropX: 0, cropW: srcW, margins };
-    }
-    octx.drawImage(sourceCanvas, cropX, 0, cropW, srcH, 0, 0, cropW, srcH);
-    return { canvas: out, cropX, cropW, margins };
+    const x = Math.max(0, Math.floor(minX));
+    const y = Math.max(0, Math.floor(minY));
+    const right = Math.min(Math.ceil(mapRect.width), Math.ceil(maxX));
+    const bottom = Math.min(Math.ceil(mapRect.height), Math.ceil(maxY));
+    const w = Math.max(1, right - x);
+    const h = Math.max(1, bottom - y);
+    return { x, y, width: w, height: h };
     }
 
     function getExportHorizontalCropPlan(sourceCanvas, baseCropW, cropH, options = {}) {
@@ -5291,16 +5287,17 @@ window.addEventListener('load', resetInitialScrollPositions);
     })
       .then((canvas) => {
         cleanup();
-        const trimmed = trimBasemapOnlyHorizontalWhitespaceAsymmetric(canvas, 0.4, 0.45);
-        logEdgeExportDebug('dom-capture-basemap-trim', {
+        const coverageRect = getBasemapTileCoverageRectPx(mapEl);
+        const coveredCanvas = coverageRect ? extractCanvasRect(canvas, coverageRect) : canvas;
+        logEdgeExportDebug('dom-capture-basemap-coverage', {
           srcW: canvas ? canvas.width : 0,
-          outW: trimmed && trimmed.canvas ? trimmed.canvas.width : 0,
-          cropX: trimmed ? trimmed.cropX : 0,
-          cropW: trimmed ? trimmed.cropW : 0,
-          leftBlank: trimmed && trimmed.margins ? (trimmed.margins.leftBlank || 0) : 0,
-          rightBlank: trimmed && trimmed.margins ? (trimmed.margins.rightBlank || 0) : 0
+          srcH: canvas ? canvas.height : 0,
+          cropX: coverageRect ? coverageRect.x : 0,
+          cropY: coverageRect ? coverageRect.y : 0,
+          cropW: coverageRect ? coverageRect.width : (canvas ? canvas.width : 0),
+          cropH: coverageRect ? coverageRect.height : (canvas ? canvas.height : 0)
         });
-        cb(null, (trimmed && trimmed.canvas) ? trimmed.canvas : canvas);
+        cb(null, coveredCanvas || canvas);
       })
       .catch((err) => {
         cleanup();
