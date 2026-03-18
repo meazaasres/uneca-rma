@@ -4944,36 +4944,32 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     const margins = getHorizontalWhitespaceMargins(sourceCanvas, width, height, maxTrimRatio);
     if (margins.detected) {
-      let leftTrim = Math.max(0, Math.min(maxAllowedPerSide, margins.leftBlank | 0));
-      let rightTrim = Math.max(0, Math.min(maxAllowedPerSide, margins.rightBlank | 0));
-      let contentWidth = Math.max(1, width - leftTrim - rightTrim);
+      // Keep horizontal trimming symmetric to avoid export-side lateral drift.
+      // This is especially important on wide layouts where one side can look
+      // "blank" because of pale basemap styling.
+      let sideTrim = Math.max(
+        0,
+        Math.min(maxAllowedPerSide, Math.min(margins.leftBlank | 0, margins.rightBlank | 0))
+      );
+      let contentWidth = Math.max(1, width - (2 * sideTrim));
       if (contentWidth < minInkWidth) {
-        const overflow = minInkWidth - contentWidth;
-        const trimBudget = Math.max(0, (leftTrim + rightTrim) - Math.max(0, width - minInkWidth));
-        let release = Math.min(overflow, trimBudget);
-        while (release > 0 && (leftTrim > 0 || rightTrim > 0)) {
-          if (leftTrim >= rightTrim && leftTrim > 0) {
-            leftTrim--;
-          } else if (rightTrim > 0) {
-            rightTrim--;
-          }
-          release--;
-        }
-        contentWidth = Math.max(1, width - leftTrim - rightTrim);
+        const maxSideForInk = Math.max(0, Math.floor((width - minInkWidth) / 2));
+        sideTrim = Math.min(sideTrim, maxSideForInk);
+        contentWidth = Math.max(1, width - (2 * sideTrim));
       }
-      if (contentWidth >= 1 && (leftTrim > 0 || rightTrim > 0)) {
+      if (contentWidth >= 1 && sideTrim > 0) {
         return {
-          cropX: leftTrim,
+          cropX: sideTrim,
           cropW: contentWidth,
           cropY: 0,
           cropH: height,
           baseCropW: width,
-          sideCropPx: Math.min(leftTrim, rightTrim),
-          leftTrim,
-          rightTrim,
+          sideCropPx: sideTrim,
+          leftTrim: sideTrim,
+          rightTrim: sideTrim,
           leftBlank: margins.leftBlank,
           rightBlank: margins.rightBlank,
-          stage: "content-aware"
+          stage: "content-aware-symmetric"
         };
       }
     }
