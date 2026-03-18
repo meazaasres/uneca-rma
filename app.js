@@ -4464,6 +4464,16 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (!ENABLE_TEMP_EXPORT_DEBUG) return;
     if (!geometry || !geometry.cropPlan) return;
     const plan = geometry.cropPlan;
+    const mapEl = document.getElementById('map');
+    const paneEl = mapEl ? mapEl.querySelector('.leaflet-map-pane') : null;
+    let paneOffsetX = 0;
+    let paneOffsetY = 0;
+    if (mapEl && paneEl) {
+      const mapRect = mapEl.getBoundingClientRect();
+      const paneRect = paneEl.getBoundingClientRect();
+      paneOffsetX = Math.round(paneRect.left - mapRect.left);
+      paneOffsetY = Math.round(paneRect.top - mapRect.top);
+    }
     const fmt = String(formatLabel || "export").toUpperCase();
     const message =
       `${fmt} crop debug | stage=${String(plan.stage || "none")}` +
@@ -4471,6 +4481,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       ` | rightBlank=${Number(plan.rightBlank || 0)}` +
       ` | leftTrim=${Number(plan.leftTrim || 0)}` +
       ` | rightTrim=${Number(plan.rightTrim || 0)}` +
+      ` | paneX=${paneOffsetX}` +
+      ` | paneY=${paneOffsetY}` +
       ` | cropX=${Number(geometry.cropX || 0)}` +
       ` | cropW=${Number(geometry.cropW || 0)}/${Number(geometry.baseCropW || 0)}`;
     showPopup(message, "success");
@@ -4485,16 +4497,26 @@ window.addEventListener('load', resetInitialScrollPositions);
     const offsetX = Math.round(paneRect.left - mapRect.left);
     const offsetY = Math.round(paneRect.top - mapRect.top);
     const absMax = Math.max(Math.abs(offsetX), Math.abs(offsetY));
+    const maxReasonableOffset = Math.max(
+      EDGE_EXPORT_MAX_PANE_OFFSET_PX,
+      Math.floor(Math.min(mapCanvas.width, mapCanvas.height) * 0.35)
+    );
     logEdgeExportDebug("alignMapCanvasForEdge.offset", {
       offsetX,
       offsetY,
       absMax,
-      maxAllowed: EDGE_EXPORT_MAX_PANE_OFFSET_PX
+      maxAllowed: EDGE_EXPORT_MAX_PANE_OFFSET_PX,
+      maxReasonableOffset
     });
     if (Math.abs(offsetX) <= 1 && Math.abs(offsetY) <= 1) return mapCanvas;
-    if (absMax > EDGE_EXPORT_MAX_PANE_OFFSET_PX) {
-      // Large pane offsets can be normal Leaflet map state, not export drift.
-      logEdgeExportDebug("alignMapCanvasForEdge.skipLargeOffset", { offsetX, offsetY });
+    if (absMax > maxReasonableOffset) {
+      // Ignore implausibly large values that are likely measurement anomalies.
+      logEdgeExportDebug("alignMapCanvasForEdge.skipOutlierOffset", {
+        offsetX,
+        offsetY,
+        absMax,
+        maxReasonableOffset
+      });
       return mapCanvas;
     }
 
