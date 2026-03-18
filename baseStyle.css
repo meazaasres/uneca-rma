@@ -25,14 +25,6 @@
     }
         /* Make map full-height */
     #map {
-      --north-arrow-width: 34px;
-      --north-arrow-height: 44px;
-      --north-arrow-font-size: 12px;
-      --north-arrow-triangle-base: 6px;
-      --north-arrow-triangle-height: 12px;
-      --scale-label-font-size: 8px;
-      --scale-control-padding-y: 3px;
-      --scale-control-padding-x: 6px;
       height: 100%;
       width: 100%;
       position: relative;
@@ -100,7 +92,7 @@
       width: 252px;
       max-width: 40%;
       box-sizing: border-box;
-      background: #ffffff;
+      background: rgba(255,255,255,0.90);
       padding: 5px 7px;
       font-size: 0.72em;
       text-align: justify;
@@ -249,7 +241,7 @@ footer {
   position: absolute;
   bottom: 10px;
   left: 10px;
-  background: #ffffff;
+  background: rgba(255,255,255,0.7);
   padding: 4px;
 }
 .export-legend-clone {
@@ -427,8 +419,8 @@ footer {
 }
 
 .leaflet-control-north-arrow {
-  width: var(--north-arrow-width, 34px);
-  height: var(--north-arrow-height, 44px);
+  width: 34px;
+  height: 44px;
   background: #ffffff;
   border: 1px solid #cfd6e4;
   border-radius: 4px;
@@ -456,7 +448,7 @@ footer {
 
 .leaflet-control-north-arrow .north-arrow-symbol {
   position: relative;
-  font-size: var(--north-arrow-font-size, 12px);
+  font-size: 12px;
   font-weight: 700;
   color: #1e3a8a;
   line-height: 1;
@@ -469,9 +461,9 @@ footer {
   width: 0;
   height: 0;
   margin: 3px auto 0;
-  border-left: var(--north-arrow-triangle-base, 6px) solid transparent;
-  border-right: var(--north-arrow-triangle-base, 6px) solid transparent;
-  border-bottom: var(--north-arrow-triangle-height, 12px) solid #1e3a8a;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 12px solid #1e3a8a;
 }
 
 .leaflet-control-exact-scale {
@@ -479,13 +471,13 @@ footer {
   border: 1px solid #cfd6e4;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  padding: var(--scale-control-padding-y, 3px) var(--scale-control-padding-x, 6px);
+  padding: 3px 6px;
 }
 
 .leaflet-control-exact-scale .exact-scale-label {
   margin-top: 0;
   text-align: center;
-  font-size: var(--scale-label-font-size, 8px);
+  font-size: 8px;
   line-height: 1.2;
   color: #102a43;
   font-weight: 400;

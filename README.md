@@ -8,20 +8,6 @@ Browser-based rapid mapping tool for loading, styling, filtering, and exporting 
 - Attribute-based thematic styling and class table editing
 - Continent/country filtering
 - Export outputs as PNG, PDF, and SVG
-- Fully client-side processing and export (no backend services)
-
-## Responsive Layout and Export Consistency
-- The application is fully client-side: all map rendering and exports are executed in the browser.
-- Overlay elements are arranged with fixed responsive anchors by default:
-	- North arrow: top-right of map frame
-	- Scale bar: bottom-right of map frame
-	- Disclaimer: bottom-left of map frame
-	- Legend: below the map frame in export outputs
-	- Map title: centered at the top of export outputs
-- PNG, PDF, and SVG exports use a strict normalized export frame to keep layout stable across:
-	- Browser type (Edge, Chrome, Firefox, Safari)
-	- Browser zoom changes
-	- Device screen sizes and resolutions
 
 ## Run
 No build step is required.

@@ -6,10 +6,6 @@ const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
 const SCALE_BAR_OFFSET_X_PX = 43;
 const SCALE_BAR_OFFSET_Y_PX = 7;
-const SCALE_BAR_LIFT_UP_PX = 5;
-const ENABLE_TEMP_SCALE_UPDATE_TRACKER = true;
-const ENABLE_TEMP_SCALE_PLACEMENT_TRACKER = true;
-const ENABLE_TEMP_EXPORT_DEBUG = true;
 const MAX_ZIP_ENTRIES = 50;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
@@ -33,15 +29,6 @@ const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
-const DISCLAIMER_MIN_WIDTH_PX = 220;
-const DISCLAIMER_MAX_WIDTH_PX = 420;
-const DISCLAIMER_WIDTH_RATIO = 0.3;
-const MAP_OVERLAY_FIXED_ANCHORS_DEFAULT = true;
-const ENABLE_MAP_OVERLAY_DRAG = false;
-const STRICT_EXPORT_LAYOUT_ENABLED = true;
-const STRICT_PDF_A4_ENABLED = true;
-const STRICT_EXPORT_FRAME_WIDTH_PX = 1000;
-const STRICT_EXPORT_FRAME_HEIGHT_PX = 1414;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
   "cdn.jsdelivr.net",
@@ -155,16 +142,6 @@ function setDynamicStyle(el, styleObj) {
 
 function sanitizeId(str) {
   return String(str).replace(/[^\w\-]/g, "_");
-}
-
-function clampNumber(value, min, max) {
-  const v = Number(value);
-  const lo = Number(min);
-  const hi = Number(max);
-  if (!Number.isFinite(v)) return Number.isFinite(lo) ? lo : 0;
-  if (Number.isFinite(lo) && v < lo) return lo;
-  if (Number.isFinite(hi) && v > hi) return hi;
-  return v;
 }
 
 function sanitizePlainText(value, fallback = "") {
@@ -1983,13 +1960,6 @@ function makeControlDraggable(control, initial) {
   applyDraggableControlInitialPosition(el, mapEl, true);
   draggableMapControls.add(el);
 
-  if (!ENABLE_MAP_OVERLAY_DRAG || MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) {
-    el.classList.remove("is-dragging");
-    el.dataset.userMoved = "";
-    setDynamicStyle(el, { cursor: "default" });
-    return;
-  }
-
   let dragging = false;
   let startX = 0;
   let startY = 0;
@@ -2065,122 +2035,6 @@ function getTopRightPosition(el, mapEl, marginPx = 12) {
   return { left, top };
 }
 
-function getResponsiveScaleBarWidthPx() {
-  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
-  const mapW = mapEl ? (mapEl.clientWidth || 0) : 0;
-  if (!mapW) return 160;
-  return Math.round(clampNumber(mapW * 0.15, 120, 220));
-}
-
-function getResponsiveDisclaimerTargetWidthPx(mapWidthPx) {
-  const w = Number(mapWidthPx);
-  if (!Number.isFinite(w) || w <= 0) return 252;
-  let ratio = DISCLAIMER_WIDTH_RATIO;
-  if (w >= 1700) ratio = 0.24;
-  else if (w >= 1300) ratio = 0.28;
-  else if (w >= 1000) ratio = 0.32;
-  else ratio = 0.38;
-  return Math.round(clampNumber(w * ratio, DISCLAIMER_MIN_WIDTH_PX, 520));
-}
-
-function getResponsiveOverlayMarginPx(frameW, frameH) {
-  const w = Number(frameW) || 0;
-  const h = Number(frameH) || 0;
-  const basis = Math.max(1, Math.min(w, h));
-  return Math.round(clampNumber(basis * 0.018, 10, 18));
-}
-
-function getUnifiedOverlayPlacement(kind, frameW, frameH, overlayW, overlayH, options = {}) {
-  const W = Math.max(1, Number(frameW) || 1);
-  const H = Math.max(1, Number(frameH) || 1);
-  const ow = Math.max(1, Number(overlayW) || 1);
-  const oh = Math.max(1, Number(overlayH) || 1);
-  const margin = Number.isFinite(Number(options.marginPx))
-    ? Math.max(0, Number(options.marginPx))
-    : getResponsiveOverlayMarginPx(W, H);
-  const leftInset = Number.isFinite(Number(options.leftInsetPx))
-    ? Math.max(0, Number(options.leftInsetPx))
-    : margin;
-  const rightInset = Number.isFinite(Number(options.rightInsetPx))
-    ? Math.max(0, Number(options.rightInsetPx))
-    : MAP_SIDE_VISIBLE_INSET_PX;
-  const reservedBottomBandPx = Number.isFinite(Number(options.reservedBottomBandPx))
-    ? Math.max(0, Number(options.reservedBottomBandPx))
-    : 0;
-
-  const minLeft = Math.max(0, Math.round(leftInset));
-  const maxLeft = Math.max(minLeft, Math.round(W - rightInset - ow - margin));
-
-  if (kind === "north") {
-    const left = Math.max(minLeft, Math.min(maxLeft, Math.round(W - rightInset - ow - margin)));
-    const top = Math.max(0, Math.min(Math.round(H - oh), Math.round(margin)));
-    return { left, top, bottom: null };
-  }
-
-  if (kind === "scale") {
-    const left = Math.max(minLeft, Math.min(maxLeft, Math.round(W - rightInset - ow - margin)));
-    const top = Math.max(0, Math.min(Math.round(H - oh), Math.round(H - oh - margin - SCALE_BAR_LIFT_UP_PX)));
-    return {
-      left,
-      top,
-      bottom: Math.max(0, Math.round(H - (top + oh)))
-    };
-  }
-
-  const discLeft = Math.max(minLeft, Math.min(maxLeft, Math.round(leftInset)));
-  const discTopBase = H - oh - margin - reservedBottomBandPx;
-  const discTop = Math.max(0, Math.min(Math.round(H - oh), Math.round(discTopBase)));
-  return {
-    left: discLeft,
-    top: discTop,
-    bottom: Math.max(0, Math.round(H - (discTop + oh)))
-  };
-}
-
-function updateResponsiveMapControlSizing() {
-  const mapEl = map && typeof map.getContainer === "function" ? map.getContainer() : null;
-  if (!mapEl) return;
-  const mapW = Number(mapEl.clientWidth) || 0;
-  if (!mapW) return;
-
-  const northArrowW = Math.round(clampNumber(mapW * 0.024, 30, 44));
-  const northArrowH = Math.round(clampNumber(northArrowW * 1.28, 40, 56));
-  const northArrowFont = Math.round(clampNumber(northArrowW * 0.35, 10, 14));
-  const northArrowTriBase = Math.round(clampNumber(northArrowW * 0.35, 5, 8));
-  const northArrowTriHeight = Math.round(clampNumber(northArrowH * 0.28, 10, 15));
-  const scaleFontSize = Math.round(clampNumber(mapW * 0.0054, 8, 11));
-  const scalePadY = Math.round(clampNumber(scaleFontSize * 0.35, 3, 5));
-  const scalePadX = Math.round(clampNumber(scaleFontSize * 0.75, 6, 9));
-
-  mapEl.style.setProperty("--north-arrow-width", `${northArrowW}px`);
-  mapEl.style.setProperty("--north-arrow-height", `${northArrowH}px`);
-  mapEl.style.setProperty("--north-arrow-font-size", `${northArrowFont}px`);
-  mapEl.style.setProperty("--north-arrow-triangle-base", `${northArrowTriBase}px`);
-  mapEl.style.setProperty("--north-arrow-triangle-height", `${northArrowTriHeight}px`);
-  mapEl.style.setProperty("--scale-label-font-size", `${scaleFontSize}px`);
-  mapEl.style.setProperty("--scale-control-padding-y", `${scalePadY}px`);
-  mapEl.style.setProperty("--scale-control-padding-x", `${scalePadX}px`);
-}
-
-function getScaleBarBoundsInMapPx() {
-  const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
-  const scaleEl = (scaleControl && typeof scaleControl.getContainer === 'function')
-    ? scaleControl.getContainer()
-    : null;
-  if (!mapEl || !scaleEl) return null;
-  const mapRect = mapEl.getBoundingClientRect();
-  const sRect = scaleEl.getBoundingClientRect();
-  if (!mapRect || !sRect || sRect.width <= 0 || sRect.height <= 0) return null;
-  return {
-    left: sRect.left - mapRect.left,
-    right: sRect.right - mapRect.left,
-    top: sRect.top - mapRect.top,
-    bottom: sRect.bottom - mapRect.top,
-    width: sRect.width,
-    height: sRect.height
-  };
-}
-
 function formatScaleDistance(meters) {
   if (!isFinite(meters) || meters <= 0) return "--";
   if (meters >= 1000) {
@@ -2215,7 +2069,6 @@ const ExactScaleControl = L.Control.extend({
   },
   _update: function() {
     if (!this._map || !this._value) return;
-    this.options.widthPx = getResponsiveScaleBarWidthPx();
     const size = this._map.getSize();
     const sx = Number(size && size.x);
     const sy = Number(size && size.y);
@@ -2231,18 +2084,7 @@ const ExactScaleControl = L.Control.extend({
       const ll1 = this._map.containerPointToLatLng(p1);
       const ll2 = this._map.containerPointToLatLng(p2);
       const meters = this._map.distance(ll1, ll2);
-      const label = formatScaleDistance(meters);
-      this._value.textContent = label;
-      if (ENABLE_TEMP_SCALE_UPDATE_TRACKER) {
-        window.__tempScaleUpdateCount = (window.__tempScaleUpdateCount || 0) + 1;
-        console.info("[temp-tracker] scale update executed", {
-          count: window.__tempScaleUpdateCount,
-          widthPx: this.options.widthPx,
-          sizeX: sx,
-          sizeY: sy,
-          label
-        });
-      }
+      this._value.textContent = formatScaleDistance(meters);
     } catch (e) {
       this._value.textContent = "--";
       logEdgeExportDebug("scaleControl.updateSkipped", {
@@ -2266,29 +2108,15 @@ function placeScaleBarOnMapBottom(control) {
   }
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
-  const userMoved = ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT && el.dataset && el.dataset.userMoved === "1";
+  const userMoved = el.dataset && el.dataset.userMoved === "1";
   if (userMoved) {
     clampDraggableControl(el, mapEl);
     updateDraggableControlNorm(el, mapEl);
     return;
   }
-  if (control && control.options) {
-    control.options.widthPx = getResponsiveScaleBarWidthPx();
-  }
   applyDraggableControlInitialPosition(el, mapEl, true);
-  const clamped = clampDraggableControl(el, mapEl);
+  clampDraggableControl(el, mapEl);
   updateDraggableControlNorm(el, mapEl);
-  if (ENABLE_TEMP_SCALE_PLACEMENT_TRACKER) {
-    window.__tempScalePlacementCount = (window.__tempScalePlacementCount || 0) + 1;
-    console.info("[temp-tracker] scale placement executed", {
-      count: window.__tempScalePlacementCount,
-      source: "placeScaleBarOnMapBottom",
-      left: clamped.left,
-      top: clamped.top,
-      normX: el.dataset ? el.dataset.normX : "",
-      normY: el.dataset ? el.dataset.normY : ""
-    });
-  }
 }
 
 function ensureScaleBarPinnedToMapBottom() {
@@ -2301,29 +2129,15 @@ function ensureScaleBarPinnedToMapBottom() {
   }
   el.classList.remove("fixed-page-scale-control");
   el.classList.add("map-bottom-scale-control");
-  const userMoved = ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT && el.dataset && el.dataset.userMoved === "1";
+  const userMoved = el.dataset && el.dataset.userMoved === "1";
   if (userMoved) {
     clampDraggableControl(el, mapEl);
     updateDraggableControlNorm(el, mapEl);
     return;
   }
-  if (scaleControl && scaleControl.options) {
-    scaleControl.options.widthPx = getResponsiveScaleBarWidthPx();
-  }
   applyDraggableControlInitialPosition(el, mapEl, true);
-  const clamped = clampDraggableControl(el, mapEl);
+  clampDraggableControl(el, mapEl);
   updateDraggableControlNorm(el, mapEl);
-  if (ENABLE_TEMP_SCALE_PLACEMENT_TRACKER) {
-    window.__tempScalePlacementCount = (window.__tempScalePlacementCount || 0) + 1;
-    console.info("[temp-tracker] scale placement executed", {
-      count: window.__tempScalePlacementCount,
-      source: "ensureScaleBarPinnedToMapBottom",
-      left: clamped.left,
-      top: clamped.top,
-      normX: el.dataset ? el.dataset.normX : "",
-      normY: el.dataset ? el.dataset.normY : ""
-    });
-  }
 }
 
 // North arrow
@@ -2345,31 +2159,13 @@ map.addControl(northArrowControl);
 
 // Make both controls draggable.
 makeControlDraggable(scaleControl, (el, mapEl) => {
-  return getUnifiedOverlayPlacement(
-    "scale",
-    mapEl.clientWidth || 0,
-    mapEl.clientHeight || 0,
-    el.offsetWidth || 0,
-    el.offsetHeight || 0,
-    {
-      rightInsetPx: MAP_SIDE_VISIBLE_INSET_PX,
-      leftInsetPx: DISCLAIMER_LEFT_VISIBLE_INSET_PX + 12
-    }
-  );
+  const pos = getBottomCenterPosition(el, mapEl, SCALE_BAR_OFFSET_Y_PX, SCALE_BAR_OFFSET_X_PX);
+  return { left: pos.left, top: pos.top };
 });
 placeScaleBarOnMapBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
-  return getUnifiedOverlayPlacement(
-    "north",
-    mapEl.clientWidth || 0,
-    mapEl.clientHeight || 0,
-    el.offsetWidth || 0,
-    el.offsetHeight || 0,
-    {
-      rightInsetPx: MAP_SIDE_VISIBLE_INSET_PX,
-      leftInsetPx: DISCLAIMER_LEFT_VISIBLE_INSET_PX + 12
-    }
-  );
+  const pos = getTopRightPosition(el, mapEl, 12);
+  return { left: pos.left, top: pos.top + 30 };
 });
 
 // Base layer
@@ -2379,9 +2175,7 @@ const baseLayer = L.tileLayer(
     attribution: '© United Nations',
     crossOrigin: 'anonymous',
     maxZoom: 18,
-    tileSize: 256,
-    noWrap: true,
-    bounds: MAP_NAV_BOUNDS
+    tileSize: 256
   }
 ).addTo(map);
 
@@ -2437,57 +2231,32 @@ function positionDisclaimer() {
     const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
 
   const left = 12 + DISCLAIMER_LEFT_VISIBLE_INSET_PX;
-    const preferredFixedWidth = getResponsiveDisclaimerTargetWidthPx(mapRect ? mapRect.width : 0);
+  const bottom = 30;
+    const preferredFixedWidth = 252;
     const margin = 12;
     const maxAvailableWidth = mapRect
-      ? Math.max(140, Math.round(mapRect.width - left - margin))
+      ? Math.max(120, Math.round(mapRect.width - left - margin))
       : preferredFixedWidth;
-    const scaleBounds = getScaleBarBoundsInMapPx();
-    const scaleGuardGap = 10;
-    const widthLimitByScale = scaleBounds
-      ? Math.max(140, Math.floor((scaleBounds.left - scaleGuardGap) - left))
-      : maxAvailableWidth;
-    const safeMaxAvailableWidth = Math.max(140, Math.min(maxAvailableWidth, widthLimitByScale));
-    const minAllowedWidth = Math.min(DISCLAIMER_MIN_WIDTH_PX, maxAvailableWidth);
     const getStableDisclaimerWidthPx = () => {
       const fixedWidth = Number(disc.dataset.fixedWidthPx);
       const renderedWidth = Math.round(disc.getBoundingClientRect().width || disc.offsetWidth || preferredFixedWidth);
-      const fallbackWidth = Math.min(safeMaxAvailableWidth, Math.max(minAllowedWidth, Math.min(DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)));
+      const fallbackWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
       const candidate = Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : (renderedWidth || fallbackWidth);
-      return Math.max(minAllowedWidth, Math.min(safeMaxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, Math.round(candidate)));
+      return Math.max(120, Math.min(maxAvailableWidth, Math.round(candidate)));
     };
 
-    const desiredWidth = Math.max(
-      minAllowedWidth,
-      Math.min(safeMaxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, preferredFixedWidth)
-    );
-    const userMoved = ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT && !!disclaimerUserPos;
+    const desiredWidth = Math.min(maxAvailableWidth, preferredFixedWidth);
+    const userMoved = !!disclaimerUserPos;
     const widthPx = userMoved ? getStableDisclaimerWidthPx() : desiredWidth;
     disc.dataset.fixedWidthPx = String(widthPx);
 
     disc.classList.add('clamp-5-lines');
+    disc.style.setProperty('top', 'auto');
     disc.style.setProperty('left', left + 'px');
     disc.style.setProperty('right', 'auto');
-    disc.style.setProperty('top', 'auto');
-    disc.style.setProperty('bottom', 'auto');
+    disc.style.setProperty('bottom', bottom + 'px');
     disc.style.setProperty('width', widthPx + 'px');
     disc.style.setProperty('max-width', widthPx + 'px');
-
-    const discHeight = Math.max(1, Math.round(disc.offsetHeight || disc.getBoundingClientRect().height || 1));
-    const defaultDiscPlacement = getUnifiedOverlayPlacement(
-      "disclaimer",
-      mapRect ? mapRect.width : 0,
-      mapRect ? mapRect.height : 0,
-      widthPx,
-      discHeight,
-      {
-        leftInsetPx: left,
-        rightInsetPx: MAP_SIDE_VISIBLE_INSET_PX,
-        reservedBottomBandPx: Math.round(clampNumber((mapRect ? mapRect.height : 0) * 0.02, 8, 18))
-      }
-    );
-    disc.style.setProperty('left', defaultDiscPlacement.left + 'px');
-    disc.style.setProperty('top', defaultDiscPlacement.top + 'px');
 
     // Keep user-dragged position across resize/move while clamping to map bounds.
     if (disclaimerUserPos) {
@@ -2506,102 +2275,10 @@ function positionDisclaimer() {
       disc.style.setProperty('bottom', 'auto');
       disc.style.setProperty('width', widthPx + 'px');
       disc.style.setProperty('max-width', widthPx + 'px');
-      if (ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) {
-        disclaimerUserPos = { left: leftPx, top: topPx };
-      }
+      disclaimerUserPos = { left: leftPx, top: topPx };
     }
-    resolveDisclaimerScaleBarOverlap();
   } catch (e) {
     console.warn('positionDisclaimer failed', e);
-  }
-}
-
-function resolveDisclaimerScaleBarOverlap() {
-  try {
-    const disc = document.getElementById('disclaimer');
-    const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
-    const scaleEl = (scaleControl && typeof scaleControl.getContainer === 'function')
-      ? scaleControl.getContainer()
-      : null;
-    if (!disc || !mapEl || !scaleEl) return;
-
-    const mapRect = mapEl.getBoundingClientRect();
-    const discRect = disc.getBoundingClientRect();
-    const scaleRect = scaleEl.getBoundingClientRect();
-    if (!discRect || !scaleRect) return;
-
-    const gap = 10;
-    const d = {
-      left: discRect.left - mapRect.left,
-      right: discRect.right - mapRect.left,
-      top: discRect.top - mapRect.top,
-      bottom: discRect.bottom - mapRect.top,
-      width: discRect.width,
-      height: discRect.height
-    };
-    const s = {
-      left: scaleRect.left - mapRect.left,
-      right: scaleRect.right - mapRect.left,
-      top: scaleRect.top - mapRect.top,
-      bottom: scaleRect.bottom - mapRect.top
-    };
-
-    const overlaps = (
-      d.left < (s.right + gap) &&
-      d.right > (s.left - gap) &&
-      d.top < (s.bottom + gap) &&
-      d.bottom > (s.top - gap)
-    );
-    if (!overlaps) return;
-
-    const mapW = mapEl.clientWidth || 0;
-    const mapH = mapEl.clientHeight || 0;
-    const minLeft = Math.max(6, DISCLAIMER_LEFT_VISIBLE_INSET_PX + 6);
-    const maxTop = Math.max(6, mapH - d.height - 6);
-    let nextLeft = Math.max(minLeft, Math.round(d.left));
-    let nextTop = Math.max(6, Math.min(maxTop, Math.round(s.top - d.height - gap)));
-    let nextWidth = Math.round(d.width);
-
-    const stillOverlapsVertically = (nextTop + d.height) > (s.top - gap);
-    if (stillOverlapsVertically) {
-      const maxAllowedWidth = Math.floor((s.left - gap) - nextLeft);
-      if (maxAllowedWidth >= 140) {
-        nextWidth = Math.max(140, Math.min(nextWidth, maxAllowedWidth));
-      } else {
-        nextLeft = Math.max(minLeft, Math.round(s.left - gap - d.width));
-      }
-    }
-
-    const maxLeft = Math.max(minLeft, mapW - MAP_SIDE_VISIBLE_INSET_PX - nextWidth - 6);
-    nextLeft = Math.max(minLeft, Math.min(maxLeft, nextLeft));
-
-    disc.style.setProperty('left', nextLeft + 'px');
-    disc.style.setProperty('top', nextTop + 'px');
-    disc.style.setProperty('bottom', 'auto');
-    disc.style.setProperty('width', nextWidth + 'px');
-    disc.style.setProperty('max-width', nextWidth + 'px');
-    disc.dataset.fixedWidthPx = String(nextWidth);
-    if (ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) {
-      disclaimerUserPos = { left: nextLeft, top: nextTop };
-    }
-
-    const discRect2 = disc.getBoundingClientRect();
-    const overlapsAfter = (
-      discRect2.left < (scaleRect.right + gap) &&
-      discRect2.right > (scaleRect.left - gap) &&
-      discRect2.top < (scaleRect.bottom + gap) &&
-      discRect2.bottom > (scaleRect.top - gap)
-    );
-    if (overlapsAfter) {
-      const forcedTop = Math.max(6, Math.round((scaleRect.top - mapRect.top) - (discRect2.height + gap)));
-      disc.style.setProperty('top', forcedTop + 'px');
-      disc.style.setProperty('bottom', 'auto');
-      if (ENABLE_MAP_OVERLAY_DRAG && !MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) {
-        disclaimerUserPos = { left: nextLeft, top: forcedTop };
-      }
-    }
-  } catch (e) {
-    console.warn('resolveDisclaimerScaleBarOverlap failed', e);
   }
 }
 
@@ -2643,7 +2320,6 @@ function resetAllMapUiPositions() {
 }
 
 function initDisclaimerDrag() {
-  if (!ENABLE_MAP_OVERLAY_DRAG || MAP_OVERLAY_FIXED_ANCHORS_DEFAULT) return;
   const disc = document.getElementById('disclaimer');
   const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
   if (!disc || !mapEl || disc.dataset.dragInit === '1') return;
@@ -2653,16 +2329,12 @@ function initDisclaimerDrag() {
     const leftInset = 12 + DISCLAIMER_LEFT_VISIBLE_INSET_PX;
     const margin = 12;
     const maxAvailableWidth = mapRect
-      ? Math.max(140, Math.round(mapRect.width - leftInset - margin))
+      ? Math.max(120, Math.round(mapRect.width - leftInset - margin))
       : 252;
-    const minAllowedWidth = Math.min(DISCLAIMER_MIN_WIDTH_PX, maxAvailableWidth);
     const fixedWidth = Number(disc.dataset.fixedWidthPx);
     const renderedWidth = Math.round(disc.getBoundingClientRect().width || disc.offsetWidth || 252);
     const candidate = Number.isFinite(fixedWidth) && fixedWidth > 0 ? fixedWidth : renderedWidth;
-    return Math.max(
-      minAllowedWidth,
-      Math.min(maxAvailableWidth, DISCLAIMER_MAX_WIDTH_PX, Math.round(candidate || 252))
-    );
+    return Math.max(120, Math.min(maxAvailableWidth, Math.round(candidate || 252)));
   };
 
   disc.dataset.dragInit = '1';
@@ -2696,7 +2368,6 @@ function initDisclaimerDrag() {
     disc.style.setProperty('max-width', fixedWidthPx + 'px');
     disc.dataset.fixedWidthPx = String(fixedWidthPx);
     disclaimerUserPos = { left: clampedLeft, top: clampedTop };
-    resolveDisclaimerScaleBarOverlap();
   };
 
   const beginDrag = (clientX, clientY) => {
@@ -2842,20 +2513,6 @@ function scheduleDisclaimerDragInit(maxAttempts = 10, delayMs = 180) {
   tick();
 }
 
-function reflowMapOverlays() {
-  updateResponsiveMapControlSizing();
-  if (map && typeof map.invalidateSize === "function") {
-    map.invalidateSize({ pan: false });
-  }
-  if (scaleControl && typeof scaleControl._update === "function") {
-    scaleControl._update();
-  }
-  ensureScaleBarPinnedToMapBottom();
-  positionDisclaimer();
-  repositionDraggableControls();
-  resolveDisclaimerScaleBarOverlap();
-}
-
 function runMapUiReflowPasses() {
   // Browser zoom updates element metrics asynchronously; run multiple passes.
   [20, 110, 240].forEach((delayMs) => {
@@ -2863,7 +2520,15 @@ function runMapUiReflowPasses() {
       syncLayoutWithHeaderHeight();
       // Reflow after Leaflet has processed the new container size.
       setTimeout(() => {
-        reflowMapOverlays();
+        if (map && typeof map.invalidateSize === "function") {
+          map.invalidateSize({ pan: false });
+        }
+        if (scaleControl && typeof scaleControl._update === "function") {
+          scaleControl._update();
+        }
+        ensureScaleBarPinnedToMapBottom();
+        positionDisclaimer();
+        repositionDraggableControls();
       }, 40);
     }, delayMs);
   });
@@ -2898,7 +2563,7 @@ if (window.visualViewport) {
 }
 map.on && map.on('resize', queueMapUiReflow);
 map.on && map.on('zoomend', queueMapUiReflow);
-map.on && map.on('moveend', queueMapUiReflow);
+map.on && map.on('moveend', () => setTimeout(positionDisclaimer, 50));
 
 // --- Layers control (moved into sidebar if present) ---
 const layersControl = L.control.layers(
@@ -4450,78 +4115,30 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function logEdgeExportDebug(stage, payload) {
-    if (!ENABLE_TEMP_EXPORT_DEBUG) {
-      void stage;
-      void payload;
-      return;
-    }
-    try {
-      console.info("[temp-export-debug] " + String(stage || "unknown"), payload || {});
-    } catch (e) {}
+    // Execution-tracking debug logging removed intentionally.
+    void stage;
+    void payload;
     }
 
-    function showExportCropDebugPopup(formatLabel, geometry) {
-    if (!ENABLE_TEMP_EXPORT_DEBUG) return;
-    if (!geometry || !geometry.cropPlan) return;
-    const plan = geometry.cropPlan;
-    const mapEl = document.getElementById('map');
-    const paneEl = mapEl ? mapEl.querySelector('.leaflet-map-pane') : null;
-    let paneOffsetX = 0;
-    let paneOffsetY = 0;
-    if (mapEl && paneEl) {
-      const mapRect = mapEl.getBoundingClientRect();
-      const paneRect = paneEl.getBoundingClientRect();
-      paneOffsetX = Math.round(paneRect.left - mapRect.left);
-      paneOffsetY = Math.round(paneRect.top - mapRect.top);
-    }
-    const fmt = String(formatLabel || "export").toUpperCase();
-    const message =
-      `${fmt} crop debug | stage=${String(plan.stage || "none")}` +
-      ` | leftBlank=${Number(plan.leftBlank || 0)}` +
-      ` | rightBlank=${Number(plan.rightBlank || 0)}` +
-      ` | leftTrim=${Number(plan.leftTrim || 0)}` +
-      ` | rightTrim=${Number(plan.rightTrim || 0)}` +
-      ` | paneX=${paneOffsetX}` +
-      ` | paneY=${paneOffsetY}` +
-      ` | cropX=${Number(geometry.cropX || 0)}` +
-      ` | cropW=${Number(geometry.cropW || 0)}/${Number(geometry.baseCropW || 0)}`;
-    showPopup(message, "success");
-    }
-
-    function alignMapCanvasForPaneOffset(mapCanvas, mapEl) {
-    if (!mapCanvas || !mapEl) return mapCanvas;
+    function alignMapCanvasForEdge(mapCanvas, mapEl) {
+    if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
     const paneEl = mapEl.querySelector('.leaflet-map-pane');
     if (!paneEl) return mapCanvas;
     const mapRect = mapEl.getBoundingClientRect();
     const paneRect = paneEl.getBoundingClientRect();
     const offsetX = Math.round(paneRect.left - mapRect.left);
     const offsetY = Math.round(paneRect.top - mapRect.top);
-    const needsHorizontalCorrection = Math.abs(offsetX) > 1;
     const absMax = Math.max(Math.abs(offsetX), Math.abs(offsetY));
-    const maxReasonableOffset = Math.max(
-      EDGE_EXPORT_MAX_PANE_OFFSET_PX,
-      Math.floor(Math.min(mapCanvas.width, mapCanvas.height) * 0.35)
-    );
     logEdgeExportDebug("alignMapCanvasForEdge.offset", {
       offsetX,
       offsetY,
       absMax,
-      maxAllowed: EDGE_EXPORT_MAX_PANE_OFFSET_PX,
-      maxReasonableOffset
+      maxAllowed: EDGE_EXPORT_MAX_PANE_OFFSET_PX
     });
-    if (!needsHorizontalCorrection) {
-      // Ignore vertical-only pane deltas (often from intentional map pan nudges).
-      // Applying vertical correction here can shift basemap relative to overlays.
-      return mapCanvas;
-    }
-    if (absMax > maxReasonableOffset) {
-      // Ignore implausibly large values that are likely measurement anomalies.
-      logEdgeExportDebug("alignMapCanvasForEdge.skipOutlierOffset", {
-        offsetX,
-        offsetY,
-        absMax,
-        maxReasonableOffset
-      });
+    if (Math.abs(offsetX) <= 1 && Math.abs(offsetY) <= 1) return mapCanvas;
+    if (absMax > EDGE_EXPORT_MAX_PANE_OFFSET_PX) {
+      // Large pane offsets can be normal Leaflet map state, not export drift.
+      logEdgeExportDebug("alignMapCanvasForEdge.skipLargeOffset", { offsetX, offsetY });
       return mapCanvas;
     }
 
@@ -4530,14 +4147,9 @@ window.addEventListener('load', resetInitialScrollPositions);
     aligned.height = mapCanvas.height;
     const actx = aligned.getContext('2d');
     if (!actx) return mapCanvas;
-    // Correct only horizontal pane offset; keep vertical position as rendered.
-    actx.drawImage(mapCanvas, offsetX, 0);
+    // Apply pane offset in the same direction as on-screen map pane translation.
+    actx.drawImage(mapCanvas, offsetX, offsetY);
     return aligned;
-    }
-
-    function alignMapCanvasForEdge(mapCanvas, mapEl) {
-    if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
-    return alignMapCanvasForPaneOffset(mapCanvas, mapEl);
     }
 
     function alignMapCanvasForFractionalTileZoom(mapCanvas) {
@@ -4655,60 +4267,22 @@ window.addEventListener('load', resetInitialScrollPositions);
     const octx = out.getContext('2d');
     if (!octx) return mapCanvas;
     octx.clearRect(0, 0, out.width, out.height);
-    if (!allowTranslation) {
-      const srcW = out.width;
-      const srcH = out.height;
-      const dstW = srcW * sx;
-      const dstH = srcH * sy;
-      const dstX = (srcW - dstW) / 2;
-      const dstY = (srcH - dstH) / 2;
-      octx.drawImage(mapCanvas, 0, 0, srcW, srcH, dstX, dstY, dstW, dstH);
-    } else {
-      octx.setTransform(sx, 0, 0, sy, tx, ty);
-      octx.drawImage(mapCanvas, 0, 0);
-      octx.setTransform(1, 0, 0, 1, 0, 0);
-    }
+    octx.setTransform(sx, 0, 0, sy, tx, ty);
+    octx.drawImage(mapCanvas, 0, 0);
+    octx.setTransform(1, 0, 0, 1, 0, 0);
     return out;
     }
 
     function alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
-    // Preserve scale correction, but avoid re-applying translation that Leaflet-image
-    // has effectively already accounted for in Edge exports.
-    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: false });
+    // Edge can need both tile-level transform and a small map-pane translation.
+    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
     const paneAligned = alignMapCanvasForEdge(tileAligned, mapEl);
     logEdgeExportDebug("alignMapCanvasForEdgeDisplayedState", {
       tileAlignedChanged: tileAligned !== mapCanvas,
       paneAlignedChanged: paneAligned !== tileAligned
     });
     return paneAligned;
-    }
-
-    function alignMapCanvasForDisplayedState(mapCanvas, mapEl) {
-    if (!mapCanvas || !mapEl) return mapCanvas;
-    if (isEdgeBrowser()) return alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
-    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: false });
-    const paneAligned = alignMapCanvasForPaneOffset(tileAligned, mapEl);
-    if (paneAligned !== tileAligned) {
-      logEdgeExportDebug("alignMapCanvasForDisplayedState", {
-        mode: "pane-offset",
-        tileAlignedChanged: tileAligned !== mapCanvas,
-        paneAlignedChanged: true
-      });
-      return paneAligned;
-    }
-    if (tileAligned !== mapCanvas) {
-      logEdgeExportDebug("alignMapCanvasForDisplayedState", {
-        mode: "tile-scale-only",
-        tileAlignedChanged: true
-      });
-      return tileAligned;
-    }
-    logEdgeExportDebug("alignMapCanvasForDisplayedState", {
-      mode: "no-extra-correction",
-      zoomAlignedChanged: false
-    });
-    return mapCanvas;
     }
 
     function getExportCorrectionDebug(mapCanvas, mapEl) {
@@ -4746,40 +4320,6 @@ window.addEventListener('load', resetInitialScrollPositions);
     return info;
     }
 
-    function isBasemapOnlyExportState() {
-    if (!map || typeof map.hasLayer !== 'function') return true;
-    try {
-      if (geojsonLayer && map.hasLayer(geojsonLayer)) {
-        const layers = (typeof geojsonLayer.getLayers === 'function') ? geojsonLayer.getLayers() : [];
-        if (Array.isArray(layers) && layers.length > 0) return false;
-      }
-      if (layerGroup && map.hasLayer(layerGroup)) {
-        const layers = (typeof layerGroup.getLayers === 'function') ? layerGroup.getLayers() : [];
-        if (Array.isArray(layers) && layers.length > 0) return false;
-      }
-      if (drawnItems && map.hasLayer(drawnItems)) {
-        const layers = (typeof drawnItems.getLayers === 'function') ? drawnItems.getLayers() : [];
-        if (Array.isArray(layers) && layers.length > 0) return false;
-      }
-
-      let hasNonTileLayer = false;
-      if (typeof map.eachLayer === 'function') {
-        map.eachLayer((l) => {
-          if (hasNonTileLayer || !l || l === baseLayer) return;
-          if (l instanceof L.TileLayer) return;
-          if (typeof L.FeatureGroup !== 'undefined' && l instanceof L.FeatureGroup && typeof l.getLayers === 'function') {
-            const inner = l.getLayers();
-            if (!Array.isArray(inner) || inner.length === 0) return;
-          }
-          hasNonTileLayer = true;
-        });
-      }
-      return !hasNonTileLayer;
-    } catch (e) {
-      return false;
-    }
-    }
-
     function showExportCorrectionDebugMessage(debugInfo) {
     if (!debugInfo) return;
     try {
@@ -4793,9 +4333,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
     const isFirefox = isFirefoxBrowser();
     return {
-      scale: STRICT_EXPORT_LAYOUT_ENABLED
-        ? 1
-        : (isFirefox ? Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)) : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1))),
+      scale: isFirefox ? Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)) : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
       useCORS: true,
       foreignObjectRendering: false,
       logging: false,
@@ -4809,173 +4347,21 @@ window.addEventListener('load', resetInitialScrollPositions);
     };
     }
 
-    function getStrictExportMarginPx(frameW, frameH) {
-    const w = Number(frameW) || 0;
-    const h = Number(frameH) || 0;
-    const basis = Math.max(1, Math.min(w, h));
-    return Math.round(clampNumber(basis * 0.025, 10, 26));
-    }
-
-    function getStrictOverlayPlacement(kind, frameW, frameH, overlayW, overlayH) {
-    const W = Math.max(1, Number(frameW) || 1);
-    const H = Math.max(1, Number(frameH) || 1);
-    const ow = Math.max(1, Number(overlayW) || 1);
-    const oh = Math.max(1, Number(overlayH) || 1);
-    const margin = getStrictExportMarginPx(W, H);
-    const reservedBottomBandPx = Math.round(clampNumber(H * 0.045, 28, 54));
-
-    return getUnifiedOverlayPlacement(kind, W, H, ow, oh, {
-      marginPx: margin,
-      leftInsetPx: margin,
-      rightInsetPx: 0,
-      reservedBottomBandPx
-    });
-    }
-
-    function saveCanvasToPdf(canvas, fileName = "map.pdf") {
-    const c = canvas;
-    if (!c || !c.width || !c.height) return;
-    const imgData = c.toDataURL("image/png");
-    if (!STRICT_PDF_A4_ENABLED) {
-      const orientation = c.width >= c.height ? "landscape" : "portrait";
-      const pdf = new jspdf.jsPDF({
-        orientation,
-        unit: "px",
-        format: [c.width, c.height]
-      });
-      pdf.addImage(imgData, "PNG", 0, 0, c.width, c.height);
-      pdf.save(fileName);
-      return;
-    }
-
-    const orientation = "portrait";
-    const pdf = new jspdf.jsPDF({
-      orientation,
-      unit: "pt",
-      format: "a4"
-    });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const scale = Math.min(pageW / c.width, pageH / c.height);
-    const renderW = Math.max(1, Math.round(c.width * scale));
-    const renderH = Math.max(1, Math.round(c.height * scale));
-    const x = Math.round((pageW - renderW) / 2);
-    const y = Math.round((pageH - renderH) / 2);
-    pdf.addImage(imgData, "PNG", x, y, renderW, renderH);
-    pdf.save(fileName);
-    }
-
-    function normalizeCanvasToStrictExportFrame(sourceCanvas) {
-    const src = sourceCanvas;
-    const srcW = Math.max(1, src && src.width ? src.width : 1);
-    const srcH = Math.max(1, src && src.height ? src.height : 1);
-    if (!src || !STRICT_EXPORT_LAYOUT_ENABLED) {
-      return {
-        canvas: src,
-        contentRect: { x: 0, y: 0, width: srcW, height: srcH }
-      };
-    }
-    const targetW = Math.max(1, STRICT_EXPORT_FRAME_WIDTH_PX | 0);
-    const targetH = Math.max(1, STRICT_EXPORT_FRAME_HEIGHT_PX | 0);
-    const out = document.createElement('canvas');
-    out.width = targetW;
-    out.height = targetH;
-    const ctx = out.getContext('2d');
-    if (!ctx) {
-      return {
-        canvas: src,
-        contentRect: { x: 0, y: 0, width: srcW, height: srcH }
-      };
-    }
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, out.width, out.height);
-    const scale = Math.min(targetW / srcW, targetH / srcH);
-    const drawW = Math.max(1, Math.round(srcW * scale));
-    const drawH = Math.max(1, Math.round(srcH * scale));
-    const dx = Math.round((targetW - drawW) / 2);
-    const dy = Math.round((targetH - drawH) / 2);
-    ctx.drawImage(src, 0, 0, srcW, srcH, dx, dy, drawW, drawH);
-    return {
-      canvas: out,
-      contentRect: { x: dx, y: dy, width: drawW, height: drawH }
-    };
-    }
-
-    function extractCanvasRect(sourceCanvas, rect) {
-    const src = sourceCanvas;
-    if (!src || !rect) return src;
-    const sx = Math.max(0, Math.round(rect.x || 0));
-    const sy = Math.max(0, Math.round(rect.y || 0));
-    const sw = Math.max(1, Math.min(src.width - sx, Math.round(rect.width || src.width)));
-    const sh = Math.max(1, Math.min(src.height - sy, Math.round(rect.height || src.height)));
-    if (sx === 0 && sy === 0 && sw === src.width && sh === src.height) return src;
-    const out = document.createElement('canvas');
-    out.width = sw;
-    out.height = sh;
-    const ctx = out.getContext('2d');
-    if (!ctx) return src;
-    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
-    return out;
-    }
-
-    function getHorizontalWhitespaceMargins(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
-    if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") {
-      return {
-        leftBlank: 0,
-        rightBlank: 0,
-        maxTrimPx: 0,
-        scanWidth: 0,
-        scanHeight: 0,
-        detected: false
-      };
-    }
+    function getSymmetricWhitespaceSideCropPx(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
+    if (!sourceCanvas || typeof sourceCanvas.getContext !== "function") return 0;
     const w = Math.max(1, Math.min(sourceCanvas.width | 0, scanW | 0));
     const h = Math.max(1, Math.min(sourceCanvas.height | 0, scanH | 0));
-    if (w <= 2 || h <= 2) {
-      return {
-        leftBlank: 0,
-        rightBlank: 0,
-        maxTrimPx: 0,
-        scanWidth: w,
-        scanHeight: h,
-        detected: false
-      };
-    }
+    if (w <= 2 || h <= 2) return 0;
     const maxTrimPx = Math.max(0, Math.floor(w * Math.max(0, Math.min(0.4, maxTrimRatio))));
-    if (maxTrimPx <= 0) {
-      return {
-        leftBlank: 0,
-        rightBlank: 0,
-        maxTrimPx,
-        scanWidth: w,
-        scanHeight: h,
-        detected: false
-      };
-    }
+    if (maxTrimPx <= 0) return 0;
 
     const ctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) {
-      return {
-        leftBlank: 0,
-        rightBlank: 0,
-        maxTrimPx,
-        scanWidth: w,
-        scanHeight: h,
-        detected: false
-      };
-    }
+    if (!ctx) return 0;
     let imgData;
     try {
       imgData = ctx.getImageData(0, 0, w, h);
     } catch (e) {
-      return {
-        leftBlank: 0,
-        rightBlank: 0,
-        maxTrimPx,
-        scanWidth: w,
-        scanHeight: h,
-        detected: false
-      };
+      return 0;
     }
     const px = imgData.data;
     const nonBlankThreshold = Math.max(2, Math.floor(h * 0.003));
@@ -4988,6 +4374,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const g = px[idx + 1];
         const b = px[idx + 2];
         const a = px[idx + 3];
+        // Transparent or near-white pixels count as blank export margin.
         const blank = (a <= 8) || (a >= 248 && r >= 248 && g >= 248 && b >= 248);
         if (!blank) {
           nonBlank++;
@@ -5001,259 +4388,31 @@ window.addEventListener('load', resetInitialScrollPositions);
     while (leftBlank < maxTrimPx && isMostlyBlankColumn(leftBlank)) leftBlank++;
     let rightBlank = 0;
     while (rightBlank < maxTrimPx && isMostlyBlankColumn(w - 1 - rightBlank)) rightBlank++;
-
-    return {
-      leftBlank,
-      rightBlank,
-      maxTrimPx,
-      scanWidth: w,
-      scanHeight: h,
-      detected: leftBlank > 0 || rightBlank > 0
-    };
-    }
-
-    function getSymmetricWhitespaceSideCropPx(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
-    const margins = getHorizontalWhitespaceMargins(sourceCanvas, scanW, scanH, maxTrimRatio);
-    return Math.max(0, Math.min(margins.leftBlank || 0, margins.rightBlank || 0));
-    }
-
-    function getBasemapTileCoverageRectPx(mapEl) {
-    if (!mapEl) return null;
-    const mapRect = mapEl.getBoundingClientRect();
-    const tiles = Array.from(mapEl.querySelectorAll('.leaflet-tile-pane .leaflet-tile'));
-    if (!tiles.length) return null;
-
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-
-    tiles.forEach((tile) => {
-      if (!tile || !(tile instanceof HTMLImageElement)) return;
-      if (!tile.complete || !tile.naturalWidth || !tile.naturalHeight) return;
-      const cs = window.getComputedStyle(tile);
-      if (!cs || cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity || 1) <= 0) return;
-      const r = tile.getBoundingClientRect();
-      if (!r || r.width <= 0 || r.height <= 0) return;
-      minX = Math.min(minX, r.left - mapRect.left);
-      minY = Math.min(minY, r.top - mapRect.top);
-      maxX = Math.max(maxX, r.right - mapRect.left);
-      maxY = Math.max(maxY, r.bottom - mapRect.top);
-    });
-
-    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
-      return null;
-    }
-
-    const x = Math.max(0, Math.floor(minX));
-    const y = Math.max(0, Math.floor(minY));
-    const right = Math.min(Math.ceil(mapRect.width), Math.ceil(maxX));
-    const bottom = Math.min(Math.ceil(mapRect.height), Math.ceil(maxY));
-    const w = Math.max(1, right - x);
-    const h = Math.max(1, bottom - y);
-    return { x, y, width: w, height: h };
-    }
-
-    function getExportHorizontalCropPlan(sourceCanvas, baseCropW, cropH, options = {}) {
-    const width = Math.max(1, baseCropW | 0);
-    const height = Math.max(1, cropH | 0);
-    if (options && options.forceNoCrop) {
-      return {
-        cropX: 0,
-        cropW: width,
-        cropY: 0,
-        cropH: height,
-        baseCropW: width,
-        sideCropPx: 0,
-        leftTrim: 0,
-        rightTrim: 0,
-        leftBlank: 0,
-        rightBlank: 0,
-        stage: "forced-none"
-      };
-    }
-    const maxAllowedPerSide = Math.max(0, Math.floor((width - 1) / 2));
-    const maxTrimRatio = Number.isFinite(options.maxTrimRatio)
-      ? Math.max(0, Math.min(0.4, options.maxTrimRatio))
-      : (isEdgeBrowser() ? EDGE_EXPORT_SIDE_CROP_MAX_RATIO : 0.12);
-    const minInkRatio = Number.isFinite(options.minInkWidthRatio)
-      ? Math.max(0.2, Math.min(0.98, options.minInkWidthRatio))
-      : 0.55;
-    const minInkWidth = Math.max(1, Math.floor(width * minInkRatio));
-    const allowAsymmetricWhitespaceTrim = !!options.allowAsymmetricWhitespaceTrim;
-
-    const margins = getHorizontalWhitespaceMargins(sourceCanvas, width, height, maxTrimRatio);
-    if (margins.detected && allowAsymmetricWhitespaceTrim) {
-      let leftTrim = Math.max(0, Math.min(maxAllowedPerSide, margins.leftBlank | 0));
-      let rightTrim = Math.max(0, Math.min(maxAllowedPerSide, margins.rightBlank | 0));
-      let contentWidth = Math.max(1, width - leftTrim - rightTrim);
-      if (contentWidth < minInkWidth) {
-        const deficit = minInkWidth - contentWidth;
-        if (rightTrim >= leftTrim) {
-          rightTrim = Math.max(0, rightTrim - deficit);
-        } else {
-          leftTrim = Math.max(0, leftTrim - deficit);
-        }
-        contentWidth = Math.max(1, width - leftTrim - rightTrim);
-      }
-      if (contentWidth >= 1 && (leftTrim > 0 || rightTrim > 0)) {
-        return {
-          cropX: leftTrim,
-          cropW: contentWidth,
-          cropY: 0,
-          cropH: height,
-          baseCropW: width,
-          sideCropPx: Math.min(leftTrim, rightTrim),
-          leftTrim,
-          rightTrim,
-          leftBlank: margins.leftBlank,
-          rightBlank: margins.rightBlank,
-          stage: "content-aware-asymmetric"
-        };
-      }
-    }
-
-    if (margins.detected) {
-      // Keep horizontal trimming symmetric to avoid export-side lateral drift.
-      // This is especially important on wide layouts where one side can look
-      // "blank" because of pale basemap styling.
-      let sideTrim = Math.max(
-        0,
-        Math.min(maxAllowedPerSide, Math.min(margins.leftBlank | 0, margins.rightBlank | 0))
-      );
-      let contentWidth = Math.max(1, width - (2 * sideTrim));
-      if (contentWidth < minInkWidth) {
-        const maxSideForInk = Math.max(0, Math.floor((width - minInkWidth) / 2));
-        sideTrim = Math.min(sideTrim, maxSideForInk);
-        contentWidth = Math.max(1, width - (2 * sideTrim));
-      }
-      if (contentWidth >= 1 && sideTrim > 0) {
-        return {
-          cropX: sideTrim,
-          cropW: contentWidth,
-          cropY: 0,
-          cropH: height,
-          baseCropW: width,
-          sideCropPx: sideTrim,
-          leftTrim: sideTrim,
-          rightTrim: sideTrim,
-          leftBlank: margins.leftBlank,
-          rightBlank: margins.rightBlank,
-          stage: "content-aware-symmetric"
-        };
-      }
-    }
-
-    const autoDetectedSideCropPx = getSymmetricWhitespaceSideCropPx(sourceCanvas, width, height, maxTrimRatio);
-    if (autoDetectedSideCropPx > 0) {
-      const sideCropPx = Math.min(autoDetectedSideCropPx, maxAllowedPerSide);
-      return {
-        cropX: sideCropPx,
-        cropW: Math.max(1, width - (2 * sideCropPx)),
-        cropY: 0,
-        cropH: height,
-        baseCropW: width,
-        sideCropPx,
-        leftTrim: sideCropPx,
-        rightTrim: sideCropPx,
-        leftBlank: margins.leftBlank || 0,
-        rightBlank: margins.rightBlank || 0,
-        stage: "symmetric-auto"
-      };
-    }
-
-    if (options.disableBrowserFallback) {
-      return {
-        cropX: 0,
-        cropW: width,
-        cropY: 0,
-        cropH: height,
-        baseCropW: width,
-        sideCropPx: 0,
-        leftTrim: 0,
-        rightTrim: 0,
-        leftBlank: margins.leftBlank || 0,
-        rightBlank: margins.rightBlank || 0,
-        stage: "none"
-      };
-    }
-
-    let fallbackSideCropPx = 0;
-    let fallbackStage = "none";
-    if (isFirefoxBrowser()) {
-      fallbackSideCropPx = Math.max(
-        0,
-        Math.min(
-          Math.floor(width * 0.2),
-          Math.round(width * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX,
-          maxAllowedPerSide
-        )
-      );
-      fallbackStage = fallbackSideCropPx > 0 ? "firefox-ratio" : "none";
-    } else if (isEdgeBrowser()) {
-      // Avoid forced side cropping on Edge when content-aware detection finds no whitespace.
-      // Fixed cropping can cause apparent lateral drift on wide-screen exports.
-      fallbackSideCropPx = 0;
-      fallbackStage = "none";
-    } else if (isChromeBrowser()) {
-      fallbackSideCropPx = Math.min(CHROME_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
-      fallbackStage = fallbackSideCropPx > 0 ? "chrome-fixed" : "none";
-    }
-
-    return {
-      cropX: fallbackSideCropPx,
-      cropW: Math.max(1, width - (2 * fallbackSideCropPx)),
-      cropY: 0,
-      cropH: height,
-      baseCropW: width,
-      sideCropPx: fallbackSideCropPx,
-      leftTrim: fallbackSideCropPx,
-      rightTrim: fallbackSideCropPx,
-      leftBlank: margins.leftBlank || 0,
-      rightBlank: margins.rightBlank || 0,
-      stage: fallbackStage
-    };
-    }
-
-    function computeExportMapGeometry(adjustedMapCanvas, mapEl, options = {}) {
-    const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
-    const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
-    const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
-    const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
-    const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
-    const expectedW = Math.round(cssW * rawScaleX);
-    const expectedH = Math.round(cssH * rawScaleY);
-    const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
-    const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
-    const cropPlan = getExportHorizontalCropPlan(adjustedMapCanvas, baseCropW, cropH, {
-      disableBrowserFallback: !!options.disableBrowserFallback,
-      maxTrimRatio: options.maxTrimRatio,
-      minInkWidthRatio: options.minInkWidthRatio,
-      allowAsymmetricWhitespaceTrim: !!options.allowAsymmetricWhitespaceTrim,
-      forceNoCrop: !!options.forceNoCrop
-    });
-    return {
-      cssW,
-      cssH,
-      rawScaleX,
-      rawScaleY,
-      expectedW,
-      expectedH,
-      baseCropW,
-      cropH,
-      cropX: cropPlan.cropX,
-      cropY: cropPlan.cropY,
-      cropW: cropPlan.cropW,
-      cropPlan
-    };
+    return Math.max(0, Math.min(leftBlank, rightBlank));
     }
 
     function getExportSideCropPxForBrowser(sourceCanvas, baseCropW, cropH) {
-    const plan = getExportHorizontalCropPlan(sourceCanvas, baseCropW, cropH);
-    return Math.max(0, plan.sideCropPx || 0);
+    if (isFirefoxBrowser()) {
+      return Math.max(
+        0,
+        Math.min(
+          Math.floor(baseCropW * 0.2),
+          Math.round(baseCropW * EXPORT_SIDE_CROP_RATIO) + EXPORT_SIDE_CROP_EXTRA_PX
+        )
+      );
+    }
+    if (isEdgeBrowser()) {
+      const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
+      return Math.min(EDGE_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
+    }
+    if (isChromeBrowser()) {
+      const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
+      return Math.min(CHROME_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
+    }
+    return 0;
     }
 
-    function reportEdgeExportSpaceReduction(formatLabel, sideCropPx, baseCropW, cropW, details = {}) {
+    function reportEdgeExportSpaceReduction(formatLabel, sideCropPx, baseCropW, cropW) {
     if (!isEdgeBrowser()) return;
     const fmt = String(formatLabel || "export").toUpperCase();
     const reducedBy = Math.max(0, (baseCropW | 0) - (cropW | 0));
@@ -5262,160 +4421,12 @@ window.addEventListener('load', resetInitialScrollPositions);
       sideCropPx,
       baseCropW,
       cropW,
-      reducedBy,
-      viewportW: Number(window && window.innerWidth) || null,
-      viewportH: Number(window && window.innerHeight) || null,
-      leftBlank: Number(details.leftBlank) || 0,
-      rightBlank: Number(details.rightBlank) || 0,
-      leftTrim: Number(details.leftTrim) || 0,
-      rightTrim: Number(details.rightTrim) || 0,
-      cropX: Number(details.cropX) || 0,
-      stage: details.stage || "unknown"
+      reducedBy
     });
-    }
-
-    function getMapViewportDebugSnapshot(mapEl) {
-    const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
-    return {
-      innerWidth: Number(window && window.innerWidth) || 0,
-      innerHeight: Number(window && window.innerHeight) || 0,
-      clientWidth: mapEl ? (Number(mapEl.clientWidth) || 0) : 0,
-      clientHeight: mapEl ? (Number(mapEl.clientHeight) || 0) : 0,
-      mapSizeX: mapSize ? (Number(mapSize.x) || 0) : 0,
-      mapSizeY: mapSize ? (Number(mapSize.y) || 0) : 0,
-      zoom: (map && typeof map.getZoom === 'function') ? Number(map.getZoom()) : null
-    };
-    }
-
-    function captureDisplayedMapCanvasFromDom(mapEl, cb) {
-    if (typeof cb !== 'function') return;
-    if (!mapEl) {
-      cb(new Error("Map element unavailable"));
-      return;
-    }
-
-    const hidden = [];
-    const toHide = [];
-    try {
-      const controls = mapEl.querySelector('.leaflet-control-container');
-      if (controls) toHide.push(controls);
-      const disclaimer = document.getElementById('disclaimer');
-      if (disclaimer && mapEl.contains(disclaimer)) toHide.push(disclaimer);
-    } catch (e) {}
-
-    toHide.forEach((el) => {
-      if (!el || !el.style) return;
-      hidden.push({ el, prevVisibility: el.style.visibility });
-      el.style.visibility = 'hidden';
-    });
-
-    const cleanup = () => {
-      hidden.forEach((h) => {
-        try {
-          h.el.style.visibility = h.prevVisibility;
-        } catch (e) {}
-      });
-    };
-
-    const rect = mapEl.getBoundingClientRect();
-    const width = Math.max(1, Math.round(rect.width || mapEl.clientWidth || 1));
-    const height = Math.max(1, Math.round(rect.height || mapEl.clientHeight || 1));
-    html2canvas(mapEl, {
-      scale: 1,
-      useCORS: true,
-      foreignObjectRendering: false,
-      logging: false,
-      backgroundColor: '#ffffff',
-      width,
-      height,
-      windowWidth: width,
-      windowHeight: height,
-      scrollX: 0,
-      scrollY: 0
-    })
-      .then((canvas) => {
-        cleanup();
-        cb(null, canvas);
-      })
-      .catch((err) => {
-        cleanup();
-        cb(err || new Error("DOM map capture failed"));
-      });
-    }
-
-    function captureMapCanvasForExport(cb) {
-    if (typeof cb !== 'function') return;
-    const mapEl = document.getElementById('map');
-    const before = getMapViewportDebugSnapshot(mapEl);
-    let finished = false;
-    let loadTimeoutId = 0;
-    let onBaseLoad = null;
-
-    const cleanup = () => {
-      if (loadTimeoutId) {
-        clearTimeout(loadTimeoutId);
-        loadTimeoutId = 0;
-      }
-      if (onBaseLoad && baseLayer && typeof baseLayer.off === 'function') {
-        try { baseLayer.off('load', onBaseLoad); } catch (e) {}
-      }
-      onBaseLoad = null;
-    };
-
-    const finalize = () => {
-      if (finished) return;
-      finished = true;
-      cleanup();
-      const after = getMapViewportDebugSnapshot(mapEl);
-      logEdgeExportDebug('prepareMapForExport', {
-        before,
-        after,
-        baseLayerLoading: !!(baseLayer && typeof baseLayer.isLoading === 'function' && baseLayer.isLoading())
-      });
-      if (isBasemapOnlyExportState()) {
-        captureDisplayedMapCanvasFromDom(mapEl, (domErr, domCanvas) => {
-          if (!domErr && domCanvas) {
-            cb(null, domCanvas);
-            return;
-          }
-          logEdgeExportDebug('dom-capture-fallback-to-leafletImage', {
-            error: String(domErr && domErr.message ? domErr.message : domErr || '')
-          });
-          leafletImage(map, cb);
-        });
-        return;
-      }
-      leafletImage(map, cb);
-    };
-
-    const finalizeAfterFrames = () => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          finalize();
-        });
-      });
-    };
-
-    try { map.invalidateSize({ pan: false }); } catch (e) {}
-    try { ensureBaseLayerAtBack(); } catch (e) {}
-
-    try {
-      if (baseLayer && typeof baseLayer.isLoading === 'function' && baseLayer.isLoading()) {
-        onBaseLoad = () => finalizeAfterFrames();
-        if (typeof baseLayer.once === 'function') baseLayer.once('load', onBaseLoad);
-        loadTimeoutId = window.setTimeout(() => finalizeAfterFrames(), 300);
-        return;
-      }
-    } catch (e) {}
-
-    window.setTimeout(() => {
-      try { map.invalidateSize({ pan: false }); } catch (e) {}
-      finalizeAfterFrames();
-    }, 90);
     }
 
     function compositeExportElement(cb) {
-    captureMapCanvasForExport((err, mapCanvas) => {
+    leafletImage(map, (err, mapCanvas) => {
       if (err) {
         console.error("Leaflet image export failed:", err);
         return;
@@ -5428,49 +4439,40 @@ window.addEventListener('load', resetInitialScrollPositions);
       const mapEl = document.getElementById('map');
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
-      const basemapOnly = isBasemapOnlyExportState();
-      const adjustedMapCanvas = basemapOnly
-        ? mapCanvas
-        : alignMapCanvasForDisplayedState(mapCanvas, mapEl);
+      const adjustedMapCanvas = isEdge
+        // Edge: combine tile transform with map-pane drift correction.
+        ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
+        : alignMapCanvasToDisplayedTileTransform(
+            alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
+            mapEl,
+            { allowTranslation: true }
+          );
       logEdgeExportDebug("pipeline.mode", {
-        mode: basemapOnly ? "basemap-raw" : (isEdge ? "edge-tile-plus-pane" : "displayed-state")
+        mode: isEdge ? "edge-tile-plus-pane" : "full"
       });
       showExportCorrectionDebugMessage(debugInfo);
-      const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-        forceNoCrop: !!basemapOnly
-      });
-      const cssW = geometry.cssW;
-      const cssH = geometry.cssH;
-      const rawScaleX = geometry.rawScaleX;
-      const rawScaleY = geometry.rawScaleY;
-      const baseCropW = geometry.baseCropW;
-      const cropH = geometry.cropH;
-      const cropX = geometry.cropX;
-      const cropY = geometry.cropY;
-      const cropW = geometry.cropW;
-      if (isEdge) {
-        reportEdgeExportSpaceReduction("png/pdf", geometry.cropPlan.sideCropPx, baseCropW, cropW, {
-          leftBlank: geometry.cropPlan.leftBlank,
-          rightBlank: geometry.cropPlan.rightBlank,
-          leftTrim: geometry.cropPlan.leftTrim,
-          rightTrim: geometry.cropPlan.rightTrim,
-          cropX,
-          stage: geometry.cropPlan.stage
-        });
-      }
-      showExportCropDebugPopup("png/pdf", geometry);
+      const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+      const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
+      const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
+      const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
+      const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
+      const expectedW = Math.round(cssW * rawScaleX);
+      const expectedH = Math.round(cssH * rawScaleY);
+      const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
+      const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
+      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
+      const cropX = Math.max(0, sideCropPx);
+      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
+      if (isEdge) reportEdgeExportSpaceReduction("png/pdf", sideCropPx, baseCropW, cropW);
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
-      const normalizedMap = normalizeCanvasToStrictExportFrame(cropped);
-      const layoutMapCanvas = extractCanvasRect(normalizedMap.canvas, normalizedMap.contentRect);
-
-      const W = layoutMapCanvas.width;
-      const H = layoutMapCanvas.height;
+      const W = cropW;
+      const H = cropH;
 
       const wrapper = document.createElement('div');
       wrapper.className = 'export-wrapper';
@@ -5512,7 +4514,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;display:block !important;width:100% !important}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:#ffffff !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-map-wrapper .export-north-arrow-clone{display:flex !important;align-items:center !important;justify-content:center !important;flex-direction:column !important}
         .export-map-wrapper .export-north-arrow-clone .north-arrow-symbol{display:block !important;width:100% !important;text-align:center !important;padding-top:0 !important;line-height:1 !important}
         .export-img{width:100%;height:auto;display:block}
@@ -5521,7 +4523,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       const img = document.createElement('img');
       img.className = 'export-img';
-      img.src = layoutMapCanvas.toDataURL("image/png");
+      img.src = cropped.toDataURL("image/png");
       img.alt = "Exported map image";
       mapWrapper.appendChild(img);
 
@@ -5564,12 +4566,10 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const relLeftCss = srcRect.left - mapRect.left;
         const relTopCss = srcRect.top - mapRect.top;
-        const baseExportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
-        const baseExportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
-        let exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
+        const exportLeft = Math.max(0, Math.round(relLeftCss * rawScaleX) - cropX);
+        const exportTop = Math.max(0, Math.round(relTopCss * rawScaleY));
+        const exportWidth = Math.max(1, Math.round(srcRect.width * rawScaleX));
         const exportHeight = Math.max(1, Math.round(srcRect.height * rawScaleY));
-        let exportLeft = baseExportLeft;
-        let exportTop = baseExportTop;
 
         clone.style.position = 'absolute';
         clone.style.left = exportLeft + 'px';
@@ -5582,44 +4582,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.transform = 'none';
         clone.style.cursor = 'default';
         clone.style.pointerEvents = 'none';
-        const isScaleClone = !!(source.classList &&
-          (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control')));
-        const isNorthClone = !!(source.classList && source.classList.contains('leaflet-control-north-arrow'));
-        const isDisclaimerClone = !!(source.id === 'disclaimer');
-
-        if (STRICT_EXPORT_LAYOUT_ENABLED && (isScaleClone || isNorthClone || isDisclaimerClone)) {
-          if (isDisclaimerClone) {
-            exportWidth = Math.round(clampNumber(W * 0.34, 210, Math.max(240, Math.round(W * 0.52))));
-            clone.style.width = exportWidth + 'px';
-            clone.style.maxWidth = exportWidth + 'px';
-            clone.style.height = 'auto';
-          }
-          if (isScaleClone) {
-            exportWidth = Math.round(clampNumber(W * 0.18, 110, 240));
-            clone.style.width = exportWidth + 'px';
-            clone.style.whiteSpace = 'nowrap';
-            clone.style.overflow = 'hidden';
-            clone.style.textOverflow = 'ellipsis';
-          }
-          const p = getStrictOverlayPlacement(
-            isNorthClone ? 'north' : (isScaleClone ? 'scale' : 'disclaimer'),
-            W,
-            H,
-            exportWidth,
-            clone.offsetHeight || exportHeight
-          );
-          clone.style.left = p.left + 'px';
-          clone.style.top = p.top + 'px';
-          clone.style.right = 'auto';
-          clone.style.bottom = 'auto';
-          if (isScaleClone && p.bottom != null) {
-            clone.style.top = 'auto';
-            clone.style.bottom = p.bottom + 'px';
-          }
-        }
         if (
-          isScaleClone &&
-          !STRICT_EXPORT_LAYOUT_ENABLED
+          source.classList &&
+          (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))
         ) {
           const bottomCss = Math.max(0, mapRect.bottom - srcRect.bottom);
           const exportBottomRaw = Math.max(0, Math.round(bottomCss * rawScaleY));
@@ -5629,7 +4594,8 @@ window.addEventListener('load', resetInitialScrollPositions);
           clone.style.zIndex = '5';
         }
         if (
-          isNorthClone
+          source.classList &&
+          source.classList.contains('leaflet-control-north-arrow')
         ) {
           // Inline centering guards against Firefox/html2canvas dropping selector-based alignment.
           clone.style.display = 'flex';
@@ -5651,7 +4617,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
         mapWrapper.appendChild(clone);
         // Final hard clamp inside map frame to prevent spill into legend section.
-        if (isScaleClone) {
+        if (source.classList && (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))) {
           const maxBottom = Math.max(0, H - (clone.offsetHeight || exportHeight));
           const currentBottom = Math.max(0, parseFloat(clone.style.bottom || "0") || 0);
           clone.style.bottom = Math.max(0, Math.min(maxBottom, currentBottom)) + 'px';
@@ -5684,15 +4650,10 @@ window.addEventListener('load', resetInitialScrollPositions);
         if (existing) return;
         const mapRect = mapEl.getBoundingClientRect();
         const srcRect = src.getBoundingClientRect();
-        let left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
-        let top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
+        const left = Math.max(0, Math.round((srcRect.left - mapRect.left) * rawScaleX) - cropX);
+        const top = Math.max(0, Math.round((srcRect.top - mapRect.top) * rawScaleY));
         const w = Math.max(20, Math.round(srcRect.width * rawScaleX));
         const h = Math.max(24, Math.round(srcRect.height * rawScaleY));
-        if (STRICT_EXPORT_LAYOUT_ENABLED) {
-          const p = getStrictOverlayPlacement('north', W, H, w, h);
-          left = p.left;
-          top = p.top;
-        }
 
         const fallback = document.createElement('div');
         fallback.className = 'export-north-arrow-clone';
@@ -5756,17 +4717,12 @@ window.addEventListener('load', resetInitialScrollPositions);
           topCss = Math.max(0, mapRect.height - srcHeightCss - 8);
           bottomCss = Math.max(0, mapRect.height - (topCss + srcHeightCss));
         }
-        let left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
+        const left = Math.max(0, Math.round(leftCss * rawScaleX) - cropX);
         const top = Math.max(0, Math.round(topCss * rawScaleY));
         const w = Math.max(70, Math.round(srcWidthCss * rawScaleX));
         const h = Math.max(20, Math.round(srcHeightCss * rawScaleY));
         const bottomRaw = Math.max(0, Math.round((bottomCss == null ? 8 : bottomCss) * rawScaleY));
-        let bottom = Math.max(6, Math.min(bottomRaw, Math.max(6, H - h)));
-        if (STRICT_EXPORT_LAYOUT_ENABLED) {
-          const p = getStrictOverlayPlacement('scale', W, H, w, h);
-          left = p.left;
-          bottom = Math.max(6, Number.isFinite(p.bottom) ? p.bottom : bottom);
-        }
+        const bottom = Math.max(6, Math.min(bottomRaw, Math.max(6, H - h)));
         const labelText = src
           ? (src.querySelector('.exact-scale-label')?.textContent || src.textContent || 'Scale: --').trim()
           : 'Scale: --';
@@ -5811,7 +4767,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           fallbackDisc.style.left = '8px';
           fallbackDisc.style.bottom = '-2px';
           fallbackDisc.style.maxWidth = Math.max(140, Math.round(W * 0.45)) + 'px';
-          fallbackDisc.style.background = '#ffffff';
+          fallbackDisc.style.background = 'rgba(255,255,255,0.95)';
           fallbackDisc.style.padding = '6px';
           fallbackDisc.style.fontSize = '10px';
           fallbackDisc.style.lineHeight = '1.25';
@@ -6080,7 +5036,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function buildEdgeDirectExportCanvas(formatLabel, cb, onError) {
-      captureMapCanvasForExport((err, mapCanvas) => {
+      leafletImage(map, (err, mapCanvas) => {
         if (err || !mapCanvas) {
           if (typeof onError === "function") onError(err || new Error("Map canvas unavailable"));
           return;
@@ -6088,36 +5044,23 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const mapEl = document.getElementById('map');
         const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
-        const basemapOnly = isBasemapOnlyExportState();
-        const adjustedMapCanvas = basemapOnly
-          ? mapCanvas
-          : alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
-        logEdgeExportDebug("pipeline.mode", {
-          mode: basemapOnly ? "edge-basemap-raw" : "edge-direct-canvas-tile-plus-pane"
-        });
+        const adjustedMapCanvas = alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
+        logEdgeExportDebug("pipeline.mode", { mode: "edge-direct-canvas-tile-plus-pane" });
         showExportCorrectionDebugMessage(debugInfo);
 
-        const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-          forceNoCrop: !!basemapOnly
-        });
-        const cssW = geometry.cssW;
-        const cssH = geometry.cssH;
-        const rawScaleX = geometry.rawScaleX;
-        const rawScaleY = geometry.rawScaleY;
-        const baseCropW = geometry.baseCropW;
-        const cropH = geometry.cropH;
-        const cropX = geometry.cropX;
-        const cropY = geometry.cropY;
-        const cropW = geometry.cropW;
-        reportEdgeExportSpaceReduction(formatLabel || "png/pdf", geometry.cropPlan.sideCropPx, baseCropW, cropW, {
-          leftBlank: geometry.cropPlan.leftBlank,
-          rightBlank: geometry.cropPlan.rightBlank,
-          leftTrim: geometry.cropPlan.leftTrim,
-          rightTrim: geometry.cropPlan.rightTrim,
-          cropX,
-          stage: geometry.cropPlan.stage
-        });
-        showExportCropDebugPopup(formatLabel || "png/pdf", geometry);
+        const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+        const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
+        const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
+        const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
+        const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
+        const expectedW = Math.round(cssW * rawScaleX);
+        const expectedH = Math.round(cssH * rawScaleY);
+        const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
+        const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
+        const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
+        const cropX = Math.max(0, sideCropPx);
+        const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
+        reportEdgeExportSpaceReduction(formatLabel || "png/pdf", sideCropPx, baseCropW, cropW);
 
         const cropped = document.createElement('canvas');
         cropped.width = cropW;
@@ -6127,10 +5070,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           if (typeof onError === "function") onError(new Error("Crop canvas context unavailable"));
           return;
         }
-        cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-        const normalizedMap = normalizeCanvasToStrictExportFrame(cropped);
-        const layoutMapCanvas = extractCanvasRect(normalizedMap.canvas, normalizedMap.contentRect);
+        cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const disclaimerText = (document.getElementById('disclaimer')?.textContent || '').trim();
@@ -6143,26 +5083,20 @@ window.addEventListener('load', resetInitialScrollPositions);
           || '').trim();
         const legendBlocks = getExportLegendBlocks();
 
-        const isPdfExport = String(formatLabel || '').toLowerCase() === 'pdf';
-        const titleFontPx = 20;
-        const titleH = isPdfExport
-          ? (titleText ? (titleFontPx + 2) : 0)
-          : 36;
+        const titleH = 36;
         const legendHeaderH = 24;
         const legendRowH = 20;
         const legendBlockGap = 10;
         const legendTopPad = 8;
-        const legendBottomPad = isPdfExport ? 0 : 8;
+        const legendBottomPad = 8;
         const legendH = legendBlocks.length
           ? (legendTopPad + legendBottomPad + legendBlocks.reduce((sum, block, idx) => {
               const blockH = legendHeaderH + (block.rows.length * legendRowH);
               return sum + blockH + (idx > 0 ? legendBlockGap : 0);
             }, 0))
           : 0;
-        const mapFrameW = layoutMapCanvas.width;
-        const mapFrameH = layoutMapCanvas.height;
-        const outW = mapFrameW;
-        const outH = titleH + mapFrameH + legendH;
+        const outW = cropW;
+        const outH = titleH + cropH + legendH;
 
         const out = document.createElement('canvas');
         out.width = outW;
@@ -6175,34 +5109,25 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         octx.fillStyle = '#ffffff';
         octx.fillRect(0, 0, outW, outH);
-        if (titleH > 0 && titleText) {
-          octx.fillStyle = '#222222';
-          octx.font = `600 ${titleFontPx}px Segoe UI, sans-serif`;
-          octx.textAlign = 'center';
-          octx.textBaseline = isPdfExport ? 'top' : 'middle';
-          octx.fillText(
-            titleText,
-            Math.round(outW / 2),
-            isPdfExport ? 0 : Math.round(titleH / 2)
-          );
-        }
+        octx.fillStyle = '#222222';
+        octx.font = '600 20px Segoe UI, sans-serif';
+        octx.textAlign = 'center';
+        octx.textBaseline = 'middle';
+        octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
 
-        octx.drawImage(layoutMapCanvas, 0, titleH);
+        octx.drawImage(cropped, 0, titleH);
 
         // Draw north arrow where it is currently placed on the live map.
         {
           const naRect = northArrowEl ? northArrowEl.getBoundingClientRect() : null;
           const naW = (naRect && naRect.width > 0) ? Math.max(22, Math.round(naRect.width * rawScaleX)) : 34;
           const naH = (naRect && naRect.height > 0) ? Math.max(28, Math.round(naRect.height * rawScaleY)) : 44;
-          const strictNorthPos = getStrictOverlayPlacement("north", outW, mapFrameH, naW, naH);
-          let naX = STRICT_EXPORT_LAYOUT_ENABLED
-            ? strictNorthPos.left
-            : (Math.round(((naRect && mapRect) ? (naRect.left - mapRect.left) : (cssW - (naW / rawScaleX) - 12)) * rawScaleX) - cropX);
-          let naY = STRICT_EXPORT_LAYOUT_ENABLED
-            ? (titleH + strictNorthPos.top)
-            : (titleH + Math.round(((naRect && mapRect) ? (naRect.top - mapRect.top) : 12) * rawScaleY));
+          const naLeftCss = (naRect && mapRect) ? (naRect.left - mapRect.left) : (cssW - (naW / rawScaleX) - 12);
+          const naTopCss = (naRect && mapRect) ? (naRect.top - mapRect.top) : 12;
+          let naX = Math.round(naLeftCss * rawScaleX) - cropX;
+          let naY = titleH + Math.round(naTopCss * rawScaleY);
           naX = Math.max(0, Math.min(outW - naW, naX));
-          naY = Math.max(titleH, Math.min((titleH + mapFrameH) - naH, naY));
+          naY = Math.max(titleH, Math.min((titleH + cropH) - naH, naY));
           octx.fillStyle = '#ffffff';
           octx.strokeStyle = '#cfd6e4';
           octx.lineWidth = 1;
@@ -6250,23 +5175,15 @@ window.addEventListener('load', resetInitialScrollPositions);
           }
           let boxH = (maxLines * lineH) + (pad * 2);
           if (sourceDiscH > 0) {
-            boxH = Math.max(boxH, Math.min(Math.round(mapFrameH * 0.32), sourceDiscH));
+            boxH = Math.max(boxH, Math.min(Math.round(cropH * 0.32), sourceDiscH));
           }
-          let x;
-          let y;
-          if (STRICT_EXPORT_LAYOUT_ENABLED) {
-            const strictDiscPos = getStrictOverlayPlacement("disclaimer", outW, mapFrameH, maxW, boxH);
-            x = strictDiscPos.left;
-            y = titleH + strictDiscPos.top;
-          } else {
-            const discLeftCss = (discRect && mapRect) ? (discRect.left - mapRect.left) : 8;
-            const discTopCss = (discRect && mapRect) ? (discRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 28);
-            x = Math.round(discLeftCss * rawScaleX) - cropX - edgeDiscExpandLeftPx;
-            y = titleH + Math.round(discTopCss * rawScaleY);
-          }
+          const discLeftCss = (discRect && mapRect) ? (discRect.left - mapRect.left) : 8;
+          const discTopCss = (discRect && mapRect) ? (discRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 28);
+          let x = Math.round(discLeftCss * rawScaleX) - cropX - edgeDiscExpandLeftPx;
+          let y = titleH + Math.round(discTopCss * rawScaleY);
           x = Math.max(0, Math.min(outW - maxW, x));
-          y = Math.max(titleH, Math.min((titleH + mapFrameH) - boxH, y));
-          octx.fillStyle = '#ffffff';
+          y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
+          octx.fillStyle = 'rgba(255,255,255,0.93)';
           octx.fillRect(x, y, maxW, boxH);
           octx.fillStyle = '#333333';
           const drawJustifiedLine = (ctx, line, startX, baselineY, maxTextW, isLast) => {
@@ -6312,21 +5229,13 @@ window.addEventListener('load', resetInitialScrollPositions);
           octx.font = `${scaleFontPx}px Segoe UI, sans-serif`;
           const measuredW = Math.ceil(octx.measureText(scaleText).width) + 14;
           const boxW = Math.max(sourceBoxW, measuredW);
-          let x;
-          let y;
-          if (STRICT_EXPORT_LAYOUT_ENABLED) {
-            const strictScalePos = getStrictOverlayPlacement("scale", outW, mapFrameH, boxW, boxH);
-            x = strictScalePos.left;
-            y = titleH + strictScalePos.top;
-          } else {
-            const sbLeftCss = (sbRect && mapRect) ? (sbRect.left - mapRect.left) : ((cssW - (boxW / rawScaleX)) / 2);
-            const sbTopCss = (sbRect && mapRect) ? (sbRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 8);
-            x = Math.round(sbLeftCss * rawScaleX) - cropX;
-            y = titleH + Math.round(sbTopCss * rawScaleY) - 8;
-          }
+          const sbLeftCss = (sbRect && mapRect) ? (sbRect.left - mapRect.left) : ((cssW - (boxW / rawScaleX)) / 2);
+          const sbTopCss = (sbRect && mapRect) ? (sbRect.top - mapRect.top) : (cssH - (boxH / rawScaleY) - 8);
+          let x = Math.round(sbLeftCss * rawScaleX) - cropX;
+          let y = titleH + Math.round(sbTopCss * rawScaleY) - 8;
           x = Math.max(0, Math.min(outW - boxW, x));
-          y = Math.max(titleH, Math.min((titleH + mapFrameH) - boxH, y));
-          octx.fillStyle = '#ffffff';
+          y = Math.max(titleH, Math.min((titleH + cropH) - boxH, y));
+          octx.fillStyle = 'rgba(255,255,255,0.95)';
           octx.fillRect(x, y, boxW, boxH);
           octx.strokeStyle = '#cfd6e4';
           octx.lineWidth = 1;
@@ -6339,7 +5248,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
 
         if (legendBlocks.length) {
-          let y = titleH + mapFrameH + legendTopPad;
+          let y = titleH + cropH + legendTopPad;
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
 
@@ -6436,7 +5345,15 @@ window.addEventListener('load', resetInitialScrollPositions);
           buildEdgeDirectExportCanvas(
             "pdf",
             (canvas) => {
-              saveCanvasToPdf(canvas, 'map.pdf');
+              const imgData = canvas.toDataURL('image/png');
+              const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+              const pdf = new jspdf.jsPDF({
+                orientation,
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+              });
+              pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+              pdf.save('map.pdf');
               hideLoading();
             },
             (err) => {
@@ -6450,7 +5367,15 @@ window.addEventListener('load', resetInitialScrollPositions);
         compositeExportElement(wrapper => {
             html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
             .then(canvas => {
-              saveCanvasToPdf(canvas, 'map.pdf');
+              const imgData = canvas.toDataURL('image/png');
+              const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+              const pdf = new jspdf.jsPDF({
+                orientation,
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+              });
+              pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+              pdf.save('map.pdf');
               document.body.removeChild(wrapper);
               hideLoading();
             })
@@ -6631,7 +5556,7 @@ function exportSVG() {
     return;
   }
 
-  captureMapCanvasForExport((err, mapCanvas) => {
+  leafletImage(map, (err, mapCanvas) => {
     if (err || !mapCanvas) {
       showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
       hideLoading();
@@ -6653,24 +5578,29 @@ function exportSVG() {
       // authoritative canvas pixels from leafletImage
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
-      const adjustedMapCanvas = alignMapCanvasForDisplayedState(mapCanvas, mapEl);
+      const adjustedMapCanvas = isEdge
+        // Edge: combine tile transform with map-pane drift correction.
+        ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
+        : alignMapCanvasToDisplayedTileTransform(
+            alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
+            mapEl,
+            { allowTranslation: true }
+          );
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-tile-plus-pane" : "displayed-state"
+        mode: isEdge ? "edge-tile-plus-pane" : "full"
       });
       showExportCorrectionDebugMessage(debugInfo);
       const canvasPixelWidth  = adjustedMapCanvas.width;
       const canvasPixelHeight = adjustedMapCanvas.height;
 
       // container CSS size and scale factor
-      const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-        disableBrowserFallback: STRICT_EXPORT_LAYOUT_ENABLED && isChromeBrowser()
-      });
-      const containerWidth  = geometry.cssW || mapEl.clientWidth || canvasPixelWidth;
-      const containerHeight = geometry.cssH || mapEl.clientHeight || canvasPixelHeight;
+      const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
+      const containerWidth  = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl.clientWidth || canvasPixelWidth);
+      const containerHeight = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl.clientHeight || canvasPixelHeight);
       // clamp scale to avoid excessively large exported font sizes when
       // device or canvas ratios are large. Keep within [1,2] for stability.
-      const rawScaleX = geometry.rawScaleX;
-      const rawScaleY = geometry.rawScaleY;
+      const rawScaleX = containerWidth > 0 ? (canvasPixelWidth / containerWidth) : 1;
+      const rawScaleY = containerHeight > 0 ? (canvasPixelHeight / containerHeight) : rawScaleX;
       const uiScale = Math.min(Math.max(rawScaleX, 1), 2);
 
       // title/legend heights (CSS -> canvas px)
@@ -6693,33 +5623,22 @@ function exportSVG() {
       const legendHeightPx = Math.max(Math.round(legendHeightCss * uiScale), computedLegendHeightPx);
 
       // expected canvas pixels for visible map area
-      const expectedCanvasW = geometry.expectedW;
-      const expectedCanvasH = geometry.expectedH;
-      const baseCropW = geometry.baseCropW;
-      const cropH = geometry.cropH;
-      const cropW = geometry.cropW;
-      const cropX = geometry.cropX;
-      const cropY = geometry.cropY;
-      if (isEdge) {
-        reportEdgeExportSpaceReduction("svg", geometry.cropPlan.sideCropPx, baseCropW, cropW, {
-          leftBlank: geometry.cropPlan.leftBlank,
-          rightBlank: geometry.cropPlan.rightBlank,
-          leftTrim: geometry.cropPlan.leftTrim,
-          rightTrim: geometry.cropPlan.rightTrim,
-          cropX,
-          stage: geometry.cropPlan.stage
-        });
-      }
-      showExportCropDebugPopup("svg", geometry);
+      const expectedCanvasW = Math.round(containerWidth * rawScaleX);
+      const expectedCanvasH = Math.round(containerHeight * rawScaleY);
+
+      // LEFT-ALIGNED CROP: use cropX = 0 to avoid centered empty right area
+      const baseCropW = Math.min(expectedCanvasW, canvasPixelWidth);
+      const cropH = Math.min(expectedCanvasH, canvasPixelHeight);
+      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
+      const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
+      const cropX = sideCropPx;
+      const cropY = 0; // top-align crop
+      if (isEdge) reportEdgeExportSpaceReduction("svg", sideCropPx, baseCropW, cropW);
 
       // Debug logging to help tune if needed
       console.info("SVG export debug:",
         { canvasPixelWidth, canvasPixelHeight, containerWidth, containerHeight, uiScale,
-          expectedCanvasW, expectedCanvasH, cropW, cropH, cropX, cropY,
-          cropStage: geometry.cropPlan.stage,
-          leftTrim: geometry.cropPlan.leftTrim,
-          rightTrim: geometry.cropPlan.rightTrim,
-          titleHeightPx, legendHeightPx });
+          expectedCanvasW, expectedCanvasH, cropW, cropH, cropX, cropY, titleHeightPx, legendHeightPx });
 
       // draw cropped region to offscreen canvas
       const cropped = document.createElement('canvas');
@@ -6727,32 +5646,18 @@ function exportSVG() {
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
       cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const trimInfo = (STRICT_EXPORT_LAYOUT_ENABLED ? false : isFirefoxBrowser())
+      const trimInfo = isFirefoxBrowser()
         ? trimHorizontalWhitespaceWithOffset(cropped, 0.4)
         : { canvas: cropped, leftTrim: 0 };
       const exportCanvas = trimInfo.canvas || cropped;
       const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
 
-      const baseUsedCanvasWidth  = Math.max(1, exportCanvas.width);
-      const baseUsedCanvasHeight = Math.max(1, exportCanvas.height);
-      let usedCanvasWidth = baseUsedCanvasWidth;
-      let usedCanvasHeight = baseUsedCanvasHeight;
-      if (STRICT_EXPORT_LAYOUT_ENABLED) {
-        const strictScale = Math.min(
-          STRICT_EXPORT_FRAME_WIDTH_PX / baseUsedCanvasWidth,
-          STRICT_EXPORT_FRAME_HEIGHT_PX / baseUsedCanvasHeight
-        );
-        usedCanvasWidth = Math.max(1, Math.round(baseUsedCanvasWidth * strictScale));
-        usedCanvasHeight = Math.max(1, Math.round(baseUsedCanvasHeight * strictScale));
-      }
-      const mapScaleX = usedCanvasWidth / baseUsedCanvasWidth;
-      const mapScaleY = usedCanvasHeight / baseUsedCanvasHeight;
+      const usedCanvasWidth  = Math.max(1, exportCanvas.width);
+      const usedCanvasHeight = Math.max(1, exportCanvas.height);
 
       // Firefox can trim asymmetric side whitespace; center trimmed map content
       // in the original crop frame to match Chrome/Edge visual alignment.
-      const totalWidthPx  = (STRICT_EXPORT_LAYOUT_ENABLED || !isFirefoxBrowser())
-        ? usedCanvasWidth
-        : Math.max(usedCanvasWidth, cropW);
+      const totalWidthPx  = isFirefoxBrowser() ? Math.max(usedCanvasWidth, cropW) : usedCanvasWidth;
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
       const contentOffsetX = Math.max(0, Math.round((totalWidthPx - usedCanvasWidth) / 2));
       const firefoxInkCenterShiftX = isFirefoxBrowser() ? getHorizontalInkCenterShift(exportCanvas) : 0;
@@ -6819,8 +5724,8 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (((containerPoint.x * rawScaleX) - cropX - extraTrimX) * mapScaleX) + alignedContentOffsetX;
-        const y = (((containerPoint.y * rawScaleY) - cropY) * mapScaleY) + titleHeightPx;
+        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX;
+        const y = (containerPoint.y * rawScaleY) - cropY + titleHeightPx;
         return [x, y];
       }
 
@@ -6877,7 +5782,7 @@ function exportSVG() {
                 path.setAttribute("d", d);
                 path.setAttribute("fill", rIdx === 0 ? (style.fill || "none") : "#ffffff");
                 path.setAttribute("stroke", style.stroke || "#000");
-                path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * Math.max(mapScaleX, mapScaleY))));
+                path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
                 path.setAttribute("fill-opacity", String(style.fillOpacity));
                 svg.appendChild(path);
               });
@@ -6893,7 +5798,7 @@ function exportSVG() {
               path.setAttribute("d", d);
               path.setAttribute("fill", "none");
               path.setAttribute("stroke", style.stroke || "#000");
-              path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * Math.max(mapScaleX, mapScaleY))));
+              path.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
               svg.appendChild(path);
             });
           } else if (geom.type === "Point" || geom.type === "MultiPoint") {
@@ -6901,13 +5806,13 @@ function exportSVG() {
             pts.forEach(coord => {
               const [x, y] = projectCoordToCanvas(coord);
               const circle = document.createElementNS(svgNS, "circle");
-              const r = Math.max(1, Math.round(getPointRadius() * Math.max(mapScaleX, mapScaleY)));
+              const r = Math.max(1, Math.round(getPointRadius() * rawScaleX));
               circle.setAttribute("cx", String(x));
               circle.setAttribute("cy", String(y));
               circle.setAttribute("r", String(r));
               circle.setAttribute("fill", style.fill || "#ccc");
               circle.setAttribute("stroke", style.stroke || "#000");
-              circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * Math.max(mapScaleX, mapScaleY))));
+              circle.setAttribute("stroke-width", String(Math.max(0.5, style.strokeWidth * rawScaleX)));
               svg.appendChild(circle);
             });
           }
@@ -6919,24 +5824,11 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
+        const discX = alignedContentOffsetX + Math.max(6, Math.round(8 * rawScaleX));
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
-        const strictDiscDesiredW = Math.round(clampNumber(usedCanvasWidth * 0.34, 210, Math.max(240, Math.round(usedCanvasWidth * 0.52))));
-        const strictDiscPos = getStrictOverlayPlacement(
-          "disclaimer",
-          usedCanvasWidth,
-          usedCanvasHeight,
-          strictDiscDesiredW,
-          Math.max(40, Math.round(62 * uiScale))
-        );
-        const discX = STRICT_EXPORT_LAYOUT_ENABLED
-          ? (alignedContentOffsetX + strictDiscPos.left)
-          : (alignedContentOffsetX + Math.max(6, Math.round(8 * rawScaleX)));
         let discWidth = Math.max(
           Math.round(120 * uiScale),
-          Math.min(
-            STRICT_EXPORT_LAYOUT_ENABLED ? strictDiscDesiredW : desiredWidth,
-            Math.max(120, (alignedContentOffsetX + usedCanvasWidth) - discX - marginPx)
-          )
+          Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discX - marginPx))
         );
         const fontSizeDisc = Math.max(8, Math.round(10 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
@@ -6976,28 +5868,16 @@ function exportSVG() {
         discWidth = Math.min(discWidth, tightWidth);
 
         const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
-        let discY;
-        if (STRICT_EXPORT_LAYOUT_ENABLED) {
-          const strictDiscFinalPos = getStrictOverlayPlacement(
-            "disclaimer",
-            usedCanvasWidth,
-            usedCanvasHeight,
-            discWidth,
-            discHeight
-          );
-          discY = titleHeightPx + strictDiscFinalPos.top;
-        } else {
-          discY = discRect && mapRect
-            ? (() => {
-                const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
-                const bottomPx = Math.max(0, Math.round(bottomCss * rawScaleY));
-                return Math.max(
-                  titleHeightPx,
-                  titleHeightPx + usedCanvasHeight - discHeight - bottomPx
-                );
-              })()
-            : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
-        }
+        let discY = discRect && mapRect
+          ? (() => {
+              const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
+              const bottomPx = Math.max(0, Math.round(bottomCss * rawScaleY));
+              return Math.max(
+                titleHeightPx,
+                titleHeightPx + usedCanvasHeight - discHeight - bottomPx
+              );
+            })()
+          : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
         const discYMin = titleHeightPx + 2;
         const discYMax = Math.max(discYMin, (titleHeightPx + usedCanvasHeight - discHeight - 2));
         discY = Math.max(discYMin, Math.min(discYMax, discY));
@@ -7008,7 +5888,7 @@ function exportSVG() {
         discBg.setAttribute("width", String(discWidth));
         discBg.setAttribute("height", String(discHeight));
         discBg.setAttribute("fill", "#ffffff");
-        discBg.setAttribute("fill-opacity", "1");
+        discBg.setAttribute("fill-opacity", "0.95");
         svg.appendChild(discBg);
 
         const discText = document.createElementNS(svgNS, "text");
@@ -7042,13 +5922,8 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const strictNorthPos = getStrictOverlayPlacement("north", usedCanvasWidth, usedCanvasHeight, naW, naH);
-        const naX = STRICT_EXPORT_LAYOUT_ENABLED
-          ? (alignedContentOffsetX + strictNorthPos.left)
-          : Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
-        let naY = STRICT_EXPORT_LAYOUT_ENABLED
-          ? (titleHeightPx + strictNorthPos.top)
-          : (titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY));
+        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
+        let naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
         const naYMin = titleHeightPx + 2;
         const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
         naY = Math.max(naYMin, Math.min(naYMax, naY));
@@ -7093,14 +5968,9 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        const strictScaleWidth = Math.round(clampNumber(usedCanvasWidth * 0.18, 110, 240));
-        const strictScalePos = getStrictOverlayPlacement("scale", usedCanvasWidth, usedCanvasHeight, strictScaleWidth, sbH);
-        let sbX = STRICT_EXPORT_LAYOUT_ENABLED
-          ? (alignedContentOffsetX + strictScalePos.left)
-          : Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
-        let sbY = STRICT_EXPORT_LAYOUT_ENABLED
-          ? (titleHeightPx + strictScalePos.top)
-          : (titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY) - Math.max(2, Math.round(4 * uiScale)));
+        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
+        let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
+        sbY -= Math.max(2, Math.round(4 * uiScale));
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
         const sbXMin = alignedContentOffsetX;
