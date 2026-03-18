@@ -5202,6 +5202,62 @@ window.addEventListener('load', resetInitialScrollPositions);
     };
     }
 
+    function captureDisplayedMapCanvasFromDom(mapEl, cb) {
+    if (typeof cb !== 'function') return;
+    if (!mapEl) {
+      cb(new Error("Map element unavailable"));
+      return;
+    }
+
+    const hidden = [];
+    const toHide = [];
+    try {
+      const controls = mapEl.querySelector('.leaflet-control-container');
+      if (controls) toHide.push(controls);
+      const disclaimer = document.getElementById('disclaimer');
+      if (disclaimer && mapEl.contains(disclaimer)) toHide.push(disclaimer);
+    } catch (e) {}
+
+    toHide.forEach((el) => {
+      if (!el || !el.style) return;
+      hidden.push({ el, prevVisibility: el.style.visibility });
+      el.style.visibility = 'hidden';
+    });
+
+    const cleanup = () => {
+      hidden.forEach((h) => {
+        try {
+          h.el.style.visibility = h.prevVisibility;
+        } catch (e) {}
+      });
+    };
+
+    const rect = mapEl.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width || mapEl.clientWidth || 1));
+    const height = Math.max(1, Math.round(rect.height || mapEl.clientHeight || 1));
+    html2canvas(mapEl, {
+      scale: 1,
+      useCORS: true,
+      foreignObjectRendering: false,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width,
+      height,
+      windowWidth: width,
+      windowHeight: height,
+      scrollX: 0,
+      scrollY: 0
+    })
+      .then((canvas) => {
+        cleanup();
+        cb(null, canvas);
+      })
+      .catch((err) => {
+        cleanup();
+        cb(err || new Error("DOM map capture failed"));
+      });
+    }
+
     function captureMapCanvasForExport(cb) {
     if (typeof cb !== 'function') return;
     const mapEl = document.getElementById('map');
@@ -5231,6 +5287,19 @@ window.addEventListener('load', resetInitialScrollPositions);
         after,
         baseLayerLoading: !!(baseLayer && typeof baseLayer.isLoading === 'function' && baseLayer.isLoading())
       });
+      if (isBasemapOnlyExportState()) {
+        captureDisplayedMapCanvasFromDom(mapEl, (domErr, domCanvas) => {
+          if (!domErr && domCanvas) {
+            cb(null, domCanvas);
+            return;
+          }
+          logEdgeExportDebug('dom-capture-fallback-to-leafletImage', {
+            error: String(domErr && domErr.message ? domErr.message : domErr || '')
+          });
+          leafletImage(map, cb);
+        });
+        return;
+      }
       leafletImage(map, cb);
     };
 
