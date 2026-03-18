@@ -5057,6 +5057,21 @@ window.addEventListener('load', resetInitialScrollPositions);
     function getExportHorizontalCropPlan(sourceCanvas, baseCropW, cropH, options = {}) {
     const width = Math.max(1, baseCropW | 0);
     const height = Math.max(1, cropH | 0);
+    if (options && options.forceNoCrop) {
+      return {
+        cropX: 0,
+        cropW: width,
+        cropY: 0,
+        cropH: height,
+        baseCropW: width,
+        sideCropPx: 0,
+        leftTrim: 0,
+        rightTrim: 0,
+        leftBlank: 0,
+        rightBlank: 0,
+        stage: "forced-none"
+      };
+    }
     const maxAllowedPerSide = Math.max(0, Math.floor((width - 1) / 2));
     const maxTrimRatio = Number.isFinite(options.maxTrimRatio)
       ? Math.max(0, Math.min(0.4, options.maxTrimRatio))
@@ -5214,7 +5229,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       disableBrowserFallback: !!options.disableBrowserFallback,
       maxTrimRatio: options.maxTrimRatio,
       minInkWidthRatio: options.minInkWidthRatio,
-      allowAsymmetricWhitespaceTrim: !!options.allowAsymmetricWhitespaceTrim
+      allowAsymmetricWhitespaceTrim: !!options.allowAsymmetricWhitespaceTrim,
+      forceNoCrop: !!options.forceNoCrop
     });
     return {
       cssW,
@@ -5319,17 +5335,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     })
       .then((canvas) => {
         cleanup();
-        const coverageRect = getBasemapTileCoverageRectPx(mapEl);
-        const coveredCanvas = coverageRect ? extractCanvasRect(canvas, coverageRect) : canvas;
-        logEdgeExportDebug('dom-capture-basemap-coverage', {
-          srcW: canvas ? canvas.width : 0,
-          srcH: canvas ? canvas.height : 0,
-          cropX: coverageRect ? coverageRect.x : 0,
-          cropY: coverageRect ? coverageRect.y : 0,
-          cropW: coverageRect ? coverageRect.width : (canvas ? canvas.width : 0),
-          cropH: coverageRect ? coverageRect.height : (canvas ? canvas.height : 0)
-        });
-        cb(null, coveredCanvas || canvas);
+        cb(null, canvas);
       })
       .catch((err) => {
         cleanup();
@@ -5431,7 +5437,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       });
       showExportCorrectionDebugMessage(debugInfo);
       const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-        allowAsymmetricWhitespaceTrim: !!basemapOnly
+        forceNoCrop: !!basemapOnly
       });
       const cssW = geometry.cssW;
       const cssH = geometry.cssH;
@@ -6092,7 +6098,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         showExportCorrectionDebugMessage(debugInfo);
 
         const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-          allowAsymmetricWhitespaceTrim: !!basemapOnly
+          forceNoCrop: !!basemapOnly
         });
         const cssW = geometry.cssW;
         const cssH = geometry.cssH;
