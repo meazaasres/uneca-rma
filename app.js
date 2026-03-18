@@ -4655,9 +4655,19 @@ window.addEventListener('load', resetInitialScrollPositions);
     const octx = out.getContext('2d');
     if (!octx) return mapCanvas;
     octx.clearRect(0, 0, out.width, out.height);
-    octx.setTransform(sx, 0, 0, sy, tx, ty);
-    octx.drawImage(mapCanvas, 0, 0);
-    octx.setTransform(1, 0, 0, 1, 0, 0);
+    if (!allowTranslation) {
+      const srcW = out.width;
+      const srcH = out.height;
+      const dstW = srcW * sx;
+      const dstH = srcH * sy;
+      const dstX = (srcW - dstW) / 2;
+      const dstY = (srcH - dstH) / 2;
+      octx.drawImage(mapCanvas, 0, 0, srcW, srcH, dstX, dstY, dstW, dstH);
+    } else {
+      octx.setTransform(sx, 0, 0, sy, tx, ty);
+      octx.drawImage(mapCanvas, 0, 0);
+      octx.setTransform(1, 0, 0, 1, 0, 0);
+    }
     return out;
     }
 
