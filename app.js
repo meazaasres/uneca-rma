@@ -5037,8 +5037,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       );
       fallbackStage = fallbackSideCropPx > 0 ? "firefox-ratio" : "none";
     } else if (isEdgeBrowser()) {
-      fallbackSideCropPx = Math.min(EDGE_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
-      fallbackStage = fallbackSideCropPx > 0 ? "edge-fixed" : "none";
+      // Avoid forced side cropping on Edge when content-aware detection finds no whitespace.
+      // Fixed cropping can cause apparent lateral drift on wide-screen exports.
+      fallbackSideCropPx = 0;
+      fallbackStage = "none";
     } else if (isChromeBrowser()) {
       fallbackSideCropPx = Math.min(CHROME_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
       fallbackStage = fallbackSideCropPx > 0 ? "chrome-fixed" : "none";
