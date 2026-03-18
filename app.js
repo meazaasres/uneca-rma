@@ -4746,6 +4746,40 @@ window.addEventListener('load', resetInitialScrollPositions);
     return info;
     }
 
+    function isBasemapOnlyExportState() {
+    if (!map || typeof map.hasLayer !== 'function') return true;
+    try {
+      if (geojsonLayer && map.hasLayer(geojsonLayer)) {
+        const layers = (typeof geojsonLayer.getLayers === 'function') ? geojsonLayer.getLayers() : [];
+        if (Array.isArray(layers) && layers.length > 0) return false;
+      }
+      if (layerGroup && map.hasLayer(layerGroup)) {
+        const layers = (typeof layerGroup.getLayers === 'function') ? layerGroup.getLayers() : [];
+        if (Array.isArray(layers) && layers.length > 0) return false;
+      }
+      if (drawnItems && map.hasLayer(drawnItems)) {
+        const layers = (typeof drawnItems.getLayers === 'function') ? drawnItems.getLayers() : [];
+        if (Array.isArray(layers) && layers.length > 0) return false;
+      }
+
+      let hasNonTileLayer = false;
+      if (typeof map.eachLayer === 'function') {
+        map.eachLayer((l) => {
+          if (hasNonTileLayer || !l || l === baseLayer) return;
+          if (l instanceof L.TileLayer) return;
+          if (typeof L.FeatureGroup !== 'undefined' && l instanceof L.FeatureGroup && typeof l.getLayers === 'function') {
+            const inner = l.getLayers();
+            if (!Array.isArray(inner) || inner.length === 0) return;
+          }
+          hasNonTileLayer = true;
+        });
+      }
+      return !hasNonTileLayer;
+    } catch (e) {
+      return false;
+    }
+    }
+
     function showExportCorrectionDebugMessage(debugInfo) {
     if (!debugInfo) return;
     try {
@@ -5240,9 +5274,12 @@ window.addEventListener('load', resetInitialScrollPositions);
       const mapEl = document.getElementById('map');
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
-      const adjustedMapCanvas = alignMapCanvasForDisplayedState(mapCanvas, mapEl);
+      const basemapOnly = isBasemapOnlyExportState();
+      const adjustedMapCanvas = basemapOnly
+        ? mapCanvas
+        : alignMapCanvasForDisplayedState(mapCanvas, mapEl);
       logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-tile-plus-pane" : "displayed-state"
+        mode: basemapOnly ? "basemap-raw" : (isEdge ? "edge-tile-plus-pane" : "displayed-state")
       });
       showExportCorrectionDebugMessage(debugInfo);
       const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl);
@@ -5895,8 +5932,13 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const mapEl = document.getElementById('map');
         const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
-        const adjustedMapCanvas = alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
-        logEdgeExportDebug("pipeline.mode", { mode: "edge-direct-canvas-tile-plus-pane" });
+        const basemapOnly = isBasemapOnlyExportState();
+        const adjustedMapCanvas = basemapOnly
+          ? mapCanvas
+          : alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
+        logEdgeExportDebug("pipeline.mode", {
+          mode: basemapOnly ? "edge-basemap-raw" : "edge-direct-canvas-tile-plus-pane"
+        });
         showExportCorrectionDebugMessage(debugInfo);
 
         const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl);
