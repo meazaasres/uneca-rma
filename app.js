@@ -4496,6 +4496,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     const paneRect = paneEl.getBoundingClientRect();
     const offsetX = Math.round(paneRect.left - mapRect.left);
     const offsetY = Math.round(paneRect.top - mapRect.top);
+    const needsHorizontalCorrection = Math.abs(offsetX) > 1;
     const absMax = Math.max(Math.abs(offsetX), Math.abs(offsetY));
     const maxReasonableOffset = Math.max(
       EDGE_EXPORT_MAX_PANE_OFFSET_PX,
@@ -4508,7 +4509,11 @@ window.addEventListener('load', resetInitialScrollPositions);
       maxAllowed: EDGE_EXPORT_MAX_PANE_OFFSET_PX,
       maxReasonableOffset
     });
-    if (Math.abs(offsetX) <= 1 && Math.abs(offsetY) <= 1) return mapCanvas;
+    if (!needsHorizontalCorrection) {
+      // Ignore vertical-only pane deltas (often from intentional map pan nudges).
+      // Applying vertical correction here can shift basemap relative to overlays.
+      return mapCanvas;
+    }
     if (absMax > maxReasonableOffset) {
       // Ignore implausibly large values that are likely measurement anomalies.
       logEdgeExportDebug("alignMapCanvasForEdge.skipOutlierOffset", {
@@ -4525,8 +4530,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     aligned.height = mapCanvas.height;
     const actx = aligned.getContext('2d');
     if (!actx) return mapCanvas;
-    // Apply pane offset in the same direction as on-screen map pane translation.
-    actx.drawImage(mapCanvas, offsetX, offsetY);
+    // Correct only horizontal pane offset; keep vertical position as rendered.
+    actx.drawImage(mapCanvas, offsetX, 0);
     return aligned;
     }
 
