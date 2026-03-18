@@ -5065,8 +5065,39 @@ window.addEventListener('load', resetInitialScrollPositions);
       ? Math.max(0.2, Math.min(0.98, options.minInkWidthRatio))
       : 0.55;
     const minInkWidth = Math.max(1, Math.floor(width * minInkRatio));
+    const allowAsymmetricWhitespaceTrim = !!options.allowAsymmetricWhitespaceTrim;
 
     const margins = getHorizontalWhitespaceMargins(sourceCanvas, width, height, maxTrimRatio);
+    if (margins.detected && allowAsymmetricWhitespaceTrim) {
+      let leftTrim = Math.max(0, Math.min(maxAllowedPerSide, margins.leftBlank | 0));
+      let rightTrim = Math.max(0, Math.min(maxAllowedPerSide, margins.rightBlank | 0));
+      let contentWidth = Math.max(1, width - leftTrim - rightTrim);
+      if (contentWidth < minInkWidth) {
+        const deficit = minInkWidth - contentWidth;
+        if (rightTrim >= leftTrim) {
+          rightTrim = Math.max(0, rightTrim - deficit);
+        } else {
+          leftTrim = Math.max(0, leftTrim - deficit);
+        }
+        contentWidth = Math.max(1, width - leftTrim - rightTrim);
+      }
+      if (contentWidth >= 1 && (leftTrim > 0 || rightTrim > 0)) {
+        return {
+          cropX: leftTrim,
+          cropW: contentWidth,
+          cropY: 0,
+          cropH: height,
+          baseCropW: width,
+          sideCropPx: Math.min(leftTrim, rightTrim),
+          leftTrim,
+          rightTrim,
+          leftBlank: margins.leftBlank,
+          rightBlank: margins.rightBlank,
+          stage: "content-aware-asymmetric"
+        };
+      }
+    }
+
     if (margins.detected) {
       // Keep horizontal trimming symmetric to avoid export-side lateral drift.
       // This is especially important on wide layouts where one side can look
@@ -5182,7 +5213,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     const cropPlan = getExportHorizontalCropPlan(adjustedMapCanvas, baseCropW, cropH, {
       disableBrowserFallback: !!options.disableBrowserFallback,
       maxTrimRatio: options.maxTrimRatio,
-      minInkWidthRatio: options.minInkWidthRatio
+      minInkWidthRatio: options.minInkWidthRatio,
+      allowAsymmetricWhitespaceTrim: !!options.allowAsymmetricWhitespaceTrim
     });
     return {
       cssW,
@@ -5398,7 +5430,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         mode: basemapOnly ? "basemap-raw" : (isEdge ? "edge-tile-plus-pane" : "displayed-state")
       });
       showExportCorrectionDebugMessage(debugInfo);
-      const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl);
+      const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
+        allowAsymmetricWhitespaceTrim: !!basemapOnly
+      });
       const cssW = geometry.cssW;
       const cssH = geometry.cssH;
       const rawScaleX = geometry.rawScaleX;
@@ -6057,7 +6091,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         });
         showExportCorrectionDebugMessage(debugInfo);
 
-        const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl);
+        const geometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
+          allowAsymmetricWhitespaceTrim: !!basemapOnly
+        });
         const cssW = geometry.cssW;
         const cssH = geometry.cssH;
         const rawScaleX = geometry.rawScaleX;
