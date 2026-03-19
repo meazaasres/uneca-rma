@@ -2174,7 +2174,9 @@ const baseLayer = L.tileLayer(
   {
     attribution: '© United Nations',
     crossOrigin: 'anonymous',
+    bounds: MAP_NAV_BOUNDS,
     maxZoom: 18,
+    noWrap: true,
     tileSize: 256
   }
 ).addTo(map);
@@ -4425,51 +4427,163 @@ window.addEventListener('load', resetInitialScrollPositions);
     });
     }
 
-    function compositeExportElement(cb) {
-    leafletImage(map, (err, mapCanvas) => {
-      if (err) {
-        console.error("Leaflet image export failed:", err);
-        return;
+    function layerHasRenderableExportContent(layer, seen = new Set()) {
+    if (!layer || seen.has(layer) || layer === baseLayer) return false;
+    seen.add(layer);
+
+    const isTileLayer = typeof L.TileLayer === 'function' && layer instanceof L.TileLayer;
+    const isImageOverlay = typeof L.ImageOverlay === 'function' && layer instanceof L.ImageOverlay;
+    const isSvgOverlay = typeof L.SVGOverlay === 'function' && layer instanceof L.SVGOverlay;
+    if (isTileLayer || isImageOverlay || isSvgOverlay) {
+      return true;
+    }
+
+    if (typeof layer.getLayers === 'function') {
+      const childLayers = layer.getLayers();
+      if (Array.isArray(childLayers) && childLayers.length) {
+        return childLayers.some((child) => layerHasRenderableExportContent(child, seen));
       }
-      if (!mapCanvas) {
-        console.warn("No map canvas returned");
-        return;
+    }
+
+    if (typeof layer.getLatLng === 'function') return true;
+    if (typeof layer.getLatLngs === 'function') {
+      try {
+        const latLngs = layer.getLatLngs();
+        return Array.isArray(latLngs) && latLngs.length > 0;
+      } catch (e) {
+        return true;
+      }
+    }
+    if (typeof layer.toGeoJSON === 'function') return true;
+    return false;
+    }
+
+    function hasRenderableOverlayContentForExport() {
+    if (!map || typeof map.eachLayer !== 'function') return true;
+    let hasOverlayContent = false;
+    map.eachLayer((layer) => {
+      if (hasOverlayContent) return;
+      if (!map.hasLayer(layer)) return;
+      if (layerHasRenderableExportContent(layer)) hasOverlayContent = true;
+    });
+    return hasOverlayContent;
+    }
+
+    function setNodesTemporarilyHidden(nodes, hidden) {
+    nodes.forEach((node) => {
+      if (!node || !node.style) return;
+      if (hidden) {
+        node.dataset.exportPrevVisibility = node.style.visibility || '';
+        node.dataset.exportPrevOpacity = node.style.opacity || '';
+        node.style.setProperty('visibility', 'hidden', 'important');
+        node.style.setProperty('opacity', '0', 'important');
+      } else {
+        const prevVisibility = node.dataset.exportPrevVisibility || '';
+        const prevOpacity = node.dataset.exportPrevOpacity || '';
+        if (prevVisibility) node.style.visibility = prevVisibility;
+        else node.style.removeProperty('visibility');
+        if (prevOpacity) node.style.opacity = prevOpacity;
+        else node.style.removeProperty('opacity');
+        delete node.dataset.exportPrevVisibility;
+        delete node.dataset.exportPrevOpacity;
+      }
+    });
+    }
+
+    function captureDisplayedBasemapCanvas(mapEl) {
+    const hiddenNodes = [];
+    if (mapEl) {
+      hiddenNodes.push(...Array.from(mapEl.querySelectorAll('.leaflet-control-container, .leaflet-popup-pane, .leaflet-tooltip-pane')));
+    }
+    const disclaimerEl = document.getElementById('disclaimer');
+    if (disclaimerEl) hiddenNodes.push(disclaimerEl);
+
+    setNodesTemporarilyHidden(hiddenNodes, true);
+    return html2canvas(mapEl, buildHtml2CanvasOptions(mapEl))
+      .then((canvas) => {
+        if (!canvas || !(canvas.width > 0) || !(canvas.height > 0)) {
+          throw new Error('Displayed map capture returned an empty canvas.');
+        }
+        canvas._exportCaptureSource = 'displayed';
+        return canvas;
+      })
+      .finally(() => {
+        setNodesTemporarilyHidden(hiddenNodes, false);
+      });
+    }
+
+    function captureMapCanvasForExport(onSuccess, onError) {
+    const runLeafletImageCapture = () => {
+      leafletImage(map, (err, mapCanvas) => {
+        if (err) {
+          if (typeof onError === 'function') onError(err);
+          return;
+        }
+        if (!mapCanvas) {
+          if (typeof onError === 'function') onError(new Error('No map canvas returned'));
+          return;
+        }
+        onSuccess(mapCanvas);
+      });
+    };
+
+    const mapEl = document.getElementById('map');
+    const canUseDisplayedChromeCapture = isChromeBrowser() && mapEl && !hasRenderableOverlayContentForExport();
+    if (!canUseDisplayedChromeCapture) {
+      runLeafletImageCapture();
+      return;
+    }
+
+    captureDisplayedBasemapCanvas(mapEl)
+      .then(onSuccess)
+      .catch((err) => {
+        console.warn('Displayed basemap capture failed; falling back to leafletImage.', err);
+        runLeafletImageCapture();
+      });
+    }
+
+    function compositeExportElement(cb) {
+    captureMapCanvasForExport((mapCanvas) => {
+      const usedDisplayedCapture = !!(mapCanvas && mapCanvas._exportCaptureSource === 'displayed');
+      if (!usedDisplayedCapture) {
+        const mapEl = document.getElementById('map');
+        const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
+        const isEdge = isEdgeBrowser();
+        const adjustedMapCanvas = isEdge
+          // Edge: combine tile transform with map-pane drift correction.
+          ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
+          : alignMapCanvasToDisplayedTileTransform(
+              alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
+              mapEl,
+              { allowTranslation: true }
+            );
+        logEdgeExportDebug("pipeline.mode", {
+          mode: isEdge ? "edge-tile-plus-pane" : "full"
+        });
+        showExportCorrectionDebugMessage(debugInfo);
+        mapCanvas = adjustedMapCanvas;
       }
 
       const mapEl = document.getElementById('map');
-      const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
-      const isEdge = isEdgeBrowser();
-      const adjustedMapCanvas = isEdge
-        // Edge: combine tile transform with map-pane drift correction.
-        ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
-        : alignMapCanvasToDisplayedTileTransform(
-            alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
-            mapEl,
-            { allowTranslation: true }
-          );
-      logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-tile-plus-pane" : "full"
-      });
-      showExportCorrectionDebugMessage(debugInfo);
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
-      const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : adjustedMapCanvas.width);
-      const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
-      const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
-      const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
+      const cssW = (mapSize && mapSize.x > 0) ? mapSize.x : (mapEl ? mapEl.clientWidth : mapCanvas.width);
+      const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : mapCanvas.height);
+      const rawScaleX = cssW > 0 ? (mapCanvas.width / cssW) : 1;
+      const rawScaleY = cssH > 0 ? (mapCanvas.height / cssH) : rawScaleX;
       const expectedW = Math.round(cssW * rawScaleX);
       const expectedH = Math.round(cssH * rawScaleY);
-      const baseCropW = Math.max(1, Math.min(expectedW, adjustedMapCanvas.width));
-      const cropH = Math.max(1, Math.min(expectedH, adjustedMapCanvas.height));
-      const sideCropPx = getExportSideCropPxForBrowser(adjustedMapCanvas, baseCropW, cropH);
+      const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
+      const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
+      const sideCropPx = usedDisplayedCapture ? 0 : getExportSideCropPxForBrowser(mapCanvas, baseCropW, cropH);
       const cropX = Math.max(0, sideCropPx);
       const cropW = Math.max(1, baseCropW - (2 * sideCropPx));
-      if (isEdge) reportEdgeExportSpaceReduction("png/pdf", sideCropPx, baseCropW, cropW);
+      if (isEdgeBrowser()) reportEdgeExportSpaceReduction("png/pdf", sideCropPx, baseCropW, cropW);
 
       const cropped = document.createElement('canvas');
       cropped.width = cropW;
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
-      cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+      cctx.drawImage(mapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
 
       const W = cropW;
       const H = cropH;
@@ -4597,7 +4711,6 @@ window.addEventListener('load', resetInitialScrollPositions);
           source.classList &&
           source.classList.contains('leaflet-control-north-arrow')
         ) {
-          // Inline centering guards against Firefox/html2canvas dropping selector-based alignment.
           clone.style.display = 'flex';
           clone.style.flexDirection = 'column';
           clone.style.alignItems = 'center';
@@ -4616,7 +4729,6 @@ window.addEventListener('load', resetInitialScrollPositions);
           }
         }
         mapWrapper.appendChild(clone);
-        // Final hard clamp inside map frame to prevent spill into legend section.
         if (source.classList && (source.classList.contains('leaflet-control-exact-scale') || source.classList.contains('map-bottom-scale-control'))) {
           const maxBottom = Math.max(0, H - (clone.offsetHeight || exportHeight));
           const currentBottom = Math.max(0, parseFloat(clone.style.bottom || "0") || 0);
@@ -4624,10 +4736,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
       }
 
-      // Export disclaimer exactly as currently displayed on map.
       cloneMapOverlayToExport('#disclaimer', 'export-disclaimer-clone');
-
-      // Keep clone attempt for Chrome/Edge fidelity.
       cloneMapOverlayToExport('.leaflet-control-north-arrow', 'export-north-arrow-clone');
       cloneMapOverlayToExport('.leaflet-control-exact-scale, .map-bottom-scale-control', 'export-scale-clone');
 
@@ -4754,95 +4863,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       ensureScaleBarFallback();
 
       function ensureFirefoxGuaranteedOverlays() {
-        // Keep Firefox behavior aligned with Chrome by relying on exact clones.
         if (!isFirefoxBrowser()) return;
         return;
-
-        const existingDisc = mapWrapper.querySelector('.export-disclaimer-clone');
-        if (!existingDisc) {
-          const srcDisc = document.getElementById('disclaimer');
-          const fallbackDisc = document.createElement('div');
-          fallbackDisc.className = 'export-disclaimer-clone';
-          fallbackDisc.style.position = 'absolute';
-          fallbackDisc.style.left = '8px';
-          fallbackDisc.style.bottom = '-2px';
-          fallbackDisc.style.maxWidth = Math.max(140, Math.round(W * 0.45)) + 'px';
-          fallbackDisc.style.background = 'rgba(255,255,255,0.95)';
-          fallbackDisc.style.padding = '6px';
-          fallbackDisc.style.fontSize = '10px';
-          fallbackDisc.style.lineHeight = '1.25';
-          fallbackDisc.style.color = '#000';
-          fallbackDisc.style.textAlign = 'left';
-          fallbackDisc.style.zIndex = '6';
-          fallbackDisc.textContent = (srcDisc && srcDisc.textContent ? String(srcDisc.textContent).trim() : 'Disclaimer');
-          mapWrapper.appendChild(fallbackDisc);
-        }
-
-        const existingNorth = mapWrapper.querySelector('.export-north-arrow-clone');
-        if (!existingNorth) {
-          const na = document.createElement('div');
-          na.className = 'export-north-arrow-clone';
-          na.style.position = 'absolute';
-          na.style.right = '12px';
-          na.style.top = '12px';
-          na.style.width = '34px';
-          na.style.height = '44px';
-          na.style.background = '#fff';
-          na.style.border = '1px solid #cfd6e4';
-          na.style.borderRadius = '4px';
-          na.style.display = 'flex';
-          na.style.flexDirection = 'column';
-          na.style.alignItems = 'center';
-          na.style.justifyContent = 'center';
-          na.style.boxSizing = 'border-box';
-          na.style.zIndex = '6';
-          const nText = document.createElement('div');
-          nText.textContent = 'N';
-          nText.style.fontSize = '12px';
-          nText.style.fontWeight = '700';
-          nText.style.color = '#1e3a8a';
-          nText.style.lineHeight = '1';
-          const tri = document.createElement('div');
-          tri.style.width = '0';
-          tri.style.height = '0';
-          tri.style.borderLeft = '6px solid transparent';
-          tri.style.borderRight = '6px solid transparent';
-          tri.style.borderBottom = '12px solid #1e3a8a';
-          tri.style.marginTop = '3px';
-          na.appendChild(nText);
-          na.appendChild(tri);
-          mapWrapper.appendChild(na);
-        }
-
-        const existingScale = mapWrapper.querySelector('.export-scale-clone');
-        if (!existingScale) {
-          const srcScale = (scaleControl && typeof scaleControl.getContainer === "function")
-            ? scaleControl.getContainer()
-            : null;
-          const scaleTxt = srcScale
-            ? (srcScale.querySelector('.exact-scale-label')?.textContent || srcScale.textContent || 'Scale: --')
-            : 'Scale: --';
-          const sb = document.createElement('div');
-          sb.className = 'export-scale-clone';
-          sb.style.position = 'absolute';
-          sb.style.left = Math.max(8, Math.round((W - 140) / 2)) + 'px';
-          sb.style.bottom = '-2px';
-          sb.style.width = '140px';
-          sb.style.minHeight = '22px';
-          sb.style.background = '#fff';
-          sb.style.border = '1px solid #cfd6e4';
-          sb.style.borderRadius = '4px';
-          sb.style.padding = '3px 6px';
-          sb.style.boxSizing = 'border-box';
-          sb.style.fontSize = '8px';
-          sb.style.lineHeight = '1.2';
-          sb.style.fontWeight = '400';
-          sb.style.color = '#102a43';
-          sb.style.textAlign = 'center';
-          sb.style.zIndex = '6';
-          sb.textContent = String(scaleTxt || 'Scale: --').trim();
-          mapWrapper.appendChild(sb);
-        }
       }
 
       ensureFirefoxGuaranteedOverlays();
@@ -4951,6 +4973,12 @@ window.addEventListener('load', resetInitialScrollPositions);
         img.onload = runCb;
         img.onerror = runCb;
       }
+    }, (err) => {
+      if (err) {
+        console.error("Leaflet image export failed:", err);
+        return;
+      }
+      console.warn("No map canvas returned");
     });
     }
 
