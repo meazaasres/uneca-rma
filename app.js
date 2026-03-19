@@ -4661,6 +4661,38 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (isChromeBrowser()) {
       const mapW = Math.max(1, mapEl.clientWidth || 0);
       const mapH = Math.max(1, mapEl.clientHeight || 0);
+      const chromeMaskSelectors = [
+        '#sidebar',
+        '#right-sidebar',
+        '#classification-wrapper',
+        '#table-container',
+        '#layers-container',
+        '#popup-message'
+      ];
+      const maskedNodes = chromeMaskSelectors
+        .map((sel) => document.querySelector(sel))
+        .filter(Boolean)
+        .map((el) => {
+          const prev = {
+            visibility: el.style.visibility,
+            opacity: el.style.opacity,
+            pointerEvents: el.style.pointerEvents
+          };
+          el.style.visibility = 'hidden';
+          el.style.opacity = '0';
+          el.style.pointerEvents = 'none';
+          return { el, prev };
+        });
+
+      const restoreMaskedNodes = () => {
+        maskedNodes.forEach(({ el, prev }) => {
+          if (!el) return;
+          el.style.visibility = prev.visibility;
+          el.style.opacity = prev.opacity;
+          el.style.pointerEvents = prev.pointerEvents;
+        });
+      };
+
       html2canvas(mapEl, {
         scale: Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
         useCORS: true,
@@ -4674,14 +4706,17 @@ window.addEventListener('load', resetInitialScrollPositions);
         scrollX: 0,
         scrollY: 0,
         ignoreElements: (el) => {
-          if (!el || !el.classList) return false;
+          if (!el) return false;
           if (el.id === "disclaimer") return true;
+          if (el.id === "sidebar" || el.id === "right-sidebar") return true;
+          if (el.id === "classification-wrapper" || el.id === "table-container") return true;
           if (el.classList.contains("leaflet-control")) return true;
           if (el.id === "map-title") return true;
           return false;
         }
       })
       .then((canvas) => {
+        restoreMaskedNodes();
         if (!canvas) {
           if (typeof onError === "function") onError(new Error("Chrome map canvas unavailable"));
           return;
@@ -4689,6 +4724,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         finalizePreparedCanvas(canvas, "chrome-html2canvas");
       })
       .catch((err) => {
+        restoreMaskedNodes();
         leafletImage(map, (leafErr, mapCanvas) => {
           if (leafErr || !mapCanvas) {
             if (typeof onError === "function") onError(leafErr || err || new Error("Map canvas unavailable"));
