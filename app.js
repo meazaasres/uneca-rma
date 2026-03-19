@@ -4601,17 +4601,9 @@ window.addEventListener('load', resetInitialScrollPositions);
 
       const mapEl = document.getElementById('map');
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
-      const isEdge = isEdgeBrowser();
-      const adjustedMapCanvas = isEdge
-        ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
-        : alignMapCanvasToDisplayedTileTransform(
-            alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
-            mapEl,
-            { allowTranslation: true }
-          );
-      logEdgeExportDebug("pipeline.mode", {
-        mode: isEdge ? "edge-tile-plus-pane" : "full"
-      });
+      // Keep export correction minimal: rely on leafletImage output and centered fractional zoom correction.
+      const adjustedMapCanvas = alignMapCanvasForFractionalTileZoom(mapCanvas);
+      logEdgeExportDebug("pipeline.mode", { mode: "stable-minimal" });
       showExportCorrectionDebugMessage(debugInfo);
 
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
@@ -4619,12 +4611,13 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
       const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
       const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
+      // Avoid vertical trimming because it can introduce cross-browser Y drift.
       const blankInsets = getCanvasBlankInsets(adjustedMapCanvas, 0.2);
       const cropRect = fitCropRectToAspect({
         x: blankInsets.left,
-        y: blankInsets.top,
+        y: 0,
         width: Math.max(1, adjustedMapCanvas.width - blankInsets.left - blankInsets.right),
-        height: Math.max(1, adjustedMapCanvas.height - blankInsets.top - blankInsets.bottom)
+        height: Math.max(1, adjustedMapCanvas.height)
       }, getCanonicalExportTemplate().mapWidth / getCanonicalExportTemplate().mapHeight);
       const template = getCanonicalExportTemplate();
       const exportMapCanvas = document.createElement('canvas');
