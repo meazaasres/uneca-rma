@@ -4593,17 +4593,18 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function buildPreparedExportMapCanvas(formatLabel, cb, onError) {
-    leafletImage(map, (err, mapCanvas) => {
-      if (err || !mapCanvas) {
-        if (typeof onError === "function") onError(err || new Error("Map canvas unavailable"));
-        return;
-      }
+    const mapEl = document.getElementById('map');
+    if (!mapEl) {
+      if (typeof onError === "function") onError(new Error("Map element not found"));
+      return;
+    }
 
-      const mapEl = document.getElementById('map');
-      const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
-      // Keep export correction minimal: rely on leafletImage output and centered fractional zoom correction.
-      const adjustedMapCanvas = alignMapCanvasForFractionalTileZoom(mapCanvas);
-      logEdgeExportDebug("pipeline.mode", { mode: "stable-minimal" });
+    const finalizePreparedCanvas = (capturedCanvas, modeLabel) => {
+      const debugInfo = getExportCorrectionDebug(capturedCanvas, mapEl);
+      const adjustedMapCanvas = isChromeBrowser()
+        ? capturedCanvas
+        : alignMapCanvasForFractionalTileZoom(capturedCanvas);
+      logEdgeExportDebug("pipeline.mode", { mode: modeLabel });
       showExportCorrectionDebugMessage(debugInfo);
 
       const mapSize = (map && typeof map.getSize === 'function') ? map.getSize() : null;
@@ -4655,6 +4656,56 @@ window.addEventListener('load', resetInitialScrollPositions);
         mapDrawRect: { x: drawX, y: drawY, width: drawWidth, height: drawHeight },
         sourceAspect: sourceWidth / Math.max(1, sourceHeight)
       });
+    };
+
+    if (isChromeBrowser()) {
+      const mapW = Math.max(1, mapEl.clientWidth || 0);
+      const mapH = Math.max(1, mapEl.clientHeight || 0);
+      html2canvas(mapEl, {
+        scale: Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
+        useCORS: true,
+        foreignObjectRendering: false,
+        logging: false,
+        backgroundColor: "#ffffff",
+        width: mapW,
+        height: mapH,
+        windowWidth: mapW,
+        windowHeight: mapH,
+        scrollX: 0,
+        scrollY: 0,
+        ignoreElements: (el) => {
+          if (!el || !el.classList) return false;
+          if (el.id === "disclaimer") return true;
+          if (el.classList.contains("leaflet-control")) return true;
+          if (el.id === "map-title") return true;
+          return false;
+        }
+      })
+      .then((canvas) => {
+        if (!canvas) {
+          if (typeof onError === "function") onError(new Error("Chrome map canvas unavailable"));
+          return;
+        }
+        finalizePreparedCanvas(canvas, "chrome-html2canvas");
+      })
+      .catch((err) => {
+        leafletImage(map, (leafErr, mapCanvas) => {
+          if (leafErr || !mapCanvas) {
+            if (typeof onError === "function") onError(leafErr || err || new Error("Map canvas unavailable"));
+            return;
+          }
+          finalizePreparedCanvas(mapCanvas, "chrome-fallback-leafletimage");
+        });
+      });
+      return;
+    }
+
+    leafletImage(map, (err, mapCanvas) => {
+      if (err || !mapCanvas) {
+        if (typeof onError === "function") onError(err || new Error("Map canvas unavailable"));
+        return;
+      }
+      finalizePreparedCanvas(mapCanvas, "stable-minimal");
     });
     }
 
