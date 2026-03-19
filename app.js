@@ -4611,14 +4611,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       const cssH = (mapSize && mapSize.y > 0) ? mapSize.y : (mapEl ? mapEl.clientHeight : adjustedMapCanvas.height);
       const rawScaleX = cssW > 0 ? (adjustedMapCanvas.width / cssW) : 1;
       const rawScaleY = cssH > 0 ? (adjustedMapCanvas.height / cssH) : rawScaleX;
-      // Avoid vertical trimming because it can introduce cross-browser Y drift.
-      const blankInsets = getCanvasBlankInsets(adjustedMapCanvas, 0.2);
-      const cropRect = fitCropRectToAspect({
-        x: blankInsets.left,
-        y: 0,
-        width: Math.max(1, adjustedMapCanvas.width - blankInsets.left - blankInsets.right),
-        height: Math.max(1, adjustedMapCanvas.height)
-      }, getCanonicalExportTemplate().mapWidth / getCanonicalExportTemplate().mapHeight);
       const template = getCanonicalExportTemplate();
       const exportMapCanvas = document.createElement('canvas');
       exportMapCanvas.width = template.mapWidth;
@@ -4628,16 +4620,25 @@ window.addEventListener('load', resetInitialScrollPositions);
         if (typeof onError === "function") onError(new Error("Export canvas context unavailable"));
         return;
       }
+      exportCtx.fillStyle = '#ffffff';
+      exportCtx.fillRect(0, 0, template.mapWidth, template.mapHeight);
+      const sourceWidth = Math.max(1, adjustedMapCanvas.width);
+      const sourceHeight = Math.max(1, adjustedMapCanvas.height);
+      const containScale = Math.min(template.mapWidth / sourceWidth, template.mapHeight / sourceHeight);
+      const drawWidth = Math.max(1, Math.round(sourceWidth * containScale));
+      const drawHeight = Math.max(1, Math.round(sourceHeight * containScale));
+      const drawX = Math.max(0, Math.round((template.mapWidth - drawWidth) / 2));
+      const drawY = Math.max(0, Math.round((template.mapHeight - drawHeight) / 2));
       exportCtx.drawImage(
         adjustedMapCanvas,
-        cropRect.x,
-        cropRect.y,
-        cropRect.width,
-        cropRect.height,
         0,
         0,
-        template.mapWidth,
-        template.mapHeight
+        sourceWidth,
+        sourceHeight,
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight
       );
 
       cb({
@@ -4650,8 +4651,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         cssH,
         rawScaleX,
         rawScaleY,
-        cropRect,
-        sourceAspect: cropRect.width / Math.max(1, cropRect.height)
+        sourceFrame: { x: 0, y: 0, width: sourceWidth, height: sourceHeight },
+        mapDrawRect: { x: drawX, y: drawY, width: drawWidth, height: drawHeight },
+        sourceAspect: sourceWidth / Math.max(1, sourceHeight)
       });
     });
     }
@@ -5544,7 +5546,7 @@ function exportSVG() {
 
   settleMapForExport()
     .catch(() => undefined)
-    .then(() => buildPreparedExportMapCanvas("svg", ({ template, exportMapCanvas, cropRect, rawScaleX, rawScaleY }) => {
+    .then(() => buildPreparedExportMapCanvas("svg", ({ template, exportMapCanvas, sourceFrame, mapDrawRect, rawScaleX, rawScaleY }) => {
       const canvasDataUrlCheck = tryCanvasToDataURL(exportMapCanvas);
       if (!canvasDataUrlCheck) {
         showPopup("Export blocked by cross-origin tiles. Enable CORS or use PNG fallback.", "error");
@@ -5572,8 +5574,8 @@ function exportSVG() {
         const legendHeightPx = Math.max(Math.round(legendHeightCss * uiScale), computedLegendHeightPx);
         const totalWidthPx = template.mapWidth;
         const totalHeightPx = titleHeightPx + template.mapHeight + legendHeightPx + (marginPx * 2);
-        const exportPxPerCssX = rawScaleX * (template.mapWidth / Math.max(1, cropRect.width));
-        const exportPxPerCssY = rawScaleY * (template.mapHeight / Math.max(1, cropRect.height));
+        const exportPxPerCssX = rawScaleX * (mapDrawRect.width / Math.max(1, sourceFrame.width));
+        const exportPxPerCssY = rawScaleY * (mapDrawRect.height / Math.max(1, sourceFrame.height));
         const exportPxPerCss = (exportPxPerCssX + exportPxPerCssY) / 2;
 
         const svg = document.createElementNS(svgNS, "svg");
@@ -5621,8 +5623,8 @@ function exportSVG() {
           const containerPoint = map.layerPointToContainerPoint(layerPoint);
           const sourceX = containerPoint.x * rawScaleX;
           const sourceY = containerPoint.y * rawScaleY;
-          const x = ((sourceX - cropRect.x) * template.mapWidth) / Math.max(1, cropRect.width);
-          const y = titleHeightPx + (((sourceY - cropRect.y) * template.mapHeight) / Math.max(1, cropRect.height));
+          const x = mapDrawRect.x + ((sourceX - sourceFrame.x) * mapDrawRect.width) / Math.max(1, sourceFrame.width);
+          const y = titleHeightPx + mapDrawRect.y + ((sourceY - sourceFrame.y) * mapDrawRect.height) / Math.max(1, sourceFrame.height);
           return [x, y];
         }
 
