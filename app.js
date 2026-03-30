@@ -28,6 +28,9 @@ const EXPORT_SIDE_CROP_EXTRA_PX = 10;
 const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
+const EXPORT_A4_WIDTH_PX = 2480;
+const EXPORT_A4_HEIGHT_PX = 3508;
+const EXPORT_HTML2CANVAS_SCALE = 2;
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
@@ -4333,9 +4336,9 @@ window.addEventListener('load', resetInitialScrollPositions);
     const rect = wrapper.getBoundingClientRect();
     const exportWidth = Math.max(1, Math.ceil(rect.width || wrapper.scrollWidth || wrapper.offsetWidth));
     const exportHeight = Math.max(1, Math.ceil(rect.height || wrapper.scrollHeight || wrapper.offsetHeight));
-    const isFirefox = isFirefoxBrowser();
     return {
-      scale: isFirefox ? Math.min(1.25, Math.max(1, window.devicePixelRatio || 1)) : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1)),
+      // Fixed capture scale keeps export quality stable across screens and browser zoom.
+      scale: EXPORT_HTML2CANVAS_SCALE,
       useCORS: true,
       foreignObjectRendering: false,
       logging: false,
@@ -4347,6 +4350,80 @@ window.addEventListener('load', resetInitialScrollPositions);
       scrollX: 0,
       scrollY: 0
     };
+    }
+
+    function computeContainRect(srcW, srcH, dstW, dstH) {
+    const safeSrcW = Math.max(1, srcW | 0);
+    const safeSrcH = Math.max(1, srcH | 0);
+    const safeDstW = Math.max(1, dstW | 0);
+    const safeDstH = Math.max(1, dstH | 0);
+    const scale = Math.min(safeDstW / safeSrcW, safeDstH / safeSrcH);
+    const drawW = Math.max(1, Math.round(safeSrcW * scale));
+    const drawH = Math.max(1, Math.round(safeSrcH * scale));
+    const x = Math.round((safeDstW - drawW) / 2);
+    const y = Math.round((safeDstH - drawH) / 2);
+    return { x, y, width: drawW, height: drawH };
+    }
+
+    function renderCanvasToFixedA4Portrait(sourceCanvas) {
+    const out = document.createElement('canvas');
+    out.width = EXPORT_A4_WIDTH_PX;
+    out.height = EXPORT_A4_HEIGHT_PX;
+    const ctx = out.getContext('2d');
+    if (!ctx) return sourceCanvas;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    if (!sourceCanvas || !(sourceCanvas.width > 0) || !(sourceCanvas.height > 0)) {
+      return out;
+    }
+    const rect = computeContainRect(sourceCanvas.width, sourceCanvas.height, out.width, out.height);
+    ctx.drawImage(sourceCanvas, 0, 0, sourceCanvas.width, sourceCanvas.height, rect.x, rect.y, rect.width, rect.height);
+    return out;
+    }
+
+    function saveCanvasAsA4PortraitPdf(sourceCanvas, fileName) {
+    const a4Canvas = renderCanvasToFixedA4Portrait(sourceCanvas);
+    const imgData = a4Canvas.toDataURL('image/png');
+    const pdf = new jspdf.jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+    pdf.save(fileName || 'map.pdf');
+    }
+
+    function normalizeSvgToA4Portrait(svg, srcW, srcH) {
+    if (!svg) return;
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const sourceW = Math.max(1, Math.round(Number(srcW) || Number(svg.getAttribute('data-export-width')) || Number(svg.getAttribute('width')) || EXPORT_A4_WIDTH_PX));
+    const sourceH = Math.max(1, Math.round(Number(srcH) || Number(svg.getAttribute('data-export-height')) || Number(svg.getAttribute('height')) || EXPORT_A4_HEIGHT_PX));
+    const targetW = EXPORT_A4_WIDTH_PX;
+    const targetH = EXPORT_A4_HEIGHT_PX;
+    const fit = computeContainRect(sourceW, sourceH, targetW, targetH);
+
+    const contentGroup = document.createElementNS(svgNS, 'g');
+    while (svg.firstChild) contentGroup.appendChild(svg.firstChild);
+
+    svg.setAttribute('width', String(targetW));
+    svg.setAttribute('height', String(targetH));
+    svg.setAttribute('viewBox', `0 0 ${targetW} ${targetH}`);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    svg.removeAttribute('data-export-width');
+    svg.removeAttribute('data-export-height');
+
+    const bg = document.createElementNS(svgNS, 'rect');
+    bg.setAttribute('x', '0');
+    bg.setAttribute('y', '0');
+    bg.setAttribute('width', String(targetW));
+    bg.setAttribute('height', String(targetH));
+    bg.setAttribute('fill', '#ffffff');
+    svg.appendChild(bg);
+
+    const scaleX = fit.width / sourceW;
+    const scaleY = fit.height / sourceH;
+    contentGroup.setAttribute('transform', `translate(${fit.x} ${fit.y}) scale(${scaleX} ${scaleY})`);
+    svg.appendChild(contentGroup);
     }
 
     function getSymmetricWhitespaceSideCropPx(sourceCanvas, scanW, scanH, maxTrimRatio = 0.16) {
@@ -4394,6 +4471,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function getExportSideCropPxForBrowser(sourceCanvas, baseCropW, cropH) {
+        const symmetricWhitespaceCrop = getSymmetricWhitespaceSideCropPx(sourceCanvas, baseCropW, cropH, 0.16);
+        if (symmetricWhitespaceCrop > 0) return symmetricWhitespaceCrop;
     if (isFirefoxBrowser()) {
       return Math.max(
         0,
@@ -4403,14 +4482,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         )
       );
     }
-    if (isEdgeBrowser()) {
-      const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
-      return Math.min(EDGE_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
-    }
-    if (isChromeBrowser()) {
-      const maxAllowedPerSide = Math.max(0, Math.floor((Math.max(1, baseCropW) - 1) / 2));
-      return Math.min(CHROME_EXPORT_FIXED_SIDE_CROP_PX, maxAllowedPerSide);
-    }
+    // For Chromium/Edge, avoid fixed side crop so wide screens do not shift exports.
     return 0;
     }
 
@@ -5333,8 +5405,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         buildEdgeDirectExportCanvas(
           "png",
           (canvas) => {
+            const fixedA4Canvas = renderCanvasToFixedA4Portrait(canvas);
             const a = document.createElement('a');
-            a.href = canvas.toDataURL('image/png');
+            a.href = fixedA4Canvas.toDataURL('image/png');
             a.download = 'map.png';
             a.rel = 'noopener';
             a.click();
@@ -5351,8 +5424,9 @@ window.addEventListener('load', resetInitialScrollPositions);
       compositeExportElement(wrapper => {
         html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
           .then(canvas => {
+            const fixedA4Canvas = renderCanvasToFixedA4Portrait(canvas);
             const a = document.createElement('a');
-            a.href = canvas.toDataURL('image/png');
+            a.href = fixedA4Canvas.toDataURL('image/png');
             a.download = 'map.png';
             a.rel = 'noopener';
             a.click();
@@ -5373,15 +5447,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           buildEdgeDirectExportCanvas(
             "pdf",
             (canvas) => {
-              const imgData = canvas.toDataURL('image/png');
-              const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
-              const pdf = new jspdf.jsPDF({
-                orientation,
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-              });
-              pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-              pdf.save('map.pdf');
+              saveCanvasAsA4PortraitPdf(canvas, 'map.pdf');
               hideLoading();
             },
             (err) => {
@@ -5395,15 +5461,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         compositeExportElement(wrapper => {
             html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
             .then(canvas => {
-              const imgData = canvas.toDataURL('image/png');
-              const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
-              const pdf = new jspdf.jsPDF({
-                orientation,
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-              });
-              pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-              pdf.save('map.pdf');
+              saveCanvasAsA4PortraitPdf(canvas, 'map.pdf');
               document.body.removeChild(wrapper);
               hideLoading();
             })
@@ -6122,6 +6180,9 @@ function exportSVG() {
 
         svg.appendChild(legendGroup);
       }
+  // Normalize final SVG dimensions to fixed A4 portrait for cross-screen consistency.
+  normalizeSvgToA4Portrait(svg, totalWidthPx, totalHeightPx);
+
 // serialize and download
       const serializer = new XMLSerializer();
       const svgString = serializer.serializeToString(svg);
