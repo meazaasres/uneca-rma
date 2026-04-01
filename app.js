@@ -4310,7 +4310,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     function alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl) {
     if (!mapCanvas || !mapEl || !isEdgeBrowser()) return mapCanvas;
     // Edge can need both tile-level transform and a small map-pane translation.
-    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: true });
+    // Keep scale correction but avoid double-applying tile translation offsets.
+    const tileAligned = alignMapCanvasToDisplayedTileTransform(mapCanvas, mapEl, { allowTranslation: false });
     const paneAligned = alignMapCanvasForEdge(tileAligned, mapEl);
     logEdgeExportDebug("alignMapCanvasForEdgeDisplayedState", {
       tileAlignedChanged: tileAligned !== mapCanvas,
@@ -5199,7 +5200,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           : alignMapCanvasToDisplayedTileTransform(
               alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
               mapEl,
-              { allowTranslation: true }
+              { allowTranslation: false }
             );
         logEdgeExportDebug("pipeline.mode", {
           mode: isEdge ? "edge-tile-plus-pane" : "full"
@@ -5518,7 +5519,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           : alignMapCanvasToDisplayedTileTransform(
               alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
               mapEl,
-              { allowTranslation: true }
+              { allowTranslation: false }
             );
         logEdgeExportDebug("pipeline.mode", {
           mode: isEdge ? "edge-direct-canvas-tile-plus-pane" : "direct-canvas"
@@ -5863,7 +5864,7 @@ function exportSVG() {
         : alignMapCanvasToDisplayedTileTransform(
             alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
             mapEl,
-            { allowTranslation: true }
+            { allowTranslation: false }
           );
       logEdgeExportDebug("pipeline.mode", {
         mode: isEdge ? "edge-tile-plus-pane" : "full"
