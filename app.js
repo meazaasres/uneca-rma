@@ -34,6 +34,23 @@ const EXPORT_HTML2CANVAS_SCALE = 2;
 const EXPORT_CAPTURE_MAP_WIDTH_PX = 1600;
 const EXPORT_CAPTURE_MAP_HEIGHT_PX = 1131;
 const EXPORT_CAPTURE_SETTLE_MS = 180;
+const EXPORT_CAPTURE_PRESETS = {
+  "a4-balanced": {
+    label: "A4 Balanced (fast)",
+    width: 1600,
+    height: 1131
+  },
+  "a4-detailed": {
+    label: "A4 Detailed (high quality)",
+    width: 2200,
+    height: 1556
+  },
+  "screen-wide": {
+    label: "Screen Wide 16:9",
+    width: 1920,
+    height: 1080
+  }
+};
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
 const ENFORCE_IMPORT_HOST_ALLOWLIST = false;
 const ALLOWED_IMPORT_HOSTS = new Set([
@@ -5100,6 +5117,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       return;
     }
 
+    const capturePreset = getSelectedExportCapturePreset();
+    const captureWidth = capturePreset.width;
+    const captureHeight = capturePreset.height;
+
     const originalStyle = {
       width: mapEl.style.width,
       height: mapEl.style.height,
@@ -5129,8 +5150,8 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     try {
       mapEl.style.transition = 'none';
-      mapEl.style.width = `${EXPORT_CAPTURE_MAP_WIDTH_PX}px`;
-      mapEl.style.height = `${EXPORT_CAPTURE_MAP_HEIGHT_PX}px`;
+      mapEl.style.width = `${captureWidth}px`;
+      mapEl.style.height = `${captureHeight}px`;
       mapEl.style.maxWidth = 'none';
       mapEl.style.maxHeight = 'none';
 
@@ -5152,13 +5173,26 @@ window.addEventListener('load', resetInitialScrollPositions);
           return;
         }
         mapCanvas._exportCaptureMeta = {
-          cssWidth: EXPORT_CAPTURE_MAP_WIDTH_PX,
-          cssHeight: EXPORT_CAPTURE_MAP_HEIGHT_PX
+          cssWidth: captureWidth,
+          cssHeight: captureHeight,
+          profile: capturePreset.profile
         };
         restoreMapViewport();
         if (typeof onSuccess === 'function') onSuccess(mapCanvas);
       });
     }, EXPORT_CAPTURE_SETTLE_MS);
+    }
+
+    function getSelectedExportCapturePreset() {
+    const selector = document.getElementById('export-capture-profile');
+    const selectedKey = selector ? String(selector.value || '') : '';
+    const fallbackKey = 'a4-balanced';
+    const preset = EXPORT_CAPTURE_PRESETS[selectedKey] || EXPORT_CAPTURE_PRESETS[fallbackKey];
+    return {
+      profile: EXPORT_CAPTURE_PRESETS[selectedKey] ? selectedKey : fallbackKey,
+      width: Math.max(320, Math.round(Number(preset?.width) || EXPORT_CAPTURE_MAP_WIDTH_PX)),
+      height: Math.max(240, Math.round(Number(preset?.height) || EXPORT_CAPTURE_MAP_HEIGHT_PX))
+    };
     }
 
     function compositeExportElement(cb) {
@@ -6407,6 +6441,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const btnExportSVG = document.getElementById('btnExportSVG');
   if (btnExportSVG) btnExportSVG.addEventListener('click', () => { try { exportSVG(); } catch(e){console.error(e);} });
+
+  const exportProfileSelect = document.getElementById('export-capture-profile');
+  if (exportProfileSelect) {
+    const available = Object.keys(EXPORT_CAPTURE_PRESETS);
+    if (available.includes(exportProfileSelect.value)) {
+      exportProfileSelect.value = exportProfileSelect.value;
+    } else {
+      exportProfileSelect.value = 'a4-balanced';
+    }
+  }
 
   const btnToggle = document.getElementById('btnToggleClassTable');
   if (btnToggle) btnToggle.addEventListener('click', () => { try { toggleClassTable(); } catch(e){console.error(e);} });
