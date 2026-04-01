@@ -34,6 +34,10 @@ const EXPORT_HTML2CANVAS_SCALE = 2;
 const EXPORT_CAPTURE_MAP_WIDTH_PX = 1600;
 const EXPORT_CAPTURE_MAP_HEIGHT_PX = 1131;
 const EXPORT_CAPTURE_SETTLE_MS = 180;
+const EXPORT_CAPTURE_MIN_WIDTH_PX = 640;
+const EXPORT_CAPTURE_MAX_WIDTH_PX = 4096;
+const EXPORT_CAPTURE_MIN_HEIGHT_PX = 480;
+const EXPORT_CAPTURE_MAX_HEIGHT_PX = 4096;
 const EXPORT_CAPTURE_PRESETS = {
   "a4-balanced": {
     label: "A4 Balanced (fast)",
@@ -49,6 +53,11 @@ const EXPORT_CAPTURE_PRESETS = {
     label: "Screen Wide 16:9",
     width: 1920,
     height: 1080
+  },
+  "custom": {
+    label: "Custom size",
+    width: EXPORT_CAPTURE_MAP_WIDTH_PX,
+    height: EXPORT_CAPTURE_MAP_HEIGHT_PX
   }
 };
 const EDGE_EXPORT_MAX_PANE_OFFSET_PX = 48;
@@ -5185,14 +5194,53 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     function getSelectedExportCapturePreset() {
     const selector = document.getElementById('export-capture-profile');
+    const customWidthInput = document.getElementById('export-capture-width');
+    const customHeightInput = document.getElementById('export-capture-height');
     const selectedKey = selector ? String(selector.value || '') : '';
     const fallbackKey = 'a4-balanced';
+    if (selectedKey === 'custom') {
+      const width = clampExportCaptureDimension(
+        customWidthInput ? customWidthInput.value : EXPORT_CAPTURE_MAP_WIDTH_PX,
+        EXPORT_CAPTURE_MAP_WIDTH_PX,
+        EXPORT_CAPTURE_MIN_WIDTH_PX,
+        EXPORT_CAPTURE_MAX_WIDTH_PX
+      );
+      const height = clampExportCaptureDimension(
+        customHeightInput ? customHeightInput.value : EXPORT_CAPTURE_MAP_HEIGHT_PX,
+        EXPORT_CAPTURE_MAP_HEIGHT_PX,
+        EXPORT_CAPTURE_MIN_HEIGHT_PX,
+        EXPORT_CAPTURE_MAX_HEIGHT_PX
+      );
+      if (customWidthInput) customWidthInput.value = String(width);
+      if (customHeightInput) customHeightInput.value = String(height);
+      return {
+        profile: 'custom',
+        width,
+        height
+      };
+    }
     const preset = EXPORT_CAPTURE_PRESETS[selectedKey] || EXPORT_CAPTURE_PRESETS[fallbackKey];
     return {
       profile: EXPORT_CAPTURE_PRESETS[selectedKey] ? selectedKey : fallbackKey,
       width: Math.max(320, Math.round(Number(preset?.width) || EXPORT_CAPTURE_MAP_WIDTH_PX)),
       height: Math.max(240, Math.round(Number(preset?.height) || EXPORT_CAPTURE_MAP_HEIGHT_PX))
     };
+    }
+
+    function clampExportCaptureDimension(value, fallback, min, max) {
+    const n = Math.round(Number(value));
+    const safeFallback = Math.round(Number(fallback));
+    const base = Number.isFinite(n) ? n : (Number.isFinite(safeFallback) ? safeFallback : min);
+    return Math.max(min, Math.min(max, base));
+    }
+
+    function syncExportCaptureCustomInputsVisibility() {
+    const selector = document.getElementById('export-capture-profile');
+    const customWrap = document.getElementById('export-capture-custom');
+    const customSelected = !!(selector && selector.value === 'custom');
+    if (customWrap) {
+      customWrap.classList.toggle('d-none', !customSelected);
+    }
     }
 
     function compositeExportElement(cb) {
@@ -6443,6 +6491,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnExportSVG) btnExportSVG.addEventListener('click', () => { try { exportSVG(); } catch(e){console.error(e);} });
 
   const exportProfileSelect = document.getElementById('export-capture-profile');
+  const exportCaptureWidth = document.getElementById('export-capture-width');
+  const exportCaptureHeight = document.getElementById('export-capture-height');
   if (exportProfileSelect) {
     const available = Object.keys(EXPORT_CAPTURE_PRESETS);
     if (available.includes(exportProfileSelect.value)) {
@@ -6450,7 +6500,34 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       exportProfileSelect.value = 'a4-balanced';
     }
+    exportProfileSelect.addEventListener('change', () => {
+      syncExportCaptureCustomInputsVisibility();
+    });
   }
+
+  if (exportCaptureWidth) {
+    exportCaptureWidth.addEventListener('change', () => {
+      exportCaptureWidth.value = String(clampExportCaptureDimension(
+        exportCaptureWidth.value,
+        EXPORT_CAPTURE_MAP_WIDTH_PX,
+        EXPORT_CAPTURE_MIN_WIDTH_PX,
+        EXPORT_CAPTURE_MAX_WIDTH_PX
+      ));
+    });
+  }
+
+  if (exportCaptureHeight) {
+    exportCaptureHeight.addEventListener('change', () => {
+      exportCaptureHeight.value = String(clampExportCaptureDimension(
+        exportCaptureHeight.value,
+        EXPORT_CAPTURE_MAP_HEIGHT_PX,
+        EXPORT_CAPTURE_MIN_HEIGHT_PX,
+        EXPORT_CAPTURE_MAX_HEIGHT_PX
+      ));
+    });
+  }
+
+  syncExportCaptureCustomInputsVisibility();
 
   const btnToggle = document.getElementById('btnToggleClassTable');
   if (btnToggle) btnToggle.addEventListener('click', () => { try { toggleClassTable(); } catch(e){console.error(e);} });

@@ -257,7 +257,21 @@
           <option value="a4-balanced" selected>A4 Balanced (fast)</option>
           <option value="a4-detailed">A4 Detailed (high quality)</option>
           <option value="screen-wide">Screen Wide 16:9</option>
+          <option value="custom">Custom size</option>
         </select>
+        <div id="export-capture-custom" class="row g-1 mt-1 d-none">
+          <div class="col-6">
+            <label for="export-capture-width" class="form-label mb-0">Width (px)</label>
+            <input id="export-capture-width" type="number" class="form-control form-control-sm" value="1600" min="640" max="4096" step="1">
+          </div>
+          <div class="col-6">
+            <label for="export-capture-height" class="form-label mb-0">Height (px)</label>
+            <input id="export-capture-height" type="number" class="form-control form-control-sm" value="1131" min="480" max="4096" step="1">
+          </div>
+          <div class="col-12">
+            <small class="form-text text-muted">Allowed range: width 640-4096, height 480-4096.</small>
+          </div>
+        </div>
       </div>
     </div>
   </nav>
