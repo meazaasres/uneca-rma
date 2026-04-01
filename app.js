@@ -5143,6 +5143,45 @@ window.addEventListener('load', resetInitialScrollPositions);
     captureMapCanvasWithFixedViewport(onSuccess, onError);
     }
 
+    function applyFixedExportViewport(mapEl, width, height) {
+    const safeW = Math.max(320, Math.round(Number(width) || EXPORT_CAPTURE_MAP_WIDTH_PX));
+    const safeH = Math.max(240, Math.round(Number(height) || EXPORT_CAPTURE_MAP_HEIGHT_PX));
+    const prev = {
+      width: mapEl.style.width,
+      height: mapEl.style.height,
+      minWidth: mapEl.style.minWidth,
+      minHeight: mapEl.style.minHeight,
+      maxWidth: mapEl.style.maxWidth,
+      maxHeight: mapEl.style.maxHeight
+    };
+    mapEl.style.width = `${safeW}px`;
+    mapEl.style.height = `${safeH}px`;
+    mapEl.style.minWidth = `${safeW}px`;
+    mapEl.style.minHeight = `${safeH}px`;
+    mapEl.style.maxWidth = `${safeW}px`;
+    mapEl.style.maxHeight = `${safeH}px`;
+    return {
+      width: safeW,
+      height: safeH,
+      restore: () => {
+        mapEl.style.width = prev.width;
+        mapEl.style.height = prev.height;
+        mapEl.style.minWidth = prev.minWidth;
+        mapEl.style.minHeight = prev.minHeight;
+        mapEl.style.maxWidth = prev.maxWidth;
+        mapEl.style.maxHeight = prev.maxHeight;
+      }
+    };
+    }
+
+    function scheduleLeafletCapture(mapRef, onDone) {
+    setTimeout(() => {
+      leafletImage(mapRef, (err, mapCanvas) => {
+        onDone(err, mapCanvas);
+      });
+    }, EXPORT_CAPTURE_SETTLE_MS);
+    }
+
     function captureMapCanvasWithFixedViewport(onSuccess, onError) {
     const mapEl = document.getElementById('map');
     if (!mapEl || !map || typeof leafletImage !== 'function') {
@@ -5150,13 +5189,21 @@ window.addEventListener('load', resetInitialScrollPositions);
       return;
     }
 
-    leafletImage(map, (err, mapCanvas) => {
+    const preset = getSelectedExportCapturePreset();
+    const viewportSession = applyFixedExportViewport(mapEl, preset.width, preset.height);
+
+    const finalize = (err, mapCanvas) => {
+      viewportSession.restore();
+      map.invalidateSize({ pan: false });
       if (err || !mapCanvas) {
         if (typeof onError === 'function') onError(err || new Error('No map canvas returned'));
         return;
       }
       if (typeof onSuccess === 'function') onSuccess(mapCanvas);
-    });
+    };
+
+    map.invalidateSize({ pan: false });
+    scheduleLeafletCapture(map, finalize);
     }
 
     function getSelectedExportCapturePreset() {
