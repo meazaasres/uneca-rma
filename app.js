@@ -5427,7 +5427,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       }).filter((block) => block.rows.length > 0);
     }
 
-    function buildEdgeDirectExportCanvas(formatLabel, cb, onError) {
+    function buildDirectExportCanvas(formatLabel, cb, onError) {
       leafletImage(map, (err, mapCanvas) => {
         if (err || !mapCanvas) {
           if (typeof onError === "function") onError(err || new Error("Map canvas unavailable"));
@@ -5436,17 +5436,26 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const mapEl = document.getElementById('map');
         const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
-        const adjustedMapCanvas = alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl);
-        logEdgeExportDebug("pipeline.mode", { mode: "edge-direct-canvas-tile-plus-pane" });
+        const isEdge = isEdgeBrowser();
+        const adjustedMapCanvas = isEdge
+          ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
+          : alignMapCanvasToDisplayedTileTransform(
+              alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
+              mapEl,
+              { allowTranslation: true }
+            );
+        logEdgeExportDebug("pipeline.mode", {
+          mode: isEdge ? "edge-direct-canvas-tile-plus-pane" : "direct-canvas"
+        });
         showExportCorrectionDebugMessage(debugInfo);
 
         const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-          allowBrowserCrop: true
+          allowBrowserCrop: false
         });
         const cropX = exportGeometry.cropX;
         const cropW = exportGeometry.cropW;
         const cropH = exportGeometry.cropH;
-        reportEdgeExportSpaceReduction(formatLabel || "png/pdf", exportGeometry.sideCropPx, exportGeometry.baseCropW, cropW);
+        if (isEdge) reportEdgeExportSpaceReduction(formatLabel || "png/pdf", exportGeometry.sideCropPx, exportGeometry.baseCropW, cropW);
 
         const cropped = document.createElement('canvas');
         cropped.width = cropW;
@@ -5549,77 +5558,38 @@ window.addEventListener('load', resetInitialScrollPositions);
     }
 
     function exportMap() {
-      if (isEdgeBrowser()) {
-        showLoading("Exporting map as PNG...");
-        buildEdgeDirectExportCanvas(
-          "png",
-          (canvas) => {
-            const fixedA4Canvas = renderCanvasToFixedA4Portrait(canvas);
-            const a = document.createElement('a');
-            a.href = fixedA4Canvas.toDataURL('image/png');
-            a.download = 'map.png';
-            a.rel = 'noopener';
-            a.click();
-            hideLoading();
-          },
-          (err) => {
-            console.error("Edge PNG export failed:", err);
-            hideLoading();
-          }
-        );
-        return;
-      }
       showLoading("Exporting map as PNG...");
-      compositeExportElement(wrapper => {
-        html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
-          .then(canvas => {
-            const fixedA4Canvas = renderCanvasToFixedA4Portrait(canvas);
-            const a = document.createElement('a');
-            a.href = fixedA4Canvas.toDataURL('image/png');
-            a.download = 'map.png';
-            a.rel = 'noopener';
-            a.click();
-            document.body.removeChild(wrapper);
-            hideLoading();
-          })
-          .catch(err => {
-            console.error("PNG export failed:", err);
-            document.body.removeChild(wrapper);
-            hideLoading();
-          });
-      });
+      buildDirectExportCanvas(
+        "png",
+        (canvas) => {
+          const fixedA4Canvas = renderCanvasToFixedA4Portrait(canvas);
+          const a = document.createElement('a');
+          a.href = fixedA4Canvas.toDataURL('image/png');
+          a.download = 'map.png';
+          a.rel = 'noopener';
+          a.click();
+          hideLoading();
+        },
+        (err) => {
+          console.error("PNG export failed:", err);
+          hideLoading();
+        }
+      );
     }
 
       function exportPDF() {
-        if (isEdgeBrowser()) {
-          showLoading("Exporting map as PDF...");
-          buildEdgeDirectExportCanvas(
-            "pdf",
-            (canvas) => {
-              saveCanvasAsA4PortraitPdf(canvas, 'map.pdf');
-              hideLoading();
-            },
-            (err) => {
-              console.error("Edge PDF export failed:", err);
-              hideLoading();
-            }
-          );
-          return;
-        }
         showLoading("Exporting map as PDF...");
-        compositeExportElement(wrapper => {
-            html2canvas(wrapper, buildHtml2CanvasOptions(wrapper))
-            .then(canvas => {
-              saveCanvasAsA4PortraitPdf(canvas, 'map.pdf');
-              document.body.removeChild(wrapper);
-              hideLoading();
-            })
-            .catch(err => {
-              console.error("PDF export failed:", err);
-              document.body.removeChild(wrapper);
-              hideLoading();
-            });
-        });
+        buildDirectExportCanvas(
+          "pdf",
+          (canvas) => {
+            saveCanvasAsA4PortraitPdf(canvas, 'map.pdf');
+            hideLoading();
+          },
+          (err) => {
+            console.error("PDF export failed:", err);
+            hideLoading();
+          }
+        );
       }
 
   //Start of Export SVG
@@ -5826,7 +5796,7 @@ function exportSVG() {
       const canvasPixelHeight = adjustedMapCanvas.height;
 
       const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-        allowBrowserCrop: true
+        allowBrowserCrop: false
       });
       const rawScaleX = exportGeometry.rawScaleX;
       const rawScaleY = exportGeometry.rawScaleY;
@@ -5864,39 +5834,25 @@ function exportSVG() {
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
       cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const trimInfo = isFirefoxBrowser()
-        ? trimHorizontalWhitespaceWithOffset(cropped, 0.4)
-        : { canvas: cropped, leftTrim: 0 };
+      const trimInfo = { canvas: cropped, leftTrim: 0 };
       const exportCanvas = trimInfo.canvas || cropped;
       const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
+      const uiScale = 1;
 
       const usedCanvasWidth  = Math.max(1, exportCanvas.width);
       const usedCanvasHeight = Math.max(1, exportCanvas.height);
 
       // Firefox can trim asymmetric side whitespace; center trimmed map content
       // in the original crop frame to match Chrome/Edge visual alignment.
-      const totalWidthPx  = isFirefoxBrowser() ? Math.max(usedCanvasWidth, cropW) : usedCanvasWidth;
+      const totalWidthPx  = usedCanvasWidth;
       const totalHeightPx = titleHeightPx + usedCanvasHeight + legendHeightPx + (marginPx * 2);
-      const contentOffsetX = Math.max(0, Math.round((totalWidthPx - usedCanvasWidth) / 2));
-      const firefoxInkCenterShiftX = isFirefoxBrowser() ? getHorizontalInkCenterShift(exportCanvas) : 0;
-      const minContentOffsetX = 0;
-      const maxContentOffsetX = Math.max(0, totalWidthPx - usedCanvasWidth);
-      const alignedContentOffsetX = Math.max(
-        minContentOffsetX,
-        Math.min(maxContentOffsetX, contentOffsetX + firefoxInkCenterShiftX)
-      );
+      const alignedContentOffsetX = 0;
 
       const svg = document.createElementNS(svgNS, "svg");
       svg.setAttribute("xmlns", svgNS);
       svg.setAttribute("xmlns:xlink", XLINK);
-      const isFirefoxExport = isFirefoxBrowser();
-      svg.setAttribute("width", isFirefoxExport ? "100%" : String(totalWidthPx));
-      svg.setAttribute("height", isFirefoxExport ? "100%" : String(totalHeightPx));
-      if (isFirefoxExport) {
-        // Preserve authored dimensions for tools while letting Firefox center in viewport.
-        svg.setAttribute("data-export-width", String(totalWidthPx));
-        svg.setAttribute("data-export-height", String(totalHeightPx));
-      }
+      svg.setAttribute("width", String(totalWidthPx));
+      svg.setAttribute("height", String(totalHeightPx));
       svg.setAttribute("style", "display:block;margin:0 auto;");
       svg.setAttribute("viewBox", `0 0 ${totalWidthPx} ${totalHeightPx}`);
       svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
