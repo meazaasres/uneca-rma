@@ -5126,70 +5126,13 @@ window.addEventListener('load', resetInitialScrollPositions);
       return;
     }
 
-    const capturePreset = getSelectedExportCapturePreset();
-    const captureWidth = capturePreset.width;
-    const captureHeight = capturePreset.height;
-
-    const originalStyle = {
-      width: mapEl.style.width,
-      height: mapEl.style.height,
-      maxWidth: mapEl.style.maxWidth,
-      maxHeight: mapEl.style.maxHeight,
-      transition: mapEl.style.transition
-    };
-    const originalCenter = (typeof map.getCenter === 'function') ? map.getCenter() : null;
-    const originalZoom = (typeof map.getZoom === 'function') ? map.getZoom() : null;
-
-    let restored = false;
-    const restoreMapViewport = () => {
-      if (restored) return;
-      restored = true;
-      mapEl.style.width = originalStyle.width;
-      mapEl.style.height = originalStyle.height;
-      mapEl.style.maxWidth = originalStyle.maxWidth;
-      mapEl.style.maxHeight = originalStyle.maxHeight;
-      mapEl.style.transition = originalStyle.transition;
-      try {
-        map.invalidateSize({ pan: false, animate: false });
-        if (originalCenter && Number.isFinite(originalZoom)) {
-          map.setView(originalCenter, originalZoom, { animate: false });
-        }
-      } catch (e) {}
-    };
-
-    try {
-      mapEl.style.transition = 'none';
-      mapEl.style.width = `${captureWidth}px`;
-      mapEl.style.height = `${captureHeight}px`;
-      mapEl.style.maxWidth = 'none';
-      mapEl.style.maxHeight = 'none';
-
-      map.invalidateSize({ pan: false, animate: false });
-      if (originalCenter && Number.isFinite(originalZoom)) {
-        map.setView(originalCenter, originalZoom, { animate: false });
+    leafletImage(map, (err, mapCanvas) => {
+      if (err || !mapCanvas) {
+        if (typeof onError === 'function') onError(err || new Error('No map canvas returned'));
+        return;
       }
-    } catch (e) {
-      restoreMapViewport();
-      if (typeof onError === 'function') onError(e);
-      return;
-    }
-
-    window.setTimeout(() => {
-      leafletImage(map, (err, mapCanvas) => {
-        if (err || !mapCanvas) {
-          restoreMapViewport();
-          if (typeof onError === 'function') onError(err || new Error('No map canvas returned'));
-          return;
-        }
-        mapCanvas._exportCaptureMeta = {
-          cssWidth: captureWidth,
-          cssHeight: captureHeight,
-          profile: capturePreset.profile
-        };
-        restoreMapViewport();
-        if (typeof onSuccess === 'function') onSuccess(mapCanvas);
-      });
-    }, EXPORT_CAPTURE_SETTLE_MS);
+      if (typeof onSuccess === 'function') onSuccess(mapCanvas);
+    });
     }
 
     function getSelectedExportCapturePreset() {
@@ -5582,11 +5525,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         });
         showExportCorrectionDebugMessage(debugInfo);
 
-        const captureMeta = mapCanvas._exportCaptureMeta || {};
         const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-          allowBrowserCrop: false,
-          cssWidth: captureMeta.cssWidth,
-          cssHeight: captureMeta.cssHeight
+          allowBrowserCrop: false
         });
         const cropX = exportGeometry.cropX;
         const cropW = exportGeometry.cropW;
@@ -5931,11 +5871,8 @@ function exportSVG() {
       const canvasPixelWidth  = adjustedMapCanvas.width;
       const canvasPixelHeight = adjustedMapCanvas.height;
 
-      const captureMeta = mapCanvas._exportCaptureMeta || {};
       const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-        allowBrowserCrop: false,
-        cssWidth: captureMeta.cssWidth,
-        cssHeight: captureMeta.cssHeight
+        allowBrowserCrop: false
       });
       const rawScaleX = exportGeometry.rawScaleX;
       const rawScaleY = exportGeometry.rawScaleY;
