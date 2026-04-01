@@ -5544,6 +5544,8 @@ window.addEventListener('load', resetInitialScrollPositions);
           return;
         }
         cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+        const recentered = recenterMapCanvasHorizontally(cropped, 0.12);
+        const exportMapCanvas = recentered.canvas || cropped;
 
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const legendBlocks = getExportLegendBlocks();
@@ -5560,8 +5562,8 @@ window.addEventListener('load', resetInitialScrollPositions);
               return sum + blockH + (idx > 0 ? legendBlockGap : 0);
             }, 0))
           : 0;
-        const outW = cropW;
-        const outH = titleH + cropH + legendH;
+        const outW = exportMapCanvas.width;
+        const outH = titleH + exportMapCanvas.height + legendH;
 
         const out = document.createElement('canvas');
         out.width = outW;
@@ -5580,11 +5582,11 @@ window.addEventListener('load', resetInitialScrollPositions);
         octx.textBaseline = 'middle';
         octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
 
-        octx.drawImage(cropped, 0, titleH);
-        drawFixedExportOverlaysToCanvas(octx, 0, titleH, cropW, cropH);
+        octx.drawImage(exportMapCanvas, 0, titleH);
+        drawFixedExportOverlaysToCanvas(octx, 0, titleH, exportMapCanvas.width, exportMapCanvas.height);
 
         if (legendBlocks.length) {
-          let y = titleH + cropH + legendTopPad;
+          let y = titleH + exportMapCanvas.height + legendTopPad;
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
 
@@ -5789,6 +5791,28 @@ function getHorizontalInkCenterShift(sourceCanvas) {
   return Math.round(desiredLeft - left);
 }
 
+function recenterMapCanvasHorizontally(sourceCanvas, maxShiftRatio = 0.12) {
+  if (!sourceCanvas || !(sourceCanvas.width > 0) || !(sourceCanvas.height > 0)) {
+    return { canvas: sourceCanvas, shiftX: 0 };
+  }
+  const w = Math.max(1, sourceCanvas.width | 0);
+  const h = Math.max(1, sourceCanvas.height | 0);
+  const requestedShiftX = getHorizontalInkCenterShift(sourceCanvas);
+  const maxShiftPx = Math.max(0, Math.floor(w * Math.max(0.02, Math.min(0.25, Number(maxShiftRatio) || 0.12))));
+  const shiftX = Math.max(-maxShiftPx, Math.min(maxShiftPx, requestedShiftX | 0));
+  if (Math.abs(shiftX) <= 1) return { canvas: sourceCanvas, shiftX: 0 };
+
+  const recentered = document.createElement('canvas');
+  recentered.width = w;
+  recentered.height = h;
+  const rctx = recentered.getContext('2d');
+  if (!rctx) return { canvas: sourceCanvas, shiftX: 0 };
+  rctx.fillStyle = '#ffffff';
+  rctx.fillRect(0, 0, w, h);
+  rctx.drawImage(sourceCanvas, shiftX, 0);
+  return { canvas: recentered, shiftX };
+}
+
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
 function exportSVG() {
   showLoading("Exporting map as SVG...");
@@ -5830,6 +5854,9 @@ function exportSVG() {
   const titleEl = document.getElementById('map-title');
   const legendEl = document.getElementById('legend-items');
   const mapEl = document.getElementById('map');
+  const disclaimerEl = document.getElementById('disclaimer');
+  const northArrowEl = document.querySelector('.leaflet-control-north-arrow');
+  const scaleBarEl = document.querySelector('.leaflet-control-exact-scale, .map-bottom-scale-control');
   if (!mapEl) {
     console.error("Map element not found");
     hideLoading();
@@ -5913,9 +5940,10 @@ function exportSVG() {
       cropped.height = cropH;
       const cctx = cropped.getContext('2d');
       cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const trimInfo = { canvas: cropped, leftTrim: 0 };
-      const exportCanvas = trimInfo.canvas || cropped;
-      const extraTrimX = Math.max(0, trimInfo.leftTrim || 0);
+      const recentered = recenterMapCanvasHorizontally(cropped, 0.12);
+      const exportCanvas = recentered.canvas || cropped;
+      const rasterShiftX = Math.round(Number(recentered.shiftX) || 0);
+      const extraTrimX = 0;
       const uiScale = 1;
 
       const usedCanvasWidth  = Math.max(1, exportCanvas.width);
@@ -5977,7 +6005,7 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX;
+        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX + rasterShiftX;
         const y = (containerPoint.y * rawScaleY) - cropY + titleHeightPx;
         return [x, y];
       }
@@ -6077,7 +6105,7 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = alignedContentOffsetX + Math.max(6, Math.round(8 * rawScaleX));
+        const discX = alignedContentOffsetX + Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX;
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
         let discWidth = Math.max(
           Math.round(120 * uiScale),
@@ -6175,7 +6203,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
+        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX + rasterShiftX);
         let naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
         const naYMin = titleHeightPx + 2;
         const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
@@ -6221,7 +6249,7 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
         const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX);
+        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX + rasterShiftX);
         let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
         sbY -= Math.max(2, Math.round(4 * uiScale));
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
