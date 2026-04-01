@@ -4623,6 +4623,28 @@ window.addEventListener('load', resetInitialScrollPositions);
     const baseCropW = Math.max(1, Math.min(expectedW, mapCanvas.width));
     const cropH = Math.max(1, Math.min(expectedH, mapCanvas.height));
     const cropPlan = getExportHorizontalCropPlan(mapCanvas, baseCropW, cropH, options);
+    const targetAspectRatio = Number(options.targetAspectRatio);
+    const hasTargetAspect = Number.isFinite(targetAspectRatio) && targetAspectRatio > 0;
+    let cropX = cropPlan.cropX;
+    let cropY = 0;
+    let outCropW = cropPlan.cropW;
+    let outCropH = cropPlan.cropH;
+
+    if (hasTargetAspect) {
+      const currentAspect = outCropW / Math.max(1, outCropH);
+      if (currentAspect > targetAspectRatio) {
+        const desiredW = Math.max(1, Math.min(outCropW, Math.round(outCropH * targetAspectRatio)));
+        const extraW = Math.max(0, outCropW - desiredW);
+        cropX = cropX + Math.round(extraW / 2);
+        outCropW = desiredW;
+      } else if (currentAspect < targetAspectRatio) {
+        const desiredH = Math.max(1, Math.min(outCropH, Math.round(outCropW / targetAspectRatio)));
+        const extraH = Math.max(0, outCropH - desiredH);
+        cropY = Math.round(extraH / 2);
+        outCropH = desiredH;
+      }
+    }
+
     return {
       cssW,
       cssH,
@@ -4631,9 +4653,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       expectedW,
       expectedH,
       baseCropW,
-      cropH: cropPlan.cropH,
-      cropX: cropPlan.cropX,
-      cropW: cropPlan.cropW,
+      cropH: outCropH,
+      cropX,
+      cropY,
+      cropW: outCropW,
       sideCropPx: cropPlan.sideCropPx
     };
     }
@@ -5528,9 +5551,14 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
           // Use content-aware side trim to keep widescreen exports horizontally centered.
-          allowBrowserCrop: true
+          allowBrowserCrop: true,
+          targetAspectRatio: (() => {
+            const p = getSelectedExportCapturePreset();
+            return p.width / Math.max(1, p.height);
+          })()
         });
         const cropX = exportGeometry.cropX;
+        const cropY = exportGeometry.cropY || 0;
         const cropW = exportGeometry.cropW;
         const cropH = exportGeometry.cropH;
         if (isEdge) reportEdgeExportSpaceReduction(formatLabel || "png/pdf", exportGeometry.sideCropPx, exportGeometry.baseCropW, cropW);
@@ -5543,9 +5571,21 @@ window.addEventListener('load', resetInitialScrollPositions);
           if (typeof onError === "function") onError(new Error("Crop canvas context unavailable"));
           return;
         }
-        cctx.drawImage(adjustedMapCanvas, cropX, 0, cropW, cropH, 0, 0, cropW, cropH);
+        cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
         const recentered = recenterMapCanvasHorizontally(cropped, 0.12);
         const exportMapCanvas = recentered.canvas || cropped;
+        const capturePreset = getSelectedExportCapturePreset();
+        const normalizedMapCanvas = document.createElement('canvas');
+        normalizedMapCanvas.width = capturePreset.width;
+        normalizedMapCanvas.height = capturePreset.height;
+        const nmctx = normalizedMapCanvas.getContext('2d');
+        if (!nmctx) {
+          if (typeof onError === "function") onError(new Error("Normalized canvas context unavailable"));
+          return;
+        }
+        nmctx.fillStyle = '#ffffff';
+        nmctx.fillRect(0, 0, normalizedMapCanvas.width, normalizedMapCanvas.height);
+        nmctx.drawImage(exportMapCanvas, 0, 0, exportMapCanvas.width, exportMapCanvas.height, 0, 0, normalizedMapCanvas.width, normalizedMapCanvas.height);
 
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const legendBlocks = getExportLegendBlocks();
@@ -5562,8 +5602,8 @@ window.addEventListener('load', resetInitialScrollPositions);
               return sum + blockH + (idx > 0 ? legendBlockGap : 0);
             }, 0))
           : 0;
-        const outW = exportMapCanvas.width;
-        const outH = titleH + exportMapCanvas.height + legendH;
+        const outW = normalizedMapCanvas.width;
+        const outH = titleH + normalizedMapCanvas.height + legendH;
 
         const out = document.createElement('canvas');
         out.width = outW;
@@ -5582,11 +5622,11 @@ window.addEventListener('load', resetInitialScrollPositions);
         octx.textBaseline = 'middle';
         octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
 
-        octx.drawImage(exportMapCanvas, 0, titleH);
-        drawFixedExportOverlaysToCanvas(octx, 0, titleH, exportMapCanvas.width, exportMapCanvas.height);
+        octx.drawImage(normalizedMapCanvas, 0, titleH);
+        drawFixedExportOverlaysToCanvas(octx, 0, titleH, normalizedMapCanvas.width, normalizedMapCanvas.height);
 
         if (legendBlocks.length) {
-          let y = titleH + exportMapCanvas.height + legendTopPad;
+          let y = titleH + normalizedMapCanvas.height + legendTopPad;
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
 
@@ -5902,14 +5942,18 @@ function exportSVG() {
 
       const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
         // Use content-aware side trim to keep widescreen exports horizontally centered.
-        allowBrowserCrop: true
+        allowBrowserCrop: true,
+        targetAspectRatio: (() => {
+          const p = getSelectedExportCapturePreset();
+          return p.width / Math.max(1, p.height);
+        })()
       });
       const rawScaleX = exportGeometry.rawScaleX;
       const rawScaleY = exportGeometry.rawScaleY;
       const cropW = exportGeometry.cropW;
       const cropH = exportGeometry.cropH;
       const cropX = exportGeometry.cropX;
-      const cropY = 0; // top-align crop
+      const cropY = exportGeometry.cropY || 0;
       if (isEdge) reportEdgeExportSpaceReduction("svg", exportGeometry.sideCropPx, exportGeometry.baseCropW, cropW);
 
       const titleFontPx = Math.max(18, Math.min(26, Math.round(cropW * 0.016)));
@@ -5945,9 +5989,24 @@ function exportSVG() {
       const rasterShiftX = Math.round(Number(recentered.shiftX) || 0);
       const extraTrimX = 0;
       const uiScale = 1;
+      const capturePreset = getSelectedExportCapturePreset();
+      const normalizedMapW = Math.max(1, capturePreset.width | 0);
+      const normalizedMapH = Math.max(1, capturePreset.height | 0);
+      const normalizedMapCanvas = document.createElement('canvas');
+      normalizedMapCanvas.width = normalizedMapW;
+      normalizedMapCanvas.height = normalizedMapH;
+      const nmctx = normalizedMapCanvas.getContext('2d');
+      if (!nmctx) throw new Error('Normalized SVG map canvas context unavailable');
+      nmctx.fillStyle = '#ffffff';
+      nmctx.fillRect(0, 0, normalizedMapW, normalizedMapH);
+      nmctx.drawImage(exportCanvas, 0, 0, exportCanvas.width, exportCanvas.height, 0, 0, normalizedMapW, normalizedMapH);
 
-      const usedCanvasWidth  = Math.max(1, exportCanvas.width);
-      const usedCanvasHeight = Math.max(1, exportCanvas.height);
+      const sourceCanvasWidth = Math.max(1, exportCanvas.width);
+      const sourceCanvasHeight = Math.max(1, exportCanvas.height);
+      const mapScaleX = normalizedMapW / sourceCanvasWidth;
+      const mapScaleY = normalizedMapH / sourceCanvasHeight;
+      const usedCanvasWidth  = normalizedMapW;
+      const usedCanvasHeight = normalizedMapH;
 
       // Firefox can trim asymmetric side whitespace; center trimmed map content
       // in the original crop frame to match Chrome/Edge visual alignment.
@@ -5990,7 +6049,7 @@ function exportSVG() {
       }
 
       // embed cropped image
-      const imgDataUrl = exportCanvas.toDataURL("image/png");
+      const imgDataUrl = normalizedMapCanvas.toDataURL("image/png");
       const img = document.createElementNS(svgNS, "image");
       img.setAttributeNS(XLINK, "xlink:href", imgDataUrl);
       img.setAttribute("href", imgDataUrl);
@@ -6005,8 +6064,10 @@ function exportSVG() {
         const latlng = L.latLng(coord[1], coord[0]);
         const layerPoint = map.latLngToLayerPoint(latlng);
         const containerPoint = map.layerPointToContainerPoint(layerPoint); // CSS px
-        const x = (containerPoint.x * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX + rasterShiftX;
-        const y = (containerPoint.y * rawScaleY) - cropY + titleHeightPx;
+        const xSrc = (containerPoint.x * rawScaleX) - cropX - extraTrimX + rasterShiftX;
+        const ySrc = (containerPoint.y * rawScaleY) - cropY;
+        const x = (xSrc * mapScaleX) + alignedContentOffsetX;
+        const y = (ySrc * mapScaleY) + titleHeightPx;
         return [x, y];
       }
 
@@ -6105,7 +6166,7 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = alignedContentOffsetX + Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX;
+        const discX = alignedContentOffsetX + Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX);
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
         let discWidth = Math.max(
           Math.round(120 * uiScale),
@@ -6201,10 +6262,10 @@ function exportSVG() {
       if (northArrowEl && mapEl) {
         const naRect = northArrowEl.getBoundingClientRect();
         const mapRect = mapEl.getBoundingClientRect();
-        const naW = Math.max(1, Math.round(naRect.width * rawScaleX));
-        const naH = Math.max(1, Math.round(naRect.height * rawScaleY));
-        const naX = Math.max(0, Math.round((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX + rasterShiftX);
-        let naY = titleHeightPx + Math.max(0, Math.round((naRect.top - mapRect.top) * rawScaleY) - cropY);
+        const naW = Math.max(1, Math.round(naRect.width * rawScaleX * mapScaleX));
+        const naH = Math.max(1, Math.round(naRect.height * rawScaleY * mapScaleY));
+        const naX = Math.max(0, Math.round((((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX) + alignedContentOffsetX);
+        let naY = titleHeightPx + Math.max(0, Math.round((((naRect.top - mapRect.top) * rawScaleY) - cropY) * mapScaleY));
         const naYMin = titleHeightPx + 2;
         const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
         naY = Math.max(naYMin, Math.min(naYMax, naY));
@@ -6247,10 +6308,10 @@ function exportSVG() {
       if (scaleBarEl && mapEl) {
         const sbRect = scaleBarEl.getBoundingClientRect();
         const mapRect = mapEl.getBoundingClientRect();
-        const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX));
-        const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY));
-        let sbX = Math.max(0, Math.round((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + alignedContentOffsetX + rasterShiftX);
-        let sbY = titleHeightPx + Math.max(0, Math.round((sbRect.top - mapRect.top) * rawScaleY) - cropY);
+        const sbW = Math.max(1, Math.round(sbRect.width * rawScaleX * mapScaleX));
+        const sbH = Math.max(1, Math.round(sbRect.height * rawScaleY * mapScaleY));
+        let sbX = Math.max(0, Math.round((((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX) + alignedContentOffsetX);
+        let sbY = titleHeightPx + Math.max(0, Math.round((((sbRect.top - mapRect.top) * rawScaleY) - cropY) * mapScaleY));
         sbY -= Math.max(2, Math.round(4 * uiScale));
         const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
