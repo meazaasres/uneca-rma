@@ -5526,7 +5526,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         showExportCorrectionDebugMessage(debugInfo);
 
         const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-          allowBrowserCrop: false
+          // Use content-aware side trim to keep widescreen exports horizontally centered.
+          allowBrowserCrop: true
         });
         const cropX = exportGeometry.cropX;
         const cropW = exportGeometry.cropW;
@@ -5872,7 +5873,8 @@ function exportSVG() {
       const canvasPixelHeight = adjustedMapCanvas.height;
 
       const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
-        allowBrowserCrop: false
+        // Use content-aware side trim to keep widescreen exports horizontally centered.
+        allowBrowserCrop: true
       });
       const rawScaleX = exportGeometry.rawScaleX;
       const rawScaleY = exportGeometry.rawScaleY;
