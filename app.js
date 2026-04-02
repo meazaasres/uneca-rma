@@ -1669,7 +1669,7 @@ const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
 const DISCLAIMER_LEFT_VISIBLE_INSET_PX = 50;
 const HOME_VERTICAL_PADDING_PX = 10;
 const EDGE_HOME_VERTICAL_PADDING_EXTRA_PX = 8;
-const IMPORT_EXTENT_MAX_ZOOM = 5;
+const IMPORT_EXTENT_MAX_ZOOM = 7;
 const IMPORT_EXTENT_HOME_COVERAGE_RATIO = 0.9;
 // Keep horizontal trim disabled so east/west view is not tightened.
 const HORIZONTAL_TRIM_RATIO = 0;
@@ -1867,13 +1867,6 @@ function fitToLayerExtent(layer, options = {}) {
   });
   map.panBy([0, 10], { animate: false });
   safePanInsideBounds(MAP_NAV_BOUNDS, { animate: false });
-  if (baseLayer && map && !map.hasLayer(baseLayer)) {
-    try { baseLayer.addTo(map); } catch (e) {}
-  }
-  ensureBaseLayerAtBack();
-  if (baseLayer && typeof baseLayer.redraw === "function") {
-    try { baseLayer.redraw(); } catch (e) {}
-  }
   return true;
 }
 
@@ -2217,7 +2210,6 @@ const baseLayer = L.tileLayer(
     attribution: '© United Nations',
     crossOrigin: 'anonymous',
     bounds: MAP_NAV_BOUNDS,
-    maxNativeZoom: 5,
     maxZoom: 18,
     noWrap: true,
     tileSize: 256
