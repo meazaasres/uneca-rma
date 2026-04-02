@@ -1642,6 +1642,7 @@ const mapRenderer = L.canvas({
   // Increase hit tolerance so feature popups remain clickable at lower zoom.
   tolerance: 18
 });
+const overlayRenderer = L.svg({ padding: 0.5 });
 
 const map = L.map('map', {
   preferCanvas: true,
@@ -2830,6 +2831,7 @@ function defaultPoint(feature, latlng) {
     ? activeLayerState.defaultSymbolColor
     : '#ccc';
   return L.circleMarker(latlng, {
+    renderer: overlayRenderer,
     radius: size,
     fillColor: defaultColor,
     color: '#000',
@@ -2963,6 +2965,7 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
   const safeName = sanitizeName(rawName);
   const fg = L.featureGroup().addTo(map);
   geojsonLayer = L.geoJSON(geojson, {
+    renderer: overlayRenderer,
     interactive: true,
     bubblingMouseEvents: false,
     style: defaultStyle,
@@ -3321,6 +3324,7 @@ function renderDefaultFilteredLayer() {
   }
 
   geojsonLayer = L.geoJSON(filtered, {
+    renderer: overlayRenderer,
     interactive: true,
     bubblingMouseEvents: false,
     style: defaultStyle,
@@ -3553,6 +3557,7 @@ function applyClassification() {
     categoricalUserColors = cols.slice();
 
     L.geoJSON(filteredGeojson, {
+      renderer: overlayRenderer,
       interactive: true,
       bubblingMouseEvents: false,
       style: f => {
@@ -3567,6 +3572,7 @@ function applyClassification() {
         const idx = uniques.indexOf(f.properties?.[currentAttribute]);
         const col = cols[idx] || '#ccc';
         return L.circleMarker(latlng, {
+          renderer: overlayRenderer,
           radius: getPointRadius(),
           fillColor: col,
           color: '#000',
@@ -3645,6 +3651,7 @@ function applyClassification() {
     }
 
     L.geoJSON(filteredGeojson, {
+      renderer: overlayRenderer,
       interactive: true,
       bubblingMouseEvents: false,
       style: f => {
@@ -3657,6 +3664,7 @@ function applyClassification() {
       pointToLayer: (f, latlng) => {
         const col = colorForVal(f.properties?.[currentAttribute]);
         return L.circleMarker(latlng, {
+          renderer: overlayRenderer,
           radius: getPointRadius(),
           fillColor: col,
           color: '#000',
