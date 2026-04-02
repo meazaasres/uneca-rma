@@ -61,6 +61,11 @@
     #map {
       overflow: hidden;
     }
+    #map .leaflet-tile,
+    #map .leaflet-tile-loaded,
+    #map .leaflet-tile-pane img {
+      mix-blend-mode: normal !important;
+    }
 
     #legend-title {
       cursor: move;
