@@ -53,8 +53,6 @@
       height: calc(100vh - var(--app-header-height) + 5px);
       position: relative;
       overflow: hidden;
-      clip-path: inset(0);
-      isolation: isolate;
     }
     /* Keep map controls inside the visible map window after horizontal overlap */
     #map .leaflet-left { left: 50px; }
@@ -62,14 +60,6 @@
     #map-container,
     #map {
       overflow: hidden;
-    }
-    #map {
-      contain: paint;
-    }
-    #map .leaflet-pane,
-    #map .leaflet-map-pane,
-    #map .leaflet-tile-pane {
-      will-change: transform;
     }
 
     #legend-title {

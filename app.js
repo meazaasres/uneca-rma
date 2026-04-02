@@ -2577,9 +2577,33 @@ function queueMapUiReflow() {
   });
 }
 
+function observeMapContainerResize() {
+  if (typeof ResizeObserver !== 'function') return;
+  const mapContainer = document.getElementById('map-container');
+  const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
+  if (!mapContainer || !mapEl) return;
+
+  let frame = 0;
+  const onResize = () => {
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      queueMapUiReflow();
+      if (map && typeof map.invalidateSize === 'function') {
+        map.invalidateSize({ pan: false });
+      }
+    });
+  };
+
+  const observer = new ResizeObserver(onResize);
+  observer.observe(mapContainer);
+  observer.observe(mapEl);
+}
+
 // run initially and on relevant events
 window.addEventListener('load', () => {
   syncLayoutWithHeaderHeight();
+  observeMapContainerResize();
   // Re-apply initial home once layout settles to avoid late layout shifts.
   setTimeout(applyHomeView, 50);
   setTimeout(syncLayoutWithHeaderHeight, 80);
