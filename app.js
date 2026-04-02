@@ -2554,9 +2554,7 @@ function runMapUiReflowPasses() {
       syncLayoutWithHeaderHeight();
       // Reflow after Leaflet has processed the new container size.
       setTimeout(() => {
-        if (map && typeof map.invalidateSize === "function") {
-          map.invalidateSize({ pan: false });
-        }
+        realignMapViewportAfterLayoutChange();
         if (scaleControl && typeof scaleControl._update === "function") {
           scaleControl._update();
         }
@@ -2577,6 +2575,35 @@ function queueMapUiReflow() {
   });
 }
 
+function realignMapViewportAfterLayoutChange() {
+  if (!map || typeof map.invalidateSize !== 'function') return;
+
+  let center = null;
+  let zoom = null;
+  try {
+    center = typeof map.getCenter === 'function' ? map.getCenter() : null;
+    zoom = typeof map.getZoom === 'function' ? map.getZoom() : null;
+  } catch (err) {
+    center = null;
+    zoom = null;
+  }
+
+  try {
+    map.invalidateSize({ pan: false, debounceMoveend: true });
+  } catch (err) {}
+
+  const hasStableView = center && Number.isFinite(center.lat) && Number.isFinite(center.lng) && Number.isFinite(zoom);
+  if (hasStableView && typeof map.setView === 'function') {
+    try {
+      map.setView(center, zoom, { animate: false });
+    } catch (err) {}
+  }
+
+  if (baseLayer && typeof baseLayer.redraw === 'function') {
+    try { baseLayer.redraw(); } catch (err) {}
+  }
+}
+
 function observeMapContainerResize() {
   if (typeof ResizeObserver !== 'function') return;
   const mapContainer = document.getElementById('map-container');
@@ -2589,9 +2616,7 @@ function observeMapContainerResize() {
     frame = requestAnimationFrame(() => {
       frame = 0;
       queueMapUiReflow();
-      if (map && typeof map.invalidateSize === 'function') {
-        map.invalidateSize({ pan: false });
-      }
+      realignMapViewportAfterLayoutChange();
     });
   };
 
