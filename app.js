@@ -96,6 +96,7 @@ let worldBoundaryIndex = null;
 let worldBoundaryIndexPromise = null;
 let worldCountriesByContinent = null;
 let iso3FeatureMap = new Map();
+let iso3NameMap = new Map();
 
 // Best-effort clickjacking mitigation for static hosting where CSP headers
 // may not be fully controllable at the web server layer.
@@ -1459,6 +1460,9 @@ async function loadWorldBoundaryIndex() {
         }
         if (found && found.geometry) {
           iso3FeatureMap.set(iso3, found.geometry);
+          // store a friendly name for suggestions
+          const cname = sanitizePlainText(m?.officialName || m?.country || (found?.properties && found.properties.name) || iso3);
+          iso3NameMap.set(iso3, cname);
         }
       });
     } catch (e) {
@@ -3121,6 +3125,37 @@ if (fileUploadEl) {
     const files = Array.from(evt?.target?.files || []);
     for (const file of files) {
       try {
+        const ext = getDataExtension(file?.name || "");
+        if (ext === '.csv') {
+          // Read a sample of the CSV and check if any column contains strict ISO3 codes
+          try {
+            const text = await readFileAsText(file);
+            const sample = window.Papa.parse(text, { header: true, preview: 200, skipEmptyLines: 'greedy' });
+            const rows = Array.isArray(sample.data) ? sample.data : [];
+            const headers = Object.keys(rows[0] || {}).map(h => String(h || '').trim());
+            // Ensure world boundaries loaded so iso3FeatureMap is populated
+            try { await loadWorldBoundaryIndex(); } catch (e) { /* ignore */ }
+            const isoScores = new Map();
+            headers.forEach(h => {
+              let matches = 0, nonEmpty = 0;
+              for (let i = 0; i < rows.length; i++) {
+                const v = rows[i] && rows[i][h] != null ? String(rows[i][h]).trim().toUpperCase() : '';
+                if (!v) continue;
+                nonEmpty++;
+                if (/^[A-Z]{3}$/.test(v) && iso3FeatureMap && iso3FeatureMap.has(v)) matches++;
+              }
+              isoScores.set(h, { matches, nonEmpty, frac: nonEmpty ? (matches / nonEmpty) : 0 });
+            });
+            const candidates = Array.from(isoScores.entries()).filter(([, s]) => s.frac >= 0.8);
+            if (candidates.length === 1) {
+              // Likely a country ISO3 CSV — route to country importer
+              await importCountryCsvFile(file);
+              continue;
+            }
+          } catch (e) {
+            console.warn('Could not inspect CSV for ISO3 detection:', e);
+          }
+        }
         await importFile(file);
       } catch (err) {
         console.error("File import error:", err);
@@ -3238,8 +3273,34 @@ async function importCountryCsvFile(file) {
       headerSafeMap[h] = safe;
     });
 
-    const isoKey = headers.find(h => /^iso3$|^iso_alpha3$|^iso_3$|^iso$/i.test(h));
-    if (!isoKey) throw new Error('CSV must include an ISO3 column named "ISO3"');
+    // Ensure world boundaries loaded for reliable ISO3 matching
+    await loadWorldBoundaryIndex();
+
+    // Detect the ISO3 column either by common header names or by scanning values strictly for ISO3 codes
+    let isoKey = headers.find(h => /^iso3$|^iso_alpha3$|^iso_3$|^iso$|country code$/i.test(h));
+    if (!isoKey) {
+      const sampleCount = Math.min(rows.length, 200);
+      const isoScores = new Map();
+      headers.forEach(h => {
+        let matches = 0, nonEmpty = 0;
+        for (let i = 0; i < sampleCount; i++) {
+          const v = rows[i] && rows[i][h] != null ? String(rows[i][h]).trim().toUpperCase() : '';
+          if (!v) continue;
+          nonEmpty++;
+          if (/^[A-Z]{3}$/.test(v) && iso3FeatureMap && iso3FeatureMap.has(v)) matches++;
+        }
+        isoScores.set(h, { matches, nonEmpty, frac: nonEmpty ? (matches / nonEmpty) : 0 });
+      });
+      const candidates = Array.from(isoScores.entries()).filter(([, s]) => s.frac >= 0.8);
+      if (candidates.length === 1) {
+        isoKey = candidates[0][0];
+      } else {
+        // fallback: pick best candidate with frac >= 0.5
+        const sorted = Array.from(isoScores.entries()).sort((a, b) => b[1].frac - a[1].frac);
+        if (sorted.length && sorted[0][1].frac >= 0.5) isoKey = sorted[0][0];
+      }
+    }
+    if (!isoKey) throw new Error('CSV must include an ISO3 column with strict ISO3 codes');
 
     // choose value column: prefer common names, otherwise auto-detect numeric column when unambiguous
     let valueKey = headers.find(h => /^value$|^val$|^amount$|^score$|^count$|^metric$/i.test(h));
@@ -3319,29 +3380,24 @@ async function importCountryCsvFile(file) {
     refreshLayerSelector();
     await setActiveLayer(safeName);
 
-    if (missing.length) showPopup(`Imported ${features.length} countries; ${missing.length} ISO3 codes not matched`, 'warning');
-    else showPopup(`Imported ${features.length} countries`, 'success');
+    if (missing.length) {
+      showPopup(`Imported ${features.length} countries; ${missing.length} ISO3 codes not matched`, 'warning');
+      // show detailed list in closable modal with fuzzy suggestions
+      const lines = missing.map(m => {
+        const code = String(m || '').trim();
+        const sugg = generateIso3Suggestions(code, 5);
+        if (sugg && sugg.length) return `${code} → suggestions: ${sugg.join(', ')}`;
+        return `${code} → no close ISO3 matches found`;
+      });
+      showModalList('Unmatched ISO3 codes', lines);
+    } else showPopup(`Imported ${features.length} countries`, 'success');
     return safeName;
   } finally {
     hideLoading();
   }
 }
 
-const countryCsvUploadEl = document.getElementById('country-csv-upload');
-if (countryCsvUploadEl) {
-  countryCsvUploadEl.addEventListener('change', async function(evt) {
-    const files = Array.from(evt?.target?.files || []);
-    for (const f of files) {
-      try {
-        await importCountryCsvFile(f);
-      } catch (err) {
-        console.error('Country CSV import error:', err);
-        showPopup(String(err?.message || 'Error importing country CSV'), 'error');
-      }
-    }
-    evt.target.value = '';
-  });
-}
+// Note: country CSVs are detected via the main `file-upload` input and routed to importCountryCsvFile.
 
 //Layer Selector, Activation, and Refresh
 // --- Refresh the Layer dropdown securely ---
@@ -4395,6 +4451,96 @@ function showPopup(msg, type = "error") {
   setDynamicStyle(popup, { display: "block" });
 
   setTimeout(() => { setDynamicStyle(popup, { display: "none" }); }, 6000);
+}
+
+// --- Closable modal list for longer messages (e.g., unmatched ISO3 codes) ---
+function showModalList(title, lines) {
+  if (!Array.isArray(lines)) lines = [];
+  let modal = document.getElementById('popup-list-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'popup-list-modal';
+    modal.className = 'popup-list-modal';
+    document.body.appendChild(modal);
+  }
+  modal.textContent = '';
+  const header = document.createElement('div');
+  header.className = 'popup-list-header';
+  header.textContent = title || 'Details';
+
+  const btnClose = document.createElement('button');
+  btnClose.type = 'button';
+  btnClose.className = 'btn-close-popup';
+  btnClose.textContent = 'Close';
+  btnClose.addEventListener('click', () => {
+    setDynamicStyle(modal, { display: 'none' });
+  });
+
+  const pre = document.createElement('pre');
+  pre.className = 'popup-list-content';
+  pre.textContent = lines.join('\n');
+
+  modal.appendChild(header);
+  modal.appendChild(btnClose);
+  modal.appendChild(pre);
+
+  // Basic inline styling for modal (CSP-safe via dynamic styles)
+  setDynamicStyle(modal, {
+    display: 'block',
+    position: 'fixed',
+    left: '50%',
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    'z-index': '100000',
+    'background-color': '#fff',
+    color: '#000',
+    padding: '12px',
+    border: '1px solid #444',
+    'max-width': '80vw',
+    'max-height': '70vh',
+    overflow: 'auto',
+    'box-shadow': '0 4px 16px rgba(0,0,0,0.3)'
+  });
+  setDynamicStyle(header, { 'font-weight': '600', 'margin-bottom': '8px' });
+  setDynamicStyle(btnClose, { position: 'absolute', right: '8px', top: '8px' });
+  setDynamicStyle(pre, { 'white-space': 'pre-wrap', 'margin-top': '28px' });
+}
+
+// --- ISO3 suggestion helpers ---
+function levenshtein(a, b) {
+  const A = String(a || '');
+  const B = String(b || '');
+  const m = A.length, n = B.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = A[i - 1] === B[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    }
+  }
+  return dp[m][n];
+}
+
+function generateIso3Suggestions(code, maxSuggestions = 5) {
+  if (!code) return [];
+  const c = String(code).trim().toUpperCase();
+  if (!c) return [];
+  const known = Array.from(iso3FeatureMap.keys());
+  if (!known.length) return [];
+  const scored = known.map(k => ({ k, d: levenshtein(c, k) }));
+  scored.sort((a, b) => a.d - b.d);
+  const results = [];
+  for (let i = 0; i < Math.min(maxSuggestions, scored.length); i++) {
+    const item = scored[i];
+    if (item.d > 2) break; // avoid too-distant suggestions
+    const name = iso3NameMap.get(item.k) || '';
+    results.push(`${item.k}${name ? ` (${name})` : ''} [dist=${item.d}]`);
+  }
+  return results;
 }
 
 // --- Sidebar toggle helpers (buttons cached) ---
