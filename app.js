@@ -95,6 +95,7 @@ let selectedCountryValues = new Set();
 let worldBoundaryIndex = null;
 let worldBoundaryIndexPromise = null;
 let worldCountriesByContinent = null;
+let iso3FeatureMap = new Map();
 
 // Best-effort clickjacking mitigation for static hosting where CSP headers
 // may not be fully controllable at the web server layer.
@@ -1426,6 +1427,43 @@ async function loadWorldBoundaryIndex() {
       if (!worldCountriesByContinent.has(cont)) worldCountriesByContinent.set(cont, new Set());
       worldCountriesByContinent.get(cont).add(entry.country);
     });
+
+    // Build ISO3 -> geometry map using metadata rows and feature names/aliases.
+    try {
+      iso3FeatureMap = new Map();
+      const featByNormName = new Map();
+      (feats || []).forEach(f => {
+        const fname = sanitizePlainText(f?.properties?.name || "");
+        const n = normalizeCountryName(fname);
+        if (n) featByNormName.set(n, f);
+      });
+
+      (Array.isArray(metaRows) ? metaRows : []).forEach(m => {
+        const iso3 = String(m?.iso3 || "").toUpperCase().trim();
+        if (!iso3) return;
+        // try match by canonical country name
+        const candidates = [];
+        if (m.country) candidates.push(m.country);
+        if (m.officialName) candidates.push(m.officialName);
+        (Array.isArray(m.aliases) ? m.aliases : []).forEach(a => candidates.push(a));
+        let found = null;
+        for (let i = 0; i < candidates.length && !found; i++) {
+          const n = normalizeCountryName(candidates[i]);
+          if (!n) continue;
+          if (featByNormName.has(n)) found = featByNormName.get(n);
+        }
+        if (!found) {
+          // fallback: try matching by canonical country in worldBoundaryIndex
+          const match = worldBoundaryIndex.find(w => normalizeCountryName(w.country) === normalizeCountryName(m.country || ""));
+          if (match) found = { geometry: match.geometry };
+        }
+        if (found && found.geometry) {
+          iso3FeatureMap.set(iso3, found.geometry);
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to build ISO3 feature map', e);
+    }
 
     return worldBoundaryIndex;
   })().catch(err => {
@@ -3109,6 +3147,201 @@ if (addGeojsonUrlEl) {
   });
 }
 
+// --- Import country CSV by ISO3 (strict matching) ---
+function hexToRgb(hex) {
+  const h = String(hex || "").replace('#', '');
+  if (h.length === 3) return [parseInt(h[0]+h[0],16), parseInt(h[1]+h[1],16), parseInt(h[2]+h[2],16)];
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+
+function rgbToHex(r,g,b) {
+  const toHex = (n) => ('0' + Math.max(0, Math.min(255, Math.round(n))).toString(16)).slice(-2);
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function lerp(a,b,t) { return a + (b-a) * t; }
+
+function getColorForValue(v, min, max) {
+  const a = isFinite(min) ? Number(min) : 0;
+  const b = isFinite(max) ? Number(max) : 1;
+  const val = Number(v);
+  if (!isFinite(val)) return '#cccccc';
+  const t = a === b ? 0.5 : Math.max(0, Math.min(1, (val - a) / (b - a)));
+  const c1 = hexToRgb('#ffffcc'); // light
+  const c2 = hexToRgb('#800026'); // dark
+  const r = lerp(c1[0], c2[0], t);
+  const g = lerp(c1[1], c2[1], t);
+  const bcol = lerp(c1[2], c2[2], t);
+  return rgbToHex(r,g,bcol);
+}
+
+async function addCountryChoroplethLayer(geojson, rawName, valueStats) {
+  if (!geojson || !Array.isArray(geojson.features)) throw new Error('Invalid geojson');
+  const stats = assertDatasetWithinLimits(geojson, 'Country CSV');
+  const proceed = await confirmLargeDatasetLoad(stats, 'Country CSV');
+  if (!proceed) throw new Error('Import canceled by user.');
+
+  const safeName = sanitizeName(rawName);
+  const fg = L.featureGroup().addTo(map);
+  const layer = L.geoJSON(geojson, {
+    renderer: overlayRenderer,
+    interactive: true,
+    bubblingMouseEvents: false,
+    style: (feature) => {
+      const c = feature?.properties?.rma_choropleth_color || '#cccccc';
+      return { weight: 1, color: '#333', fillColor: c, fillOpacity: 0.8 };
+    },
+    onEachFeature: bindFeaturePopup
+  }).addTo(fg);
+  layerGroup = fg;
+  overlayData[safeName] = { layerGroup: fg, geojson: geojson, isNumeric: true };
+  layersControl.addOverlay(fg, safeName);
+  trackLayerOrder(safeName);
+  reorderLayersControlUI();
+  applyLayerStackOrder();
+  refreshLayerSelector();
+  await setActiveLayer(safeName);
+  initializeMapTitleFromLayer(safeName);
+  // update legend (simple continuous legend)
+  if (valueStats) {
+    const { min, max } = valueStats;
+    const vals = [min, (min+max)/2, max];
+    const cols = vals.map(v => getColorForValue(v,min,max));
+    updateLegend(safeName, vals, cols, true, geojson);
+  }
+  return safeName;
+}
+
+async function importCountryCsvFile(file) {
+  if (!file) throw new Error('No file provided');
+  showLoading('Loading country CSV...');
+  try {
+    const text = await readFileAsText(file);
+    if (!text) throw new Error('Empty CSV');
+    const parsed = window.Papa.parse(text, { header: true, skipEmptyLines: 'greedy' });
+    if (Array.isArray(parsed.errors) && parsed.errors.length) {
+      throw new Error('CSV parse error');
+    }
+    const rows = Array.isArray(parsed.data) ? parsed.data : [];
+    if (!rows.length) throw new Error('CSV has no rows');
+
+    const headers = Object.keys(rows[0] || {}).map(h => String(h || '').trim());
+    // Build sanitized header map to avoid unsafe property keys (prevent prototype pollution)
+    const headerSafeMap = {};
+    headers.forEach(h => {
+      let safe = String(h || '').trim();
+      safe = safe.replace(/[^A-Za-z0-9_\- ]/g, '_');
+      if (/^(?:__proto__|prototype|constructor|toString|valueOf)$/i.test(safe) || !safe) {
+        safe = '_' + safe;
+      }
+      headerSafeMap[h] = safe;
+    });
+
+    const isoKey = headers.find(h => /^iso3$|^iso_alpha3$|^iso_3$|^iso$/i.test(h));
+    if (!isoKey) throw new Error('CSV must include an ISO3 column named "ISO3"');
+
+    // choose value column: prefer common names, otherwise auto-detect numeric column when unambiguous
+    let valueKey = headers.find(h => /^value$|^val$|^amount$|^score$|^count$|^metric$/i.test(h));
+    if (!valueKey) {
+      // detect numeric columns by sampling rows
+      const candidates = headers.filter(h => !new RegExp('^' + isoKey + '$', 'i').test(h));
+      const numericScores = new Map();
+      const sampleCount = Math.min(rows.length, 200);
+      candidates.forEach(h => {
+        let numeric = 0, nonEmpty = 0;
+        for (let i = 0; i < sampleCount; i++) {
+          const v = rows[i] == null ? '' : String(rows[i][h] ?? '').trim();
+          if (v === '') continue;
+          nonEmpty++;
+          const n = Number(v);
+          if (Number.isFinite(n)) numeric++;
+        }
+        numericScores.set(h, { numeric, nonEmpty, frac: nonEmpty ? (numeric / nonEmpty) : 0 });
+      });
+      // pick columns with high numeric fraction
+      const high = Array.from(numericScores.entries()).filter(([k,s]) => s.frac >= 0.8);
+      if (high.length === 1) {
+        valueKey = high[0][0];
+      } else {
+        // fallback: pick first non-ISO column (likely categorical)
+        valueKey = candidates.find(() => true);
+      }
+    }
+    if (!valueKey) throw new Error('CSV must include a value column');
+
+    const valueMap = new Map();
+    const values = [];
+    // Map rows into sanitized property keys to avoid unsafe object keys
+    const isoSafeKey = headerSafeMap[isoKey];
+    const valueSafeKey = headerSafeMap[valueKey] || valueKey.replace(/[^A-Za-z0-9_\- ]/g, '_');
+    rows.forEach(r => {
+      const rawIso = String(r[isoKey] || '').trim().toUpperCase();
+      if (!rawIso) return;
+      const rawVal = r[valueKey];
+      const num = Number(rawVal);
+      const v = Number.isFinite(num) ? num : rawVal;
+      valueMap.set(rawIso, v);
+      if (typeof v === 'number' && Number.isFinite(v)) values.push(v);
+    });
+
+    if (!valueMap.size) throw new Error('No valid ISO3 rows found in CSV');
+
+    await loadWorldBoundaryIndex(); // ensure iso3FeatureMap is populated
+
+    const features = [];
+    const missing = [];
+    for (const [iso, val] of valueMap.entries()) {
+      const geom = iso3FeatureMap.get(String(iso).toUpperCase());
+      if (!geom) {
+        missing.push(iso);
+        continue;
+      }
+      // use sanitized property keys
+      const props = {};
+      props[isoSafeKey] = iso;
+      props[valueSafeKey] = val;
+      features.push({ type: 'Feature', geometry: geom, properties: props });
+    }
+
+    if (!features.length) throw new Error('No matching ISO3 countries found in boundary data');
+
+    const geojson = { type: 'FeatureCollection', features };
+    const name = file.name || 'Country values';
+    const safeName = sanitizeName(name);
+
+    // Create a feature group placeholder and register layer so user can select attribute and classify
+    const fg = L.featureGroup().addTo(map);
+    overlayData[safeName] = { layerGroup: fg, geojson: geojson, preferredAttribute: headerSafeMap[valueKey] || valueSafeKey };
+    layersControl.addOverlay(fg, safeName);
+    trackLayerOrder(safeName);
+    reorderLayersControlUI();
+    refreshLayerSelector();
+    await setActiveLayer(safeName);
+
+    if (missing.length) showPopup(`Imported ${features.length} countries; ${missing.length} ISO3 codes not matched`, 'warning');
+    else showPopup(`Imported ${features.length} countries`, 'success');
+    return safeName;
+  } finally {
+    hideLoading();
+  }
+}
+
+const countryCsvUploadEl = document.getElementById('country-csv-upload');
+if (countryCsvUploadEl) {
+  countryCsvUploadEl.addEventListener('change', async function(evt) {
+    const files = Array.from(evt?.target?.files || []);
+    for (const f of files) {
+      try {
+        await importCountryCsvFile(f);
+      } catch (err) {
+        console.error('Country CSV import error:', err);
+        showPopup(String(err?.message || 'Error importing country CSV'), 'error');
+      }
+    }
+    evt.target.value = '';
+  });
+}
+
 //Layer Selector, Activation, and Refresh
 // --- Refresh the Layer dropdown securely ---
 function refreshLayerSelector() {
@@ -3372,6 +3605,30 @@ async function setActiveLayer(name) {
       await populateFilterControls(geojsonData);
       if (currentLayerName !== targetLayerName) return;
       populateAttributeList(geojsonData);
+      // Auto-select preferred attribute (e.g., from CSV import) when available
+      try {
+        const pref = obj && obj.preferredAttribute ? obj.preferredAttribute : null;
+        if (pref) {
+          const selAttr = document.getElementById('attribute-select');
+          if (selAttr) {
+            for (let i = 0; i < selAttr.options.length; i++) {
+              const opt = selAttr.options[i];
+              if (!opt) continue;
+              const optText = String(opt.textContent || "");
+              const optVal = String(opt.value || "");
+              if (optText === pref || optVal === String(pref).replace(/[^\w\-]/g, "_")) {
+                selAttr.value = optVal;
+                const props = geojsonData.features[0].properties || {};
+                const originalKey = Object.keys(props).find(k => String(k).replace(/[^\w\-]/g, "_") === selAttr.value);
+                currentAttribute = originalKey || selAttr.value;
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // ignore auto-select errors
+      }
       updatePointSizeControl();
       updateLineWidthControl();
       updateClassificationOptions();
