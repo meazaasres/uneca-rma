@@ -1689,8 +1689,9 @@ const map = L.map('map', {
   zoomAnimation: false,
   fadeAnimation: false,
   markerZoomAnimation: false,
-  zoomSnap: 0.1,
-  zoomDelta: 0.1
+  // Use integer zoom steps to avoid fractional tile z values (tile servers expect integers)
+  zoomSnap: 1,
+  zoomDelta: 1
 });
 
 // Deterministic startup/home view centered on Africa.
