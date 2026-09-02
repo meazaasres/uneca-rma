@@ -1429,39 +1429,61 @@ async function loadWorldBoundaryIndex() {
       worldCountriesByContinent.get(cont).add(entry.country);
     });
 
-    // Build ISO3 -> geometry map using metadata rows and feature names/aliases.
+      // Build ISO3 -> geometry map using metadata rows and feature properties (preferred),
+      // then fall back to name/alias matching. This reduces incorrect mappings where names
+      // differ between reference metadata and boundary features.
     try {
       iso3FeatureMap = new Map();
       const featByNormName = new Map();
+      const featByIsoProp = new Map();
       (feats || []).forEach(f => {
         const fname = sanitizePlainText(f?.properties?.name || "");
         const n = normalizeCountryName(fname);
         if (n) featByNormName.set(n, f);
+        // collect any ISO-like props present on the feature for direct matching
+        const props = f && f.properties ? f.properties : {};
+        ["iso_a3", "ISO_A3", "iso3", "ISO3", "cca3", "CCA3", "adm0_a3", "adm0_a3_is"].forEach(k => {
+          if (props[k]) {
+            const code = String(props[k] || "").toUpperCase().trim();
+            if (code && /^[A-Z]{3}$/.test(code)) featByIsoProp.set(code, f);
+          }
+        });
       });
 
       (Array.isArray(metaRows) ? metaRows : []).forEach(m => {
         const iso3 = String(m?.iso3 || "").toUpperCase().trim();
         if (!iso3) return;
-        // try match by canonical country name
-        const candidates = [];
-        if (m.country) candidates.push(m.country);
-        if (m.officialName) candidates.push(m.officialName);
-        (Array.isArray(m.aliases) ? m.aliases : []).forEach(a => candidates.push(a));
         let found = null;
-        for (let i = 0; i < candidates.length && !found; i++) {
-          const n = normalizeCountryName(candidates[i]);
-          if (!n) continue;
-          if (featByNormName.has(n)) found = featByNormName.get(n);
+        // Prefer direct match by ISO code present on the boundary feature props
+        if (featByIsoProp.has(iso3)) {
+          found = featByIsoProp.get(iso3);
         }
+        // Next, try matching by canonical country name or aliases
         if (!found) {
-          // fallback: try matching by canonical country in worldBoundaryIndex
-          const match = worldBoundaryIndex.find(w => normalizeCountryName(w.country) === normalizeCountryName(m.country || ""));
-          if (match) found = { geometry: match.geometry };
+          const candidates = [];
+          if (m.country) candidates.push(m.country);
+          if (m.officialName) candidates.push(m.officialName);
+          (Array.isArray(m.aliases) ? m.aliases : []).forEach(a => candidates.push(a));
+          for (let i = 0; i < candidates.length && !found; i++) {
+            const n = normalizeCountryName(candidates[i]);
+            if (!n) continue;
+            if (featByNormName.has(n)) found = featByNormName.get(n);
+          }
         }
+        // As a final fallback, try the worldBoundaryIndex name match (less reliable)
+        if (!found) {
+          const match = worldBoundaryIndex.find(w => normalizeCountryName(w.country) === normalizeCountryName(m.country || ""));
+          if (match) {
+            // attempt to find a full feature whose geometry matches the boundary entry
+            const geomMatch = feats.find(ff => JSON.stringify(ff.geometry) === JSON.stringify(match.geometry));
+            found = geomMatch || { geometry: match.geometry, properties: { name: match.country } };
+          }
+        }
+
         if (found && found.geometry) {
           iso3FeatureMap.set(iso3, found.geometry);
-          // store a friendly name for suggestions
-          const cname = sanitizePlainText(m?.officialName || m?.country || (found?.properties && found.properties.name) || iso3);
+          // store a friendly name for suggestions: prefer authoritative metadata then feature props
+          const cname = sanitizePlainText(m?.officialName || m?.country || (found?.properties && (found.properties.name || found.properties.NAME)) || iso3);
           iso3NameMap.set(iso3, cname);
         }
       });
