@@ -1407,8 +1407,11 @@ async function loadWorldBoundaryIndex() {
     const feats = Array.isArray(boundaryGeojson?.features) ? boundaryGeojson.features : [];
     const metadataByCountry = new Map();
     (Array.isArray(metaRows) ? metaRows : []).forEach(row => {
-      const countryKey = normalizeCountryName(row?.country || row?.officialName || "");
-      if (countryKey) metadataByCountry.set(countryKey, row);
+      const names = [row?.country, row?.officialName, ...(Array.isArray(row?.aliases) ? row.aliases : [])];
+      names.forEach(name => {
+        const countryKey = normalizeCountryName(name || "");
+        if (countryKey) metadataByCountry.set(countryKey, row);
+      });
     });
     worldBoundaryIndex = feats.map(f => {
       const country = sanitizePlainText(f?.properties?.name || "");
@@ -2227,7 +2230,6 @@ const baseLayer = L.tileLayer(
   'https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}',
   {
     attribution: '© United Nations',
-    crossOrigin: 'anonymous',
     bounds: MAP_NAV_BOUNDS,
     maxNativeZoom: 5,
     maxZoom: 18,
@@ -2926,11 +2928,16 @@ function getDataExtension(nameOrPath) {
 }
 
 function getCsvIsoKey(keys) {
-  return (keys || []).find(key => [
+  const exact = (keys || []).find(key => [
     "iso2", "iso2code", "isoalpha2", "isoalpha2code", "iso3166alpha2",
     "iso3", "iso3code", "isoalpha3", "isoalpha3code", "iso3166alpha3",
     "m49", "m49code", "countrycode", "countryiso3code"
   ].includes(normKey(key))) || null;
+  if (exact) return exact;
+  return (keys || []).find(key => {
+    const normalized = normKey(key);
+    return /(?:iso|country).*(?:2|3|code)|(?:iso|country)code|m49/.test(normalized);
+  }) || null;
 }
 
 function getIsoCodeFamily(key) {
@@ -2980,6 +2987,12 @@ function chooseCsvThematicKey(rows, keys, isoKey) {
 async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   if (!csvGeojson || !csvInfo) return null;
   const boundaries = await loadWorldBoundaryIndex();
+  const referenceRows = await loadCountryReferenceRows();
+  const codeToCountry = new Map();
+  (Array.isArray(referenceRows) ? referenceRows : []).forEach(row => {
+    const code = normalizeIsoJoinValue(row?.[csvInfo.isoFamily] || "");
+    if (code) codeToCountry.set(code, normalizeCountryName(row.country || row.officialName || ""));
+  });
   const valuesByCode = new Map();
   csvGeojson.features.forEach(feature => {
     const properties = feature?.properties || {};
@@ -2989,7 +3002,16 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
 
   const features = boundaries.map(boundary => {
     const boundaryCode = normalizeIsoJoinValue(boundary?.[csvInfo.isoFamily] || "");
-    const csvProperties = boundaryCode ? valuesByCode.get(boundaryCode) : null;
+    const boundaryCountry = normalizeCountryName(boundary?.country || "");
+    let csvProperties = boundaryCode ? valuesByCode.get(boundaryCode) : null;
+    if (!csvProperties && boundaryCountry) {
+      for (const [code, country] of codeToCountry) {
+        if (country === boundaryCountry && valuesByCode.has(code)) {
+          csvProperties = valuesByCode.get(code);
+          break;
+        }
+      }
+    }
     if (!csvProperties) return null;
     const properties = Object.create(null);
     properties.country = boundary.country;
