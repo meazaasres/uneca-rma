@@ -2936,7 +2936,7 @@ function getCsvIsoKey(keys) {
   if (exact) return exact;
   return (keys || []).find(key => {
     const normalized = normKey(key);
-    return /(?:iso|country).*(?:2|3|code)|(?:iso|country)code|m49/.test(normalized);
+    return /(?:iso|country).*(?:2|3|code)|(?:iso|country)code|m49|alpha(?:2|3)/.test(normalized);
   }) || null;
 }
 
@@ -2950,6 +2950,12 @@ function getIsoCodeFamily(key) {
 
 function normalizeIsoJoinValue(value) {
   return String(value == null ? "" : value).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function normalizeCsvCountryCode(value, family) {
+  const code = normalizeIsoJoinValue(value);
+  if (family === "m49" && /^\d{1,3}$/.test(code)) return code.padStart(3, "0");
+  return code;
 }
 
 function isUnsafeCsvPropertyKey(key) {
@@ -2996,12 +3002,12 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   const valuesByCode = new Map();
   csvGeojson.features.forEach(feature => {
     const properties = feature?.properties || {};
-    const code = normalizeIsoJoinValue(properties[csvInfo.isoKey]);
+    const code = normalizeCsvCountryCode(properties[csvInfo.isoKey], csvInfo.isoFamily);
     if (code) valuesByCode.set(code, properties);
   });
 
   const features = boundaries.map(boundary => {
-    const boundaryCode = normalizeIsoJoinValue(boundary?.[csvInfo.isoFamily] || "");
+    const boundaryCode = normalizeCsvCountryCode(boundary?.[csvInfo.isoFamily] || "", csvInfo.isoFamily);
     const boundaryCountry = normalizeCountryName(boundary?.country || "");
     let csvProperties = boundaryCode ? valuesByCode.get(boundaryCode) : null;
     if (!csvProperties && boundaryCountry) {
@@ -3063,12 +3069,12 @@ function mergeCsvIntoActiveLayer(csvGeojson, csvInfo) {
   const valuesByIso = new Map();
   csvGeojson.features.forEach(feature => {
     const properties = feature?.properties || {};
-    const iso = normalizeIsoJoinValue(properties[csvInfo.isoKey]);
+    const iso = normalizeCsvCountryCode(properties[csvInfo.isoKey], csvInfo.isoFamily);
     if (iso) valuesByIso.set(iso, properties);
   });
   let matched = 0;
   targetFeatures.forEach(feature => {
-    const iso = normalizeIsoJoinValue(feature?.properties?.[targetIsoKey]);
+    const iso = normalizeCsvCountryCode(feature?.properties?.[targetIsoKey], csvInfo.isoFamily);
     if (!iso || !valuesByIso.has(iso)) return;
     if (!feature.properties) feature.properties = {};
     const csvProperties = valuesByIso.get(iso) || {};
@@ -3116,8 +3122,9 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   const latKey = keys.find(k => /lat/i.test(String(k)));
   const lonKey = keys.find(k => /lon|lng|long/i.test(String(k)));
   const isoKey = getCsvIsoKey(keys);
-  if (!isoKey && (!latKey || !lonKey)) {
-    throw new Error("CSV must have latitude/longitude columns.");
+  const hasCoordinates = !!(latKey && lonKey);
+  if (!hasCoordinates && !isoKey) {
+    throw new Error("CSV must have latitude/longitude columns or a recognized ISO3/country-code column.");
   }
   const isoFamily = isoKey ? getIsoCodeFamily(isoKey) : "";
   const isoValues = isoKey ? rows.map(row => String(row?.[isoKey] ?? "").trim()).filter(Boolean) : [];
@@ -3127,7 +3134,7 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
     : isoFamily;
 
   const features = rows.map((r, rowIdx) => {
-    if (isoKey && (!latKey || !lonKey)) {
+    if (!hasCoordinates && isoKey) {
       const iso = sanitizePlainText(r?.[isoKey]);
       if (!iso) return null;
       return {
@@ -3151,7 +3158,7 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   }).filter(f => f !== null);
 
   const geojson = { type: "FeatureCollection", features };
-  if (isoKey && (!latKey || !lonKey)) {
+  if (!hasCoordinates && isoKey) {
     geojson.__rmaCsvImport = {
       isoKey,
       isoFamily: resolvedIsoFamily,
@@ -3675,6 +3682,7 @@ function populateAttributeList(data) {
     const o = document.createElement('option');
     o.value = String(k).replace(/[^\w\-]/g, "_");
     o.textContent = k;
+    if (currentAttribute && k === currentAttribute) o.selected = true;
     sel.appendChild(o);
   });
 
