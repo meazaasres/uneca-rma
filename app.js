@@ -2227,7 +2227,14 @@ makeControlDraggable(northArrowControl, (el, mapEl) => {
 });
 
 // Base layer
-const baseLayer = L.tileLayer(
+const UNTopoLayer = L.TileLayer.extend({
+  getTileUrl: function(coords) {
+    const safeCoords = { ...coords, z: Math.floor(Number(coords.z) || 0) };
+    return L.TileLayer.prototype.getTileUrl.call(this, safeCoords);
+  }
+});
+
+const baseLayer = new UNTopoLayer(
   'https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/tile/{z}/{y}/{x}',
   {
     attribution: '© United Nations',
