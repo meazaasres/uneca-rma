@@ -2956,14 +2956,13 @@ function getDataExtension(nameOrPath) {
 
 function getCsvIsoKey(keys) {
   const exact = (keys || []).find(key => [
-    "iso2", "iso2code", "isoalpha2", "isoalpha2code", "iso3166alpha2",
     "iso3", "iso3code", "isoalpha3", "isoalpha3code", "iso3166alpha3",
-    "m49", "m49code", "countrycode", "countryiso3code"
+    "countryiso3code"
   ].includes(normKey(key))) || null;
   if (exact) return exact;
   return (keys || []).find(key => {
     const normalized = normKey(key);
-    return /(?:iso|country).*(?:2|3|code)|(?:iso|country)code|m49|alpha(?:2|3)/.test(normalized);
+    return /^(?:iso3|iso3code|isoalpha3|isoalpha3code|iso3166alpha3|countryiso3code)$/.test(normalized);
   }) || null;
 }
 
@@ -2981,7 +2980,6 @@ function normalizeIsoJoinValue(value) {
 
 function normalizeCsvCountryCode(value, family) {
   const code = normalizeIsoJoinValue(value);
-  if (family === "m49" && /^\d{1,3}$/.test(code)) return code.padStart(3, "0");
   return code;
 }
 
@@ -3089,7 +3087,7 @@ function mergeCsvIntoActiveLayer(csvGeojson, csvInfo) {
   });
   const targetIsoKey = targetKeys.find(key => getIsoCodeFamily(key) === csvInfo.isoFamily)
     || getKeyByCandidatesFromFeatures(targetFeatures, [
-      "ISO_A2", "ISO2", "ISO_ALPHA2", "ISO_A3", "ISO3", "ISO_ALPHA3", "M49", "M49_CODE", "COUNTRY_CODE"
+      "ISO_A3", "ISO3", "ISO_ALPHA3", "ISO3_CODE", "ISO_ALPHA3_CODE", "COUNTRY_ISO3_CODE"
     ]);
   if (!targetIsoKey) return null;
 
@@ -3151,14 +3149,19 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   const isoKey = getCsvIsoKey(keys);
   const hasCoordinates = !!(latKey && lonKey);
   if (!hasCoordinates && !isoKey) {
-    throw new Error("CSV must have latitude/longitude columns or a recognized ISO3/country-code column.");
+    throw new Error("CSV must have latitude/longitude columns or an ISO3 code column.");
   }
   const isoFamily = isoKey ? getIsoCodeFamily(isoKey) : "";
-  const isoValues = isoKey ? rows.map(row => String(row?.[isoKey] ?? "").trim()).filter(Boolean) : [];
-  const resolvedIsoFamily = isoKey && /countrycode/i.test(normKey(isoKey))
-    && isoValues.length > 0 && isoValues.every(value => /^\d{1,3}$/.test(value))
-    ? "m49"
-    : isoFamily;
+  const resolvedIsoFamily = isoKey ? "iso3" : "";
+  if (!hasCoordinates && isoKey) {
+    const invalidIso3 = rows.some(row => {
+      const value = normalizeIsoJoinValue(row?.[isoKey]);
+      return !/^[A-Z]{3}$/.test(value);
+    });
+    if (invalidIso3) {
+      throw new Error("CSV country values must be valid three-letter ISO3 codes.");
+    }
+  }
 
   const features = rows.map((r, rowIdx) => {
     if (!hasCoordinates && isoKey) {
