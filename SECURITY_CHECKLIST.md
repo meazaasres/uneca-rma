@@ -50,6 +50,7 @@ Last updated: 2026-03-11
 
 ## Notes
 
+- CSV attribute-table joins enforce row and column limits, reject prototype-pollution property names, cap cell lengths, and copy only validated fields into matched vector features.
 - Header controls in this checklist are defined in `web.config` and are expected to be validated against the deployed endpoint.
 - The current `verify-security-headers.ps1` script validates IDs 15-23 and cache policy expectations.
 - HSTS should be verified as part of deployment validation on the final HTTPS host.
