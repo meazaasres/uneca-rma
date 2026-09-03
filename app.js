@@ -1668,8 +1668,9 @@ const map = L.map('map', {
   zoomAnimation: false,
   fadeAnimation: false,
   markerZoomAnimation: false,
-  zoomSnap: 0.1,
-  zoomDelta: 0.1
+  // The UN ArcGIS tile service exposes integer zoom levels only.
+  zoomSnap: 1,
+  zoomDelta: 1
 });
 
 // Deterministic startup/home view centered on Africa.
