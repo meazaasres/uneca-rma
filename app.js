@@ -775,16 +775,47 @@ function isAfricaContinentValue(raw) {
   return nk === "af" || nk === "afr" || nk.includes("africa");
 }
 
-function getFeatureSampleCoord(feature) {
+function getRingAverageCoordinate(ring) {
+  if (!Array.isArray(ring) || !ring.length) return null;
+  let totalX = 0;
+  let totalY = 0;
+  let count = 0;
+  ring.forEach(coord => {
+    if (!Array.isArray(coord) || coord.length < 2) return;
+    const x = Number(coord[0]);
+    const y = Number(coord[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    totalX += x;
+    totalY += y;
+    count++;
+  });
+  return count ? [totalX / count, totalY / count] : null;
+}
+
+function getFeatureSampleCoords(feature) {
   const g = feature?.geometry;
-  if (!g || !g.type || !g.coordinates) return null;
-  if (g.type === "Point") return g.coordinates;
-  if (g.type === "MultiPoint" && g.coordinates[0]) return g.coordinates[0];
-  if (g.type === "LineString" && g.coordinates[0]) return g.coordinates[0];
-  if (g.type === "MultiLineString" && g.coordinates[0] && g.coordinates[0][0]) return g.coordinates[0][0];
-  if (g.type === "Polygon" && g.coordinates[0] && g.coordinates[0][0]) return g.coordinates[0][0];
-  if (g.type === "MultiPolygon" && g.coordinates[0] && g.coordinates[0][0] && g.coordinates[0][0][0]) return g.coordinates[0][0][0];
-  return null;
+  if (!g || !g.type || !g.coordinates) return [];
+  if (g.type === "Point") return [g.coordinates];
+  if (g.type === "MultiPoint" && g.coordinates[0]) return [g.coordinates[0]];
+  if (g.type === "LineString" && g.coordinates[0]) return [g.coordinates[0]];
+  if (g.type === "MultiLineString" && g.coordinates[0] && g.coordinates[0][0]) return [g.coordinates[0][0]];
+
+  const outerRings = g.type === "Polygon"
+    ? [g.coordinates[0]]
+    : g.type === "MultiPolygon"
+      ? g.coordinates.map(polygon => polygon?.[0]).filter(Boolean)
+      : [];
+  const samples = outerRings.map(getRingAverageCoordinate).filter(Boolean);
+  const bbox = bboxFromCoordinates(g.coordinates);
+  if (bbox) samples.push([(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]);
+  outerRings.forEach(ring => {
+    if (ring?.[0]) samples.push(ring[0]);
+  });
+  return samples;
+}
+
+function getFeatureSampleCoord(feature) {
+  return getFeatureSampleCoords(feature)[0] || null;
 }
 
 function normalizeCountryName(value) {
@@ -873,7 +904,9 @@ function isLikelyCsvPayload(text) {
   const hasDelimiter = /,|;|\t/.test(header);
   const hasLatField = /(latitude|lat)\b/.test(header);
   const hasLonField = /(longitude|lon|lng|long)\b/.test(header);
-  return hasDelimiter && hasLatField && hasLonField;
+  const headerCells = header.split(/[,;\t]/).map(value => value.trim());
+  const hasIso3Field = !!getCsvIsoKey(headerCells);
+  return hasDelimiter && ((hasLatField && hasLonField) || hasIso3Field);
 }
 
 function assertCsvPayloadLooksSafe(csvText, sourceLabel = "CSV") {
@@ -916,8 +949,9 @@ function assertCsvPayloadLooksSafe(csvText, sourceLabel = "CSV") {
 
   const hasLatField = headerCells.some(v => /(latitude|lat)\b/i.test(v));
   const hasLonField = headerCells.some(v => /(longitude|lon|lng|long)\b/i.test(v));
-  if (!hasLatField || !hasLonField) {
-    throw new Error(`${sourceLabel} must have latitude/longitude columns.`);
+  const hasIso3Field = !!getCsvIsoKey(headerCells);
+  if (!((hasLatField && hasLonField) || hasIso3Field)) {
+    throw new Error(`${sourceLabel} must have latitude/longitude columns or an ISO3 code column.`);
   }
 }
 
@@ -1462,17 +1496,21 @@ async function ensureSpatialCountryContinentFields(data) {
   let tagged = 0;
   feats.forEach(f => {
     if (!f.properties) f.properties = {};
-    if (f.properties.__rma_country && f.properties.__rma_continent_spatial) return;
-    const coord = getFeatureSampleCoord(f);
-    if (!Array.isArray(coord) || coord.length < 2) return;
-    const x = Number(coord[0]);
-    const y = Number(coord[1]);
-    if (isNaN(x) || isNaN(y)) return;
-
-    const candidates = boundaryIndex.filter(b =>
-      x >= b.bbox[0] && x <= b.bbox[2] && y >= b.bbox[1] && y <= b.bbox[3]
-    );
-    const hit = candidates.find(c => pointInGeometry([x, y], c.geometry));
+    delete f.properties.__rma_country;
+    delete f.properties.__rma_continent_spatial;
+    const sampleCoords = getFeatureSampleCoords(f);
+    let hit = null;
+    for (const coord of sampleCoords) {
+      if (!Array.isArray(coord) || coord.length < 2) continue;
+      const x = Number(coord[0]);
+      const y = Number(coord[1]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const candidates = boundaryIndex.filter(b =>
+        x >= b.bbox[0] && x <= b.bbox[2] && y >= b.bbox[1] && y <= b.bbox[3]
+      );
+      hit = candidates.find(c => pointInGeometry([x, y], c.geometry));
+      if (hit) break;
+    }
     if (!hit) return;
 
     f.properties.__rma_country = hit.country;
