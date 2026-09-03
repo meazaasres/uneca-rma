@@ -2234,13 +2234,19 @@ const baseLayer = L.tileLayer(
     maxNativeZoom: 5,
     maxZoom: 18,
     noWrap: true,
-    tileSize: 256
+    tileSize: 256,
+    keepBuffer: 2,
+    updateWhenIdle: false
   }
 ).addTo(map);
 
+let baseLayerTileErrors = 0;
+
 function ensureBaseLayerAtBack() {
-  if (!baseLayer || !map || !map.hasLayer(baseLayer)) return;
+  if (!baseLayer || !map) return;
   try {
+    if (!map.hasLayer(baseLayer)) baseLayer.addTo(map);
+    baseLayer.setOpacity(1);
     if (typeof baseLayer.bringToBack === 'function') baseLayer.bringToBack();
     if (typeof baseLayer.setZIndex === 'function') baseLayer.setZIndex(1);
   } catch (e) {
@@ -2249,6 +2255,15 @@ function ensureBaseLayerAtBack() {
 }
 
 ensureBaseLayerAtBack();
+baseLayer.on('tileerror', (event) => {
+  baseLayerTileErrors++;
+  if (baseLayerTileErrors <= 3) {
+    console.warn("UN Topo tile failed to load:", event?.tile?.src || "unknown tile");
+  }
+});
+baseLayer.on('load', () => {
+  baseLayerTileErrors = 0;
+});
 map.on('layeradd', (e) => {
   if (e && e.layer === baseLayer) ensureBaseLayerAtBack();
 });
@@ -2257,10 +2272,22 @@ map.on('layerremove', (e) => {
   try {
     baseLayer.addTo(map);
     ensureBaseLayerAtBack();
+    if (typeof baseLayer.redraw === 'function') baseLayer.redraw();
   } catch (err) {
     console.warn("Basemap auto-restore failed:", err);
   }
 });
+map.on('resize zoomend moveend', () => {
+  setTimeout(() => {
+    ensureBaseLayerAtBack();
+    if (typeof baseLayer.redraw === 'function') baseLayer.redraw();
+  }, 0);
+});
+setTimeout(() => {
+  ensureBaseLayerAtBack();
+  map.invalidateSize({ pan: false });
+  if (typeof baseLayer.redraw === 'function') baseLayer.redraw();
+}, 500);
 
 // --- Draw control ---
 const drawnItems = new L.FeatureGroup();
