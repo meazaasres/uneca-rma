@@ -1405,14 +1405,24 @@ async function loadWorldBoundaryIndex() {
     });
 
     const feats = Array.isArray(boundaryGeojson?.features) ? boundaryGeojson.features : [];
+    const metadataByCountry = new Map();
+    (Array.isArray(metaRows) ? metaRows : []).forEach(row => {
+      const countryKey = normalizeCountryName(row?.country || row?.officialName || "");
+      if (countryKey) metadataByCountry.set(countryKey, row);
+    });
     worldBoundaryIndex = feats.map(f => {
       const country = sanitizePlainText(f?.properties?.name || "");
       const key = normalizeCountryName(country);
       const canonicalCountry = sanitizePlainText(canonicalByCountryNorm.get(key) || country);
       const continent = continentByCountryNorm.get(key) || guessContinentFromCountryName(country);
+      const metadata = metadataByCountry.get(normalizeCountryName(canonicalCountry))
+        || metadataByCountry.get(key) || {};
       return {
         country: canonicalCountry,
         continent,
+        iso2: sanitizePlainText(metadata.iso2 || ""),
+        iso3: sanitizePlainText(metadata.iso3 || ""),
+        m49: sanitizePlainText(metadata.m49 || ""),
         bbox: bboxFromCoordinates(f?.geometry?.coordinates),
         geometry: f?.geometry || null
       };
@@ -2917,16 +2927,17 @@ function getDataExtension(nameOrPath) {
 
 function getCsvIsoKey(keys) {
   return (keys || []).find(key => [
-    "iso2", "isoalpha2", "iso3166alpha2", "iso3", "isoalpha3",
-    "iso3166alpha3", "m49", "m49code", "countrycode"
+    "iso2", "iso2code", "isoalpha2", "isoalpha2code", "iso3166alpha2",
+    "iso3", "iso3code", "isoalpha3", "isoalpha3code", "iso3166alpha3",
+    "m49", "m49code", "countrycode", "countryiso3code"
   ].includes(normKey(key))) || null;
 }
 
 function getIsoCodeFamily(key) {
   const normalized = normKey(key);
-  if (/m49|countrycode/.test(normalized)) return "m49";
+  if (/m49/.test(normalized)) return "m49";
+  if (/countrycode|iso.*3|alpha3/.test(normalized)) return "iso3";
   if (/iso.*2|alpha2/.test(normalized)) return "iso2";
-  if (/iso.*3|alpha3/.test(normalized)) return "iso3";
   return "";
 }
 
@@ -2952,6 +2963,58 @@ function buildSafeCsvProperties(row, keys) {
     properties[key] = value;
   });
   return properties;
+}
+
+function chooseCsvThematicKey(rows, keys, isoKey) {
+  const candidates = (keys || []).filter(key => {
+    if (key === isoKey) return false;
+    return !/^(country|countryname|name|countrycode|iso|m49)/i.test(normKey(key));
+  });
+  const numeric = candidates.find(key => (rows || []).some(row => {
+    const value = String(row?.[key] ?? "").trim();
+    return value !== "" && Number.isFinite(Number(value));
+  }));
+  return numeric || candidates[0] || (keys || []).find(key => key !== isoKey) || "";
+}
+
+async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
+  if (!csvGeojson || !csvInfo) return null;
+  const boundaries = await loadWorldBoundaryIndex();
+  const valuesByCode = new Map();
+  csvGeojson.features.forEach(feature => {
+    const properties = feature?.properties || {};
+    const code = normalizeIsoJoinValue(properties[csvInfo.isoKey]);
+    if (code) valuesByCode.set(code, properties);
+  });
+
+  const features = boundaries.map(boundary => {
+    const boundaryCode = normalizeIsoJoinValue(boundary?.[csvInfo.isoFamily] || "");
+    const csvProperties = boundaryCode ? valuesByCode.get(boundaryCode) : null;
+    if (!csvProperties) return null;
+    const properties = Object.create(null);
+    properties.country = boundary.country;
+    properties.iso2 = boundary.iso2;
+    properties.iso3 = boundary.iso3;
+    properties.m49 = boundary.m49;
+    Object.keys(csvProperties).forEach(key => {
+      if (key !== csvInfo.isoKey) properties[key] = csvProperties[key];
+    });
+    return {
+      type: "Feature",
+      geometry: boundary.geometry,
+      properties
+    };
+  }).filter(Boolean);
+
+  if (!features.length) return null;
+  return {
+    type: "FeatureCollection",
+    features,
+    __rmaCsvImport: {
+      valueKeys: csvInfo.valueKeys,
+      preferredAttribute: csvInfo.preferredAttribute || ""
+    }
+  };
 }
 
 function mergeCsvIntoActiveLayer(csvGeojson, csvInfo) {
@@ -3034,9 +3097,15 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   if (!isoKey && (!latKey || !lonKey)) {
     throw new Error("CSV must have latitude/longitude columns.");
   }
+  const isoFamily = isoKey ? getIsoCodeFamily(isoKey) : "";
+  const isoValues = isoKey ? rows.map(row => String(row?.[isoKey] ?? "").trim()).filter(Boolean) : [];
+  const resolvedIsoFamily = isoKey && /countrycode/i.test(normKey(isoKey))
+    && isoValues.length > 0 && isoValues.every(value => /^\d{1,3}$/.test(value))
+    ? "m49"
+    : isoFamily;
 
   const features = rows.map((r, rowIdx) => {
-    if (isoKey) {
+    if (isoKey && (!latKey || !lonKey)) {
       const iso = sanitizePlainText(r?.[isoKey]);
       if (!iso) return null;
       return {
@@ -3060,11 +3129,12 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   }).filter(f => f !== null);
 
   const geojson = { type: "FeatureCollection", features };
-  if (isoKey) {
+  if (isoKey && (!latKey || !lonKey)) {
     geojson.__rmaCsvImport = {
       isoKey,
-      isoFamily: getIsoCodeFamily(isoKey),
-      valueKeys: keys.filter(key => key !== isoKey)
+      isoFamily: resolvedIsoFamily,
+      valueKeys: keys.filter(key => key !== isoKey),
+      preferredAttribute: chooseCsvThematicKey(rows, keys, isoKey)
     };
   }
   return geojson;
@@ -3114,7 +3184,11 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
     });
   }, 0);
 
-  overlayData[safeName] = { layerGroup: fg, geojson: geojson };
+  overlayData[safeName] = {
+    layerGroup: fg,
+    geojson: geojson,
+    preferredAttribute: geojson.__rmaCsvImport?.preferredAttribute || ""
+  };
   layersControl.addOverlay(fg, safeName);
   trackLayerOrder(safeName);
   reorderLayersControlUI();
@@ -3169,19 +3243,12 @@ async function importFile(file) {
       geojson = parseImportedData(ext, text, ext === ".geojson" ? "application/json" : "text/csv");
     }
 
-    const csvJoin = ext === ".csv" ? mergeCsvIntoActiveLayer(geojson, geojson.__rmaCsvImport) : null;
-    if (ext === ".csv" && geojson.__rmaCsvImport && !csvJoin) {
-      throw new Error("Select a vector layer with matching ISO fields before importing this CSV table.");
-    }
-    if (csvJoin) {
-      if (csvJoin.matched > 0) {
-        await setActiveLayer(currentLayerName);
-        showPopup(`CSV attributes (${csvJoin.valueKeys.length}) matched ${csvJoin.matched} features`, "success");
-      } else {
-        throw new Error("CSV ISO codes did not match the active layer.");
+    if (ext === ".csv" && geojson.__rmaCsvImport) {
+      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
+      if (!countryGeojson) {
+        throw new Error("No CSV ISO codes matched the global country reference.");
       }
-      if (fileNameEl) fileNameEl.textContent = currentLayerName;
-      return currentLayerName;
+      geojson = countryGeojson;
     }
 
     const safeName = await addImportedLayer(geojson, file.name, "Imported file");
@@ -3212,22 +3279,14 @@ async function importUrl(rawUrl) {
     if (!hasAllowedContentType && !csvPayloadFallbackAllowed) {
       throw new Error(`Remote content type is not allowed for ${ext} import.`);
     }
-    const geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
-    const csvJoin = ext === ".csv" ? mergeCsvIntoActiveLayer(geojson, geojson.__rmaCsvImport) : null;
-    if (ext === ".csv" && geojson.__rmaCsvImport && !csvJoin) {
-      throw new Error("Select a vector layer with matching ISO fields before importing this CSV table.");
-    }
-    if (csvJoin) {
-      if (csvJoin.matched > 0) {
-        await setActiveLayer(currentLayerName);
-        showPopup(`CSV attributes (${csvJoin.valueKeys.length}) matched ${csvJoin.matched} features`, "success");
-      } else {
-        throw new Error("CSV ISO codes did not match the active layer.");
+    let geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
+    if (ext === ".csv" && geojson.__rmaCsvImport) {
+      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
+      if (!countryGeojson) {
+        throw new Error("No CSV ISO codes matched the global country reference.");
       }
-      if (urlInput) urlInput.value = "";
-      if (fileNameEl) fileNameEl.textContent = currentLayerName;
-      return currentLayerName;
+      geojson = countryGeojson;
     }
 
     const safeName = await addImportedLayer(geojson, fallbackName, "Imported URL data");
@@ -3529,7 +3588,7 @@ async function setActiveLayer(name) {
 
   geojsonData = obj.geojson;
   layerGroup  = obj.layerGroup;
-  currentAttribute = null;
+  currentAttribute = obj.preferredAttribute || null;
 
   try {
     if (geojsonData && geojsonData.type === "FeatureCollection") {

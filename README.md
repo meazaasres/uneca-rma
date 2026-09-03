@@ -48,7 +48,7 @@ Export reliability depends on data size and CORS:
 - Map display uses Leaflet default web map projection (Web Mercator, EPSG:3857) for tiled basemaps.
 - Imported GeoJSON and CSV coordinates should be in WGS84 geographic coordinates (EPSG:4326), using decimal degrees.
 - CSV files should provide latitude/longitude fields (for example: `lat` and `lon`, or `latitude` and `longitude`).
-- To join a CSV attribute table to the active vector layer, provide an ISO-2, ISO-3, M49, or country-code column. Every other CSV column is copied to matching features by ISO code and becomes available in the attribute selector. The `UN Topo` basemap is raster imagery and cannot receive feature attributes directly; use a vector country layer with ISO fields.
+- CSVs with latitude/longitude fields (for example, `lat` and `lon`, or `latitude` and `longitude`) are imported as point features. CSVs without coordinates must provide an ISO-2, ISO-3, M49, or country-code column; recognized country rows are matched to global country polygons, all other CSV columns are copied to those polygons, and the first suitable data column is selected for thematic styling.
 - If source data is in another CRS/projection, reproject it to EPSG:4326 before import.
 
 ## Security Notes
