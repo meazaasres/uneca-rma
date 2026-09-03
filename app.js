@@ -79,6 +79,7 @@ const WORLD_COUNTRIES_LOCAL_URL = null; // set a local file path if vendored
 const UN_COUNTRIES_LOCAL_URL = "./UN_reference_countries_UNSD.json"; // local UN/M49-style reference table
 const UN_COUNTRIES_REMOTE_URL = "https://unstats.un.org/unsd/methodology/m49/overview"; // UN M49 overview
 const WORLD_BOUNDARY_REMOTE_URL = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json";
+const UN_COUNTRY_BOUNDARY_QUERY_URL = "https://geoservices.un.org/arcgis/rest/services/ClearMap_WebTopo/MapServer/109/query";
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
 // Minimal global state (kept intentionally small)
@@ -1440,25 +1441,39 @@ async function loadWorldBoundaryIndex() {
 
     const feats = Array.isArray(boundaryGeojson?.features) ? boundaryGeojson.features : [];
     const metadataByCountry = new Map();
+    const metadataByIso3 = new Map();
     (Array.isArray(metaRows) ? metaRows : []).forEach(row => {
       const names = [row?.country, row?.officialName, ...(Array.isArray(row?.aliases) ? row.aliases : [])];
       names.forEach(name => {
         const countryKey = normalizeCountryName(name || "");
         if (countryKey) metadataByCountry.set(countryKey, row);
       });
+      const iso3 = normalizeIsoJoinValue(row?.iso3 || "");
+      if (iso3) metadataByIso3.set(iso3, row);
     });
     worldBoundaryIndex = feats.map(f => {
-      const country = sanitizePlainText(f?.properties?.name || "");
+      const boundaryIso3 = normalizeIsoJoinValue(
+        f?.properties?.ISO3CD || f?.properties?.iso3 || f?.properties?.ISO_A3 || ""
+      );
+      const country = sanitizePlainText(
+        f?.properties?.ROMNAM || f?.properties?.name || f?.properties?.NAME || f?.properties?.MAPLAB || ""
+      );
       const key = normalizeCountryName(country);
-      const canonicalCountry = sanitizePlainText(canonicalByCountryNorm.get(key) || country);
-      const continent = continentByCountryNorm.get(key) || guessContinentFromCountryName(country);
-      const metadata = metadataByCountry.get(normalizeCountryName(canonicalCountry))
+      const metadata = metadataByIso3.get(boundaryIso3)
         || metadataByCountry.get(key) || {};
+      const canonicalCountry = sanitizePlainText(
+        metadata.officialName || metadata.country || canonicalByCountryNorm.get(key) || country
+      );
+      const canonicalKey = normalizeCountryName(canonicalCountry);
+      const continent = metadata.continent
+        || continentByCountryNorm.get(key)
+        || continentByCountryNorm.get(canonicalKey)
+        || guessContinentFromCountryName(country);
       return {
         country: canonicalCountry,
         continent,
-        iso2: sanitizePlainText(metadata.iso2 || ""),
-        iso3: sanitizePlainText(metadata.iso3 || ""),
+        iso2: sanitizePlainText(metadata.iso2 || f?.properties?.ISO2CD || ""),
+        iso3: sanitizePlainText(metadata.iso3 || boundaryIso3),
         m49: sanitizePlainText(metadata.m49 || ""),
         bbox: bboxFromCoordinates(f?.geometry?.coordinates),
         geometry: f?.geometry || null
@@ -2925,7 +2940,7 @@ function defaultStyle(feature) {
   const defaultColor = /^#[0-9A-Fa-f]{6}$/.test(activeLayerState?.defaultSymbolColor || "")
     ? activeLayerState.defaultSymbolColor
     : (/LineString/.test(t) ? '#007aff' : '#ccc');
-  if (/Polygon/.test(t)) return { color: '#5f5f5f', weight: 0.6, fillColor: defaultColor, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
+  if (/Polygon/.test(t)) return { color: 'transparent', weight: 0, fillColor: defaultColor, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
   if (/LineString/.test(t)) return { color: defaultColor, weight: getLineWidth() };
   return { color: '#000', weight: 1, fillColor: defaultColor, fillOpacity: OVERLAY_POINT_FILL_OPACITY };
 }
@@ -3063,11 +3078,28 @@ function chooseCsvThematicKey(rows, keys, isoKey) {
 
 async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   if (!csvGeojson || !csvInfo) return null;
-  const boundaries = await loadWorldBoundaryIndex();
   const referenceRows = await loadCountryReferenceRows();
+  const requestedIso3 = Array.from(new Set(csvGeojson.features
+    .map(feature => normalizeIsoJoinValue(feature?.properties?.[csvInfo.isoKey]))
+    .filter(value => /^[A-Z]{3}$/.test(value))));
+  if (!requestedIso3.length) return null;
+  const where = `ISO3CD IN (${requestedIso3.map(value => `'${value}'`).join(",")})`;
+  const query = new URL(UN_COUNTRY_BOUNDARY_QUERY_URL);
+  query.searchParams.set("where", where);
+  query.searchParams.set("outFields", "ISO3CD,ROMNAM,CONTCD");
+  query.searchParams.set("returnGeometry", "true");
+  query.searchParams.set("outSR", "4326");
+  query.searchParams.set("f", "geojson");
+  const boundaryPayload = await fetchJsonWithLimits(query.href, "UN country boundaries");
+  const boundaryFeatures = Array.isArray(boundaryPayload?.features) ? boundaryPayload.features : [];
+  const boundaries = boundaryFeatures.map(feature => ({
+    country: sanitizePlainText(feature?.properties?.ROMNAM || feature?.properties?.ISO3CD || ""),
+    iso3: normalizeIsoJoinValue(feature?.properties?.ISO3CD || ""),
+    geometry: feature?.geometry || null
+  })).filter(boundary => boundary.iso3 && boundary.geometry);
   const codeToCountry = new Map();
   (Array.isArray(referenceRows) ? referenceRows : []).forEach(row => {
-    const code = normalizeIsoJoinValue(row?.[csvInfo.isoFamily] || "");
+    const code = normalizeIsoJoinValue(row?.iso3 || "");
     if (code) codeToCountry.set(code, normalizeCountryName(row.country || row.officialName || ""));
   });
   const valuesByCode = new Map();
@@ -3078,7 +3110,7 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   });
 
   const features = boundaries.map(boundary => {
-    const boundaryCode = normalizeCsvCountryCode(boundary?.[csvInfo.isoFamily] || "", csvInfo.isoFamily);
+    const boundaryCode = normalizeCsvCountryCode(boundary?.iso3 || "", "iso3");
     const boundaryCountry = normalizeCountryName(boundary?.country || "");
     let csvProperties = boundaryCode ? valuesByCode.get(boundaryCode) : null;
     if (!csvProperties && boundaryCountry) {
@@ -3902,7 +3934,7 @@ function applyClassification() {
         const col = cols[idx] || '#ccc';
         const t = f.geometry?.type || "";
         if (/LineString/.test(t)) return { color: col, weight: getLineWidth() };
-        if (/Polygon/.test(t)) return { color: '#5f5f5f', weight: 0.6, fillColor: col, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
+        if (/Polygon/.test(t)) return { color: 'transparent', weight: 0, fillColor: col, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
         return { color: '#000', weight: 1, fillColor: col, fillOpacity: OVERLAY_POINT_FILL_OPACITY };
       },
       pointToLayer: (f, latlng) => {
@@ -3995,7 +4027,7 @@ function applyClassification() {
         const col = colorForVal(f.properties?.[currentAttribute]);
         const t = f.geometry?.type || "";
         if (/LineString/.test(t)) return { color: col, weight: getLineWidth() };
-        if (/Polygon/.test(t)) return { color: '#5f5f5f', weight: 0.6, fillColor: col, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
+        if (/Polygon/.test(t)) return { color: 'transparent', weight: 0, fillColor: col, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
         return { color: '#000', weight: 1, fillColor: col, fillOpacity: OVERLAY_POINT_FILL_OPACITY };
       },
       pointToLayer: (f, latlng) => {
