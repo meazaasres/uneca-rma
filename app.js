@@ -2920,12 +2920,12 @@ function getCsvIsoKey(keys) {
   ].includes(normKey(key))) || null;
 }
 
-function getCsvValueKey(keys, isoKey, latKey, lonKey) {
-  const excluded = new Set([isoKey, latKey, lonKey].filter(Boolean));
-  const preferred = (keys || []).find(key =>
-    !excluded.has(key) && /^(value|data|indicator|measure|value1)$/i.test(String(key).trim())
-  );
-  return preferred || (keys || []).find(key => !excluded.has(key)) || null;
+function getIsoCodeFamily(key) {
+  const normalized = normKey(key);
+  if (/m49|countrycode/.test(normalized)) return "m49";
+  if (/iso.*2|alpha2/.test(normalized)) return "iso2";
+  if (/iso.*3|alpha3/.test(normalized)) return "iso3";
+  return "";
 }
 
 function normalizeIsoJoinValue(value) {
@@ -2938,29 +2938,42 @@ function mergeCsvIntoActiveLayer(csvGeojson, csvInfo) {
   const targetFeatures = Array.isArray(target?.features) ? target.features : [];
   if (!targetFeatures.length) return null;
 
-  const targetIsoKey = getKeyByCandidatesFromFeatures(targetFeatures, [
-    "ISO_A2", "ISO2", "ISO_ALPHA2", "ISO_A3", "ISO3", "ISO_ALPHA3", "M49", "M49_CODE", "COUNTRY_CODE"
-  ]);
+  const targetKeys = [];
+  const seenTargetKeys = new Set();
+  targetFeatures.forEach(feature => {
+    Object.keys(feature?.properties || {}).forEach(key => {
+      if (seenTargetKeys.has(key)) return;
+      seenTargetKeys.add(key);
+      targetKeys.push(key);
+    });
+  });
+  const targetIsoKey = targetKeys.find(key => getIsoCodeFamily(key) === csvInfo.isoFamily)
+    || getKeyByCandidatesFromFeatures(targetFeatures, [
+      "ISO_A2", "ISO2", "ISO_ALPHA2", "ISO_A3", "ISO3", "ISO_ALPHA3", "M49", "M49_CODE", "COUNTRY_CODE"
+    ]);
   if (!targetIsoKey) return null;
 
   const valuesByIso = new Map();
   csvGeojson.features.forEach(feature => {
     const properties = feature?.properties || {};
     const iso = normalizeIsoJoinValue(properties[csvInfo.isoKey]);
-    if (iso) valuesByIso.set(iso, properties[csvInfo.valueKey]);
+    if (iso) valuesByIso.set(iso, properties);
   });
   let matched = 0;
   targetFeatures.forEach(feature => {
     const iso = normalizeIsoJoinValue(feature?.properties?.[targetIsoKey]);
     if (!iso || !valuesByIso.has(iso)) return;
     if (!feature.properties) feature.properties = {};
-    feature.properties[csvInfo.valueKey] = valuesByIso.get(iso);
+    const csvProperties = valuesByIso.get(iso) || {};
+    Object.keys(csvProperties).forEach(key => {
+      if (key !== csvInfo.isoKey) feature.properties[key] = csvProperties[key];
+    });
     matched++;
   });
 
-  if (!matched) return { matched: 0, valueKey: csvInfo.valueKey };
+  if (!matched) return { matched: 0, valueKeys: csvInfo.valueKeys };
   overlayData[currentLayerName].geojson = target;
-  return { matched, valueKey: csvInfo.valueKey };
+  return { matched, valueKeys: csvInfo.valueKeys };
 }
 
 function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
@@ -2985,10 +2998,6 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   const latKey = keys.find(k => /lat/i.test(String(k)));
   const lonKey = keys.find(k => /lon|lng|long/i.test(String(k)));
   const isoKey = getCsvIsoKey(keys);
-  const valueKey = getCsvValueKey(keys, isoKey, latKey, lonKey);
-  if (isoKey && !valueKey) {
-    throw new Error("CSV must have one data column in addition to its ISO code column.");
-  }
   if (!isoKey && (!latKey || !lonKey)) {
     throw new Error("CSV must have latitude/longitude columns.");
   }
@@ -3000,10 +3009,7 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
       return {
         type: "Feature",
         geometry: null,
-        properties: {
-          [isoKey]: iso,
-          [valueKey]: r?.[valueKey]
-        }
+        properties: { ...(r || {}) }
       };
     }
     const lat = Number.parseFloat(r?.[latKey]);
@@ -3021,7 +3027,13 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   }).filter(f => f !== null);
 
   const geojson = { type: "FeatureCollection", features };
-  if (isoKey) geojson.__rmaCsvImport = { isoKey, valueKey };
+  if (isoKey) {
+    geojson.__rmaCsvImport = {
+      isoKey,
+      isoFamily: getIsoCodeFamily(isoKey),
+      valueKeys: keys.filter(key => key !== isoKey)
+    };
+  }
   return geojson;
 }
 
@@ -3125,10 +3137,13 @@ async function importFile(file) {
     }
 
     const csvJoin = ext === ".csv" ? mergeCsvIntoActiveLayer(geojson, geojson.__rmaCsvImport) : null;
+    if (ext === ".csv" && geojson.__rmaCsvImport && !csvJoin) {
+      throw new Error("Select a vector layer with matching ISO fields before importing this CSV table.");
+    }
     if (csvJoin) {
       if (csvJoin.matched > 0) {
         await setActiveLayer(currentLayerName);
-        showPopup(`CSV column "${csvJoin.valueKey}" matched ${csvJoin.matched} features`, "success");
+        showPopup(`CSV attributes (${csvJoin.valueKeys.length}) matched ${csvJoin.matched} features`, "success");
       } else {
         throw new Error("CSV ISO codes did not match the active layer.");
       }
@@ -3167,10 +3182,13 @@ async function importUrl(rawUrl) {
     const geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
     const csvJoin = ext === ".csv" ? mergeCsvIntoActiveLayer(geojson, geojson.__rmaCsvImport) : null;
+    if (ext === ".csv" && geojson.__rmaCsvImport && !csvJoin) {
+      throw new Error("Select a vector layer with matching ISO fields before importing this CSV table.");
+    }
     if (csvJoin) {
       if (csvJoin.matched > 0) {
         await setActiveLayer(currentLayerName);
-        showPopup(`CSV column "${csvJoin.valueKey}" matched ${csvJoin.matched} features`, "success");
+        showPopup(`CSV attributes (${csvJoin.valueKeys.length}) matched ${csvJoin.matched} features`, "success");
       } else {
         throw new Error("CSV ISO codes did not match the active layer.");
       }
@@ -3530,8 +3548,16 @@ function populateAttributeList(data) {
     return hideRow(wrap);
   }
 
-  const props = data.features[0].properties || {};
-  Object.keys(props).forEach(k => {
+  const attributeKeys = [];
+  const seenKeys = new Set();
+  data.features.forEach(feature => {
+    Object.keys(feature?.properties || {}).forEach(key => {
+      if (seenKeys.has(key)) return;
+      seenKeys.add(key);
+      attributeKeys.push(key);
+    });
+  });
+  attributeKeys.forEach(k => {
     const o = document.createElement('option');
     o.value = String(k).replace(/[^\w\-]/g, "_");
     o.textContent = k;
