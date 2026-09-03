@@ -2,6 +2,8 @@
 const MAX_SIZE = 1024 * 1024 * 1024; // 1 GB limit used in handlers
 const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
+const MAX_CSV_COLUMNS = 500;
+const MAX_CSV_CELL_LENGTH = 10000;
 const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
 const SCALE_BAR_OFFSET_X_PX = 43;
@@ -2932,6 +2934,26 @@ function normalizeIsoJoinValue(value) {
   return String(value == null ? "" : value).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+function isUnsafeCsvPropertyKey(key) {
+  const normalized = String(key || "").trim().toLowerCase();
+  return normalized === "__proto__" || normalized === "prototype" || normalized === "constructor";
+}
+
+function buildSafeCsvProperties(row, keys) {
+  const properties = Object.create(null);
+  (keys || []).forEach(key => {
+    if (isUnsafeCsvPropertyKey(key)) {
+      throw new Error(`CSV contains a blocked column name: ${String(key)}`);
+    }
+    const value = row?.[key] == null ? "" : row[key];
+    if (typeof value === "string" && value.length > MAX_CSV_CELL_LENGTH) {
+      throw new Error(`CSV cell in column "${String(key)}" is too long.`);
+    }
+    properties[key] = value;
+  });
+  return properties;
+}
+
 function mergeCsvIntoActiveLayer(csvGeojson, csvInfo) {
   if (!csvGeojson || !csvInfo || !currentLayerName || !overlayData[currentLayerName]) return null;
   const target = overlayData[currentLayerName].geojson;
@@ -2993,8 +3015,19 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   if (!rows.length) {
     throw new Error(`${sourceLabel} payload is empty.`);
   }
+  if (rows.length > MAX_FEATURES) {
+    throw new Error(`${sourceLabel} has too many rows (${rows.length}).`);
+  }
 
   const keys = Object.keys(rows[0] || {});
+  if (!keys.length || keys.length > MAX_CSV_COLUMNS) {
+    throw new Error(`CSV must contain between 1 and ${MAX_CSV_COLUMNS} columns.`);
+  }
+  keys.forEach(key => {
+    if (isUnsafeCsvPropertyKey(key)) {
+      throw new Error(`CSV contains a blocked column name: ${String(key)}`);
+    }
+  });
   const latKey = keys.find(k => /lat/i.test(String(k)));
   const lonKey = keys.find(k => /lon|lng|long/i.test(String(k)));
   const isoKey = getCsvIsoKey(keys);
@@ -3009,7 +3042,7 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
       return {
         type: "Feature",
         geometry: null,
-        properties: { ...(r || {}) }
+        properties: buildSafeCsvProperties(r, keys)
       };
     }
     const lat = Number.parseFloat(r?.[latKey]);
@@ -3022,7 +3055,7 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
     return {
       type: "Feature",
       geometry: { type: "Point", coordinates: [lon, lat] },
-      properties: { ...(r || {}) }
+      properties: buildSafeCsvProperties(r, keys)
     };
   }).filter(f => f !== null);
 
