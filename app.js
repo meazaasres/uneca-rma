@@ -1436,13 +1436,26 @@ async function loadWorldBoundaryIndex() {
       iso3FeatureMap = new Map();
       const featByNormName = new Map();
       const featByIsoProp = new Map();
+      const featList = [];
+      const isoPropCandidates = [
+        "iso_a3", "ISO_A3", "iso3", "ISO3", "cca3", "CCA3",
+        "adm0_a3", "adm0_a3_is", "WB_A3", "wb_a3", "ISO_A3_EH", "ADM0_A3"
+      ];
+
       (feats || []).forEach(f => {
-        const fname = sanitizePlainText(f?.properties?.name || "");
-        const n = normalizeCountryName(fname);
-        if (n) featByNormName.set(n, f);
-        // collect any ISO-like props present on the feature for direct matching
         const props = f && f.properties ? f.properties : {};
-        ["iso_a3", "ISO_A3", "iso3", "ISO3", "cca3", "CCA3", "adm0_a3", "adm0_a3_is"].forEach(k => {
+        const nameCandidates = [];
+        [
+          props.name, props.NAME, props.ADMIN, props.admin, props.ADMIN_NAME,
+          props.NAME_LONG, props.name_en, props.NAME_SORT, props.SOVEREIGN, props.name_long
+        ].forEach(x => { if (x) nameCandidates.push(sanitizePlainText(x)); });
+        const primary = nameCandidates[0] || sanitizePlainText(props.name || props.NAME || "");
+        const n = normalizeCountryName(primary);
+        if (n) featByNormName.set(n, f);
+        featList.push({ feature: f, normNames: nameCandidates.map(normalizeCountryName).filter(Boolean) });
+
+        // collect ISO-like props present on the feature for direct matching
+        isoPropCandidates.forEach(k => {
           if (props[k]) {
             const code = String(props[k] || "").toUpperCase().trim();
             if (code && /^[A-Z]{3}$/.test(code)) featByIsoProp.set(code, f);
@@ -1454,27 +1467,55 @@ async function loadWorldBoundaryIndex() {
         const iso3 = String(m?.iso3 || "").toUpperCase().trim();
         if (!iso3) return;
         let found = null;
-        // Prefer direct match by ISO code present on the boundary feature props
+        // 1) Prefer direct match by ISO code present on the boundary feature props
         if (featByIsoProp.has(iso3)) {
           found = featByIsoProp.get(iso3);
         }
-        // Next, try matching by canonical country name or aliases
+
+        // 2) Exact name/alias match
         if (!found) {
           const candidates = [];
           if (m.country) candidates.push(m.country);
           if (m.officialName) candidates.push(m.officialName);
           (Array.isArray(m.aliases) ? m.aliases : []).forEach(a => candidates.push(a));
           for (let i = 0; i < candidates.length && !found; i++) {
-            const n = normalizeCountryName(candidates[i]);
-            if (!n) continue;
-            if (featByNormName.has(n)) found = featByNormName.get(n);
+            const nn = normalizeCountryName(candidates[i]);
+            if (!nn) continue;
+            if (featByNormName.has(nn)) found = featByNormName.get(nn);
           }
         }
-        // As a final fallback, try the worldBoundaryIndex name match (less reliable)
+
+        // 3) Fuzzy name matching across features (safe threshold)
+        if (!found) {
+          const candidates = [];
+          if (m.country) candidates.push(m.country);
+          if (m.officialName) candidates.push(m.officialName);
+          (Array.isArray(m.aliases) ? m.aliases : []).forEach(a => candidates.push(a));
+          const candidateNorms = candidates.map(normalizeCountryName).filter(Boolean);
+          let best = { dist: Infinity, feat: null };
+          featList.forEach(entry => {
+            entry.normNames.forEach(fn => {
+              candidateNorms.forEach(cn => {
+                const d = levenshtein(fn, cn);
+                if (d < best.dist) best = { dist: d, feat: entry.feature };
+              });
+            });
+          });
+          // Accept fuzzy match only if distance is small relative to name length
+          if (best.feat) {
+            const ln = Math.max(...candidateNorms.map(c => c.length), 0) || 5;
+            const maxDist = Math.min(3, Math.ceil(ln * 0.22));
+            if (best.dist <= maxDist) {
+              found = best.feat;
+              console.info(`ISO3 fuzzy matched ${iso3} -> ${best.feat?.properties?.name || '<?> (dist='+best.dist+')'}`);
+            }
+          }
+        }
+
+        // 4) worldBoundaryIndex geometry fallback
         if (!found) {
           const match = worldBoundaryIndex.find(w => normalizeCountryName(w.country) === normalizeCountryName(m.country || ""));
           if (match) {
-            // attempt to find a full feature whose geometry matches the boundary entry
             const geomMatch = feats.find(ff => JSON.stringify(ff.geometry) === JSON.stringify(match.geometry));
             found = geomMatch || { geometry: match.geometry, properties: { name: match.country } };
           }
@@ -1482,7 +1523,6 @@ async function loadWorldBoundaryIndex() {
 
         if (found && found.geometry) {
           iso3FeatureMap.set(iso3, found.geometry);
-          // store a friendly name for suggestions: prefer authoritative metadata then feature props
           const cname = sanitizePlainText(m?.officialName || m?.country || (found?.properties && (found.properties.name || found.properties.NAME)) || iso3);
           iso3NameMap.set(iso3, cname);
         }
@@ -1499,6 +1539,36 @@ async function loadWorldBoundaryIndex() {
 
   return worldBoundaryIndexPromise;
 }
+
+// Diagnostic helper: show mapping status for provided ISO3 codes or summary for all
+function showIso3Diagnostics(codes) {
+  const keys = Array.isArray(codes) && codes.length ? codes.map(k => String(k).toUpperCase().trim()) : Array.from(new Set(Array.from(iso3NameMap.keys()).concat(Array.from(iso3FeatureMap.keys()))));
+  const lines = [];
+  const featureHitMap = new Map();
+  keys.forEach(k => {
+    const hasName = iso3NameMap.has(k);
+    const hasGeom = iso3FeatureMap.has(k);
+    const name = hasName ? iso3NameMap.get(k) : '';
+    let geomSummary = '';
+    if (hasGeom) {
+      const g = iso3FeatureMap.get(k);
+      const bbox = bboxFromCoordinates(g?.coordinates || g?.coordinates?.[0] || g?.coordinates || []);
+      geomSummary = bbox ? `bbox:${bbox.map(n=>Math.round(n)).join(',')}` : (g && g.type) ? g.type : 'geometry';
+      const id = JSON.stringify(g || {}).slice(0,200);
+      featureHitMap.set(id, (featureHitMap.get(id)||[]).concat(k));
+    }
+    lines.push(`${k}: name='${name}' mapped=${hasGeom ? 'yes' : 'no'} ${geomSummary}`);
+  });
+  // show collisions
+  const collisions = [];
+  featureHitMap.forEach((arr, id) => {
+    if (arr.length > 1) collisions.push(`Feature mapped by multiple ISO3: ${arr.join(', ')}`);
+  });
+  if (collisions.length) lines.push('--- Collisions ---', ...collisions);
+  showModalList('ISO3 Mapping Diagnostics', lines.slice(0,200));
+  console.info('ISO3 diagnostics shown for', keys.length, 'codes');
+}
+window.showIso3Diagnostics = showIso3Diagnostics;
 
 async function ensureSpatialCountryContinentFields(data) {
   const feats = Array.isArray(data?.features) ? data.features : [];
