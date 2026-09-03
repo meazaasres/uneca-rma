@@ -35,7 +35,7 @@ Last updated: 2026-03-11
 | 19 | Cache-control for sensitive exports/data | Prepared | `no-store/no-cache` policy and IIS static cache disable are set in `web.config`. |
 | 20 | `Permissions-Policy` restrictions | Prepared | Defined in `web.config`; verify required policy tokens in response header. |
 | 21 | `Cross-Origin-Opener-Policy: same-origin` | Prepared | Defined in `web.config`; verify as response header. |
-| 22 | `Cross-Origin-Embedder-Policy: require-corp` | Prepared | Defined in `web.config`; verify as response header. |
+| 22 | `Cross-Origin-Embedder-Policy` | Not used | The UN basemap tile service does not provide cross-origin isolation headers; omitting COEP is required for basemap tiles to render. |
 | 23 | `Cross-Origin-Resource-Policy: same-origin` | Prepared | Defined in `web.config`; verify as response header. |
 | 24 | `Strict-Transport-Security` (HSTS) | Prepared | Defined in `web.config`; verify on HTTPS production endpoint. |
 

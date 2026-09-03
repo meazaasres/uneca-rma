@@ -57,7 +57,7 @@ Export reliability depends on data size and CORS:
 - CSP and safe DOM rendering patterns are enabled in the app
 - Deploy CSP as an HTTP response header (recommended) and set `frame-ancestors 'none'` there (`frame-ancestors` is ignored in `<meta>` CSP)
 - Vendor dependency integrity is pinned in `vendor-hashes.json`
-- Additional deployment headers are defined in `web.config`: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`, `Cross-Origin-Resource-Policy`, `Cache-Control`, and `Strict-Transport-Security`
+- Additional deployment headers are defined in `web.config`: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, `Cache-Control`, and `Strict-Transport-Security`
 
 ### Security Verification
 - Application and deployment control status is tracked in `SECURITY_CHECKLIST.md`.
