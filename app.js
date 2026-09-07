@@ -5609,12 +5609,17 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     function captureMapCanvasWithFixedViewport(onSuccess, onError) {
     const mapEl = document.getElementById('map');
-    if (!mapEl || !map || typeof html2canvas !== 'function') {
+    if (!mapEl || !map || typeof leafletImage !== 'function') {
       if (typeof onError === 'function') onError(new Error('Map export is not ready.'));
       return;
     }
 
+    const preset = getSelectedExportCapturePreset();
+    const viewportSession = applyFixedExportViewport(mapEl, preset.width, preset.height);
+
     const finalize = (err, mapCanvas) => {
+      viewportSession.restore();
+      map.invalidateSize({ pan: false });
       if (err || !mapCanvas) {
         if (typeof onError === 'function') onError(err || new Error('No map canvas returned'));
         return;
@@ -5622,9 +5627,46 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (typeof onSuccess === 'function') onSuccess(mapCanvas);
     };
 
-    captureDisplayedBasemapCanvas(mapEl)
-      .then(mapCanvas => finalize(null, mapCanvas))
-      .catch(error => finalize(error, null));
+    map.invalidateSize({ pan: false });
+    scheduleLeafletCapture(map, (err, mapCanvas) => {
+      if (err || !mapCanvas) {
+        finalize(err, mapCanvas);
+        return;
+      }
+
+      const overlayPane = mapEl.querySelector('.leaflet-overlay-pane');
+      if (!overlayPane || typeof html2canvas !== 'function') {
+        finalize(null, mapCanvas);
+        return;
+      }
+
+      html2canvas(overlayPane, {
+        backgroundColor: null,
+        foreignObjectRendering: false,
+        logging: false,
+        scale: 1,
+        useCORS: true,
+        width: mapEl.clientWidth,
+        height: mapEl.clientHeight
+      }).then(overlayCanvas => {
+        if (overlayCanvas && overlayCanvas.width > 0 && overlayCanvas.height > 0) {
+          const mapRect = mapEl.getBoundingClientRect();
+          const paneRect = overlayPane.getBoundingClientRect();
+          const scaleX = mapCanvas.width / Math.max(1, mapEl.clientWidth);
+          const scaleY = mapCanvas.height / Math.max(1, mapEl.clientHeight);
+          const offsetX = Math.round((paneRect.left - mapRect.left) * scaleX);
+          const offsetY = Math.round((paneRect.top - mapRect.top) * scaleY);
+          const ctx = mapCanvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(overlayCanvas, offsetX, offsetY,
+              Math.round(overlayCanvas.width * scaleX),
+              Math.round(overlayCanvas.height * scaleY));
+          }
+          mapCanvas._exportIncludesOverlay = true;
+        }
+        finalize(null, mapCanvas);
+      }).catch(() => finalize(null, mapCanvas));
+    });
     }
 
     function getSelectedExportCapturePreset() {
@@ -6557,7 +6599,7 @@ function exportSVG() {
       });
       const topVisibleName = visibleOrderedNames.length ? visibleOrderedNames[0] : null;
       // Keep SVG stacking aligned with layer list: only redraw current vectors when current is topmost.
-      const shouldDrawCurrentVectors = !mapCanvas._exportCaptureSource &&
+      const shouldDrawCurrentVectors = !mapCanvas._exportIncludesOverlay &&
         (!topVisibleName || topVisibleName === currentLayerName);
 
       // draw features
