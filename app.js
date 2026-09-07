@@ -6300,9 +6300,9 @@ function exportSVG() {
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
   const data = getFilteredGeojson(sourceData);
   if (!data || !Array.isArray(data.features) || !data.features.length) {
-    showPopup("No vector data available for SVG export.", "error");
+    showPopup("No vector layer is active. Exporting the basemap as PNG.", "success");
     hideLoading();
-    return;
+    return exportMap();
   }
   if (data.features.length > MAX_FEATURES) {
     showPopup("Dataset too large for client export", "error");
@@ -6345,17 +6345,17 @@ function exportSVG() {
 
   captureMapCanvasWithFixedViewport((mapCanvas) => {
     if (!mapCanvas) {
-      showPopup("SVG map capture failed. Check the basemap connection and try again.", "error");
+      showPopup("SVG capture failed. Exporting the basemap as PNG.", "success");
       hideLoading();
-      return;
+      return exportMap();
     }
 
     // detect tainted canvas
     const canvasDataUrlCheck = tryCanvasToDataURL(mapCanvas);
     if (!canvasDataUrlCheck) {
-      showPopup("SVG export blocked by cross-origin tiles.", "error");
+      showPopup("SVG export was blocked by cross-origin tiles. Exporting PNG instead.", "success");
       hideLoading();
-      return;
+      return exportMap();
     }
 
     try {
@@ -6900,14 +6900,15 @@ function exportSVG() {
       hideLoading();
     } catch (ex) {
       console.error("SVG export failed:", ex);
-      showPopup("SVG export failed.", "error");
+      showPopup("SVG export failed. Exporting PNG instead.", "success");
       hideLoading();
-      return;
+      return exportMap();
     }
   }, (err) => {
-    showPopup("SVG map capture failed. Check the basemap connection and try again.", "error");
+    showPopup("SVG capture failed. Exporting the basemap as PNG.", "success");
     console.error("SVG raster capture failed:", err);
     hideLoading();
+    exportMap();
   });
 }
 
