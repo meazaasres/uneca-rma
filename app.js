@@ -5614,12 +5614,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       return;
     }
 
-    const preset = getSelectedExportCapturePreset();
-    const viewportSession = applyFixedExportViewport(mapEl, preset.width, preset.height);
-
     const finalize = (err, mapCanvas) => {
-      viewportSession.restore();
-      map.invalidateSize({ pan: false });
       if (err || !mapCanvas) {
         if (typeof onError === 'function') onError(err || new Error('No map canvas returned'));
         return;
@@ -5627,7 +5622,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (typeof onSuccess === 'function') onSuccess(mapCanvas);
     };
 
-    map.invalidateSize({ pan: false });
     scheduleLeafletCapture(map, (err, mapCanvas) => {
       if (err || !mapCanvas) {
         finalize(err, mapCanvas);
@@ -5641,8 +5635,8 @@ window.addEventListener('load', resetInitialScrollPositions);
       }
 
       const clone = overlaySvg.cloneNode(true);
-      const width = Math.max(1, mapEl.clientWidth);
-      const height = Math.max(1, mapEl.clientHeight);
+      const width = Math.max(1, mapCanvas.width);
+      const height = Math.max(1, mapCanvas.height);
       clone.setAttribute('width', String(width));
       clone.setAttribute('height', String(height));
       clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -6055,7 +6049,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
           // Use content-aware side trim to keep widescreen exports horizontally centered.
           allowBrowserCrop: !mapCanvas._exportIncludesOverlay,
-          targetAspectRatio: (() => {
+          targetAspectRatio: mapCanvas._exportIncludesOverlay ? undefined : (() => {
             const p = getSelectedExportCapturePreset();
             return p.width / Math.max(1, p.height);
           })()
@@ -6088,7 +6082,23 @@ window.addEventListener('load', resetInitialScrollPositions);
         }
         nmctx.fillStyle = '#ffffff';
         nmctx.fillRect(0, 0, normalizedMapCanvas.width, normalizedMapCanvas.height);
-        nmctx.drawImage(exportMapCanvas, 0, 0, exportMapCanvas.width, exportMapCanvas.height, 0, 0, normalizedMapCanvas.width, normalizedMapCanvas.height);
+        const mapFit = computeContainRect(
+          exportMapCanvas.width,
+          exportMapCanvas.height,
+          normalizedMapCanvas.width,
+          normalizedMapCanvas.height
+        );
+        nmctx.drawImage(
+          exportMapCanvas,
+          0,
+          0,
+          exportMapCanvas.width,
+          exportMapCanvas.height,
+          mapFit.x,
+          mapFit.y,
+          mapFit.width,
+          mapFit.height
+        );
 
         const titleText = (document.getElementById('map-title')?.textContent || 'Map Export').trim();
         const legendBlocks = getExportLegendBlocks();
@@ -6449,6 +6459,7 @@ function exportSVG() {
         // Use content-aware side trim to keep widescreen exports horizontally centered.
         allowBrowserCrop: !mapCanvas._exportIncludesOverlay,
         targetAspectRatio: (() => {
+          if (mapCanvas._exportIncludesOverlay) return undefined;
           const p = getSelectedExportCapturePreset();
           return p.width / Math.max(1, p.height);
         })()
@@ -6504,7 +6515,18 @@ function exportSVG() {
       if (!nmctx) throw new Error('Normalized SVG map canvas context unavailable');
       nmctx.fillStyle = '#ffffff';
       nmctx.fillRect(0, 0, normalizedMapW, normalizedMapH);
-      nmctx.drawImage(exportCanvas, 0, 0, exportCanvas.width, exportCanvas.height, 0, 0, normalizedMapW, normalizedMapH);
+      const mapFit = computeContainRect(exportCanvas.width, exportCanvas.height, normalizedMapW, normalizedMapH);
+      nmctx.drawImage(
+        exportCanvas,
+        0,
+        0,
+        exportCanvas.width,
+        exportCanvas.height,
+        mapFit.x,
+        mapFit.y,
+        mapFit.width,
+        mapFit.height
+      );
 
       const sourceCanvasWidth = Math.max(1, exportCanvas.width);
       const sourceCanvasHeight = Math.max(1, exportCanvas.height);
