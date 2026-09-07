@@ -5167,8 +5167,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     const northW = Math.max(34, Math.min(56, Math.round(exportMapW * 0.05)));
     const northH = Math.max(44, Math.min(72, Math.round(northW * 1.35)));
     const northPos = {
-      x: Math.max(MAP_SIDE_VISIBLE_INSET_PX, exportMapW - MAP_SIDE_VISIBLE_INSET_PX - northW - 12),
-      y: 42
+      x: Math.max(12, exportMapW - northW - 24),
+      y: 24
     };
 
     const scaleFontSize = Math.max(9, Math.min(13, Math.round(exportMapW * 0.008)));
