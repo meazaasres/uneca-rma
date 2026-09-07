@@ -5160,12 +5160,10 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     const northW = Math.max(34, Math.min(56, Math.round(exportMapW * 0.05)));
     const northH = Math.max(44, Math.min(72, Math.round(northW * 1.35)));
-    const northNorm = getElementExportNormalizedPosition(
-      northArrowEl,
-      mapEl,
-      (el, liveMapEl) => getTopRightPosition(el, liveMapEl, 12)
-    );
-    const northPos = resolveExportPositionFromNorm(northNorm.normX, northNorm.normY, northW, northH, exportMapW, exportMapH);
+    const northPos = {
+      x: Math.max(MAP_SIDE_VISIBLE_INSET_PX, exportMapW - MAP_SIDE_VISIBLE_INSET_PX - northW - 12),
+      y: 42
+    };
 
     const scaleFontSize = Math.max(9, Math.min(13, Math.round(exportMapW * 0.008)));
     const scalePaddingX = Math.max(6, Math.round(scaleFontSize * 0.7));
@@ -5174,12 +5172,10 @@ window.addEventListener('load', resetInitialScrollPositions);
     const scaleMeasuredW = measureExportTextWidth(scaleText || 'Scale: --', scaleFont);
     const scaleW = Math.max(90, Math.min(Math.round(exportMapW * 0.28), scaleMeasuredW + (scalePaddingX * 2)));
     const scaleH = Math.max(20, Math.round(scaleFontSize + (scalePaddingY * 2) + 2));
-    const scaleNorm = getElementExportNormalizedPosition(
-      scaleEl,
-      mapEl,
-      (el, liveMapEl) => getBottomCenterPosition(el, liveMapEl, SCALE_BAR_OFFSET_Y_PX, SCALE_BAR_OFFSET_X_PX)
-    );
-    const scalePos = resolveExportPositionFromNorm(scaleNorm.normX, scaleNorm.normY, scaleW, scaleH, exportMapW, exportMapH);
+    const scalePos = {
+      x: Math.max(0, Math.round((exportMapW - scaleW) / 2) + SCALE_BAR_OFFSET_X_PX),
+      y: Math.max(0, exportMapH - SCALE_BAR_OFFSET_Y_PX - scaleH)
+    };
 
     let disclaimer = null;
     if (disclaimerText) {
@@ -5195,8 +5191,10 @@ window.addEventListener('load', resetInitialScrollPositions);
         lineHeight: Math.round(discFontSize * 1.25),
         maxLines: 5
       });
-      const discNorm = getDisclaimerExportNormalizedPosition(mapEl, disclaimerEl);
-      const discPos = resolveExportPositionFromNorm(discNorm.normX, discNorm.normY, discLayout.width, discLayout.height, exportMapW, exportMapH);
+      const discPos = {
+        x: Math.max(0, 12 + DISCLAIMER_LEFT_VISIBLE_INSET_PX),
+        y: Math.max(0, exportMapH - 30 - discLayout.height)
+      };
       disclaimer = {
         text: disclaimerText,
         lines: discLayout.lines,
