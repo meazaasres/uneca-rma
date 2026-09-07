@@ -6144,6 +6144,7 @@ window.addEventListener('load', resetInitialScrollPositions);
           const a = document.createElement('a');
           a.href = fixedA4Canvas.toDataURL('image/png');
           a.download = 'map.png';
+          a.target = '_self';
           a.rel = 'noopener';
           a.click();
           hideLoading();
@@ -6905,6 +6906,7 @@ function exportSVG() {
       const a = document.createElement('a');
       a.href = url;
       a.download = (currentLayerName ? sanitizeName(currentLayerName) : "map") + ".svg";
+      a.target = '_self';
       a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
