@@ -5614,7 +5614,12 @@ window.addEventListener('load', resetInitialScrollPositions);
       return;
     }
 
+    const preset = getSelectedExportCapturePreset();
+    const viewportSession = applyFixedExportViewport(mapEl, preset.width, preset.height);
+
     const finalize = (err, mapCanvas) => {
+      viewportSession.restore();
+      map.invalidateSize({ pan: false });
       if (err || !mapCanvas) {
         if (typeof onError === 'function') onError(err || new Error('No map canvas returned'));
         return;
@@ -5622,14 +5627,28 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (typeof onSuccess === 'function') onSuccess(mapCanvas);
     };
 
+    map.invalidateSize({ pan: false });
     scheduleLeafletCapture(map, finalize);
     }
 
     function getSelectedExportCapturePreset() {
+    const selector = document.getElementById('export-capture-profile');
+    const customWidthInput = document.getElementById('export-capture-width');
+    const customHeightInput = document.getElementById('export-capture-height');
+    const selectedKey = selector ? String(selector.value || '') : '';
+    const fallbackKey = 'a4-balanced';
+    if (selectedKey === 'custom') {
+      const width = clampExportCaptureDimension(customWidthInput ? customWidthInput.value : EXPORT_CAPTURE_MAP_WIDTH_PX, EXPORT_CAPTURE_MAP_WIDTH_PX, EXPORT_CAPTURE_MIN_WIDTH_PX, EXPORT_CAPTURE_MAX_WIDTH_PX);
+      const height = clampExportCaptureDimension(customHeightInput ? customHeightInput.value : EXPORT_CAPTURE_MAP_HEIGHT_PX, EXPORT_CAPTURE_MAP_HEIGHT_PX, EXPORT_CAPTURE_MIN_HEIGHT_PX, EXPORT_CAPTURE_MAX_HEIGHT_PX);
+      if (customWidthInput) customWidthInput.value = String(width);
+      if (customHeightInput) customHeightInput.value = String(height);
+      return { profile: 'custom', width, height };
+    }
+    const preset = EXPORT_CAPTURE_PRESETS[selectedKey] || EXPORT_CAPTURE_PRESETS[fallbackKey];
     return {
-      profile: 'a4',
-      width: EXPORT_A4_WIDTH_PX,
-      height: EXPORT_A4_HEIGHT_PX
+      profile: EXPORT_CAPTURE_PRESETS[selectedKey] ? selectedKey : fallbackKey,
+      width: Math.max(320, Math.round(Number(preset?.width) || EXPORT_CAPTURE_MAP_WIDTH_PX)),
+      height: Math.max(240, Math.round(Number(preset?.height) || EXPORT_CAPTURE_MAP_HEIGHT_PX))
     };
     }
 
@@ -6292,71 +6311,7 @@ function recenterMapCanvasHorizontally(sourceCanvas, maxShiftRatio = 0.12) {
   return { canvas: recentered, shiftX };
 }
 
-// Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
-function exportSvgFromPngComposition() {
-  showLoading("Exporting map as A4 SVG...");
-  buildDirectExportCanvas(
-    "svg",
-    (sourceCanvas) => {
-      try {
-        const svgNS = "http://www.w3.org/2000/svg";
-        const imageData = sourceCanvas.toDataURL("image/png");
-        const svg = document.createElementNS(svgNS, "svg");
-        svg.setAttribute("xmlns", svgNS);
-        svg.setAttribute("width", String(EXPORT_A4_WIDTH_PX));
-        svg.setAttribute("height", String(EXPORT_A4_HEIGHT_PX));
-        svg.setAttribute("viewBox", `0 0 ${EXPORT_A4_WIDTH_PX} ${EXPORT_A4_HEIGHT_PX}`);
-        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
-        const background = document.createElementNS(svgNS, "rect");
-        background.setAttribute("width", String(EXPORT_A4_WIDTH_PX));
-        background.setAttribute("height", String(EXPORT_A4_HEIGHT_PX));
-        background.setAttribute("fill", "#ffffff");
-        svg.appendChild(background);
-
-        const image = document.createElementNS(svgNS, "image");
-        image.setAttribute("href", imageData);
-        image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", imageData);
-        image.setAttribute("x", "0");
-        image.setAttribute("y", "0");
-        image.setAttribute("width", String(EXPORT_A4_WIDTH_PX));
-        image.setAttribute("height", String(EXPORT_A4_HEIGHT_PX));
-        image.setAttribute("preserveAspectRatio", "xMidYMid meet");
-        svg.appendChild(image);
-
-        const svgString = new XMLSerializer().serializeToString(svg);
-        const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${sanitizeName(currentLayerName || "map")}-A4.svg`;
-        link.rel = "noopener";
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          URL.revokeObjectURL(url);
-          link.remove();
-        }, 1000);
-        hideLoading();
-      } catch (error) {
-        console.error("SVG composition export failed:", error);
-        hideLoading();
-        showPopup("SVG export failed. Exporting PNG instead.", "success");
-        exportMap();
-      }
-    },
-    (error) => {
-      console.error("SVG composition capture failed:", error);
-      hideLoading();
-      showPopup("SVG capture failed. Exporting PNG instead.", "success");
-      exportMap();
-    }
-  );
-}
-
 function exportSVG() {
-  return exportSvgFromPngComposition();
-
   showLoading("Exporting map as SVG...");
 
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
@@ -7011,9 +6966,35 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Wire the single A4 SVG export action.
+  // Wire export and UI buttons (avoid inline onclick handlers)
+  const btnExportImage = document.getElementById('btnExportImage');
+  if (btnExportImage) btnExportImage.addEventListener('click', () => { try { exportMap(); } catch(e){console.error(e);} });
+
+  const btnExportPDF = document.getElementById('btnExportPDF');
+  if (btnExportPDF) btnExportPDF.addEventListener('click', () => { try { exportPDF(); } catch(e){console.error(e);} });
+
   const btnExportSVG = document.getElementById('btnExportSVG');
   if (btnExportSVG) btnExportSVG.addEventListener('click', () => { try { exportSVG(); } catch(e){console.error(e);} });
+
+  const exportProfileSelect = document.getElementById('export-capture-profile');
+  const exportCaptureWidth = document.getElementById('export-capture-width');
+  const exportCaptureHeight = document.getElementById('export-capture-height');
+  if (exportProfileSelect) {
+    const available = Object.keys(EXPORT_CAPTURE_PRESETS);
+    exportProfileSelect.value = available.includes(exportProfileSelect.value) ? exportProfileSelect.value : 'a4-balanced';
+    exportProfileSelect.addEventListener('change', () => syncExportCaptureCustomInputsVisibility());
+  }
+  if (exportCaptureWidth) {
+    exportCaptureWidth.addEventListener('change', () => {
+      exportCaptureWidth.value = String(clampExportCaptureDimension(exportCaptureWidth.value, EXPORT_CAPTURE_MAP_WIDTH_PX, EXPORT_CAPTURE_MIN_WIDTH_PX, EXPORT_CAPTURE_MAX_WIDTH_PX));
+    });
+  }
+  if (exportCaptureHeight) {
+    exportCaptureHeight.addEventListener('change', () => {
+      exportCaptureHeight.value = String(clampExportCaptureDimension(exportCaptureHeight.value, EXPORT_CAPTURE_MAP_HEIGHT_PX, EXPORT_CAPTURE_MIN_HEIGHT_PX, EXPORT_CAPTURE_MAX_HEIGHT_PX));
+    });
+  }
+  syncExportCaptureCustomInputsVisibility();
 
   const btnToggle = document.getElementById('btnToggleClassTable');
   if (btnToggle) btnToggle.addEventListener('click', () => { try { toggleClassTable(); } catch(e){console.error(e);} });
