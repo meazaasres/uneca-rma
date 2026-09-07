@@ -27,6 +27,7 @@ const ALLOWED_SHAPEFILE_ZIP_EXTENSIONS = new Set([
 ]);
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
+const EXPORT_MIN_SIDE_CROP_PX = 50;
 const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
@@ -5023,9 +5024,14 @@ window.addEventListener('load', resetInitialScrollPositions);
     const safeBaseCropW = Math.max(1, Math.min(Math.round(baseCropW || 1), sourceCanvas?.width || Math.round(baseCropW || 1)));
     const safeCropH = Math.max(1, Math.min(Math.round(cropH || 1), sourceCanvas?.height || Math.round(cropH || 1)));
     const allowBrowserCrop = options.allowBrowserCrop !== false;
-    const sideCropPx = allowBrowserCrop
+    const automaticSideCropPx = allowBrowserCrop
       ? getExportSideCropPxForBrowser(sourceCanvas, safeBaseCropW, safeCropH)
       : 0;
+    const maxSafeSideCropPx = Math.max(0, Math.floor((safeBaseCropW - 1) / 2));
+    const sideCropPx = Math.min(
+      maxSafeSideCropPx,
+      Math.max(EXPORT_MIN_SIDE_CROP_PX, automaticSideCropPx)
+    );
     const cropX = Math.max(0, Math.min(sideCropPx, Math.max(0, (sourceCanvas?.width || safeBaseCropW) - 1)));
     const cropW = Math.max(1, Math.min(safeBaseCropW - (2 * sideCropPx), (sourceCanvas?.width || safeBaseCropW) - cropX));
     return { cropX, cropW, cropH: safeCropH, sideCropPx };
