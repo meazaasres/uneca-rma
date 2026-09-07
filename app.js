@@ -5615,12 +5615,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       return;
     }
 
-    const preset = getSelectedExportCapturePreset();
-    const viewportSession = applyFixedExportViewport(mapEl, preset.width, preset.height);
-
     const finalize = (err, mapCanvas) => {
-      viewportSession.restore();
-      map.invalidateSize({ pan: false });
       if (err || !mapCanvas) {
         if (typeof onError === 'function') onError(err || new Error('No map canvas returned'));
         return;
@@ -5628,42 +5623,14 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (typeof onSuccess === 'function') onSuccess(mapCanvas);
     };
 
-    map.invalidateSize({ pan: false });
     scheduleLeafletCapture(map, finalize);
     }
 
     function getSelectedExportCapturePreset() {
-    const selector = document.getElementById('export-capture-profile');
-    const customWidthInput = document.getElementById('export-capture-width');
-    const customHeightInput = document.getElementById('export-capture-height');
-    const selectedKey = selector ? String(selector.value || '') : '';
-    const fallbackKey = 'a4-balanced';
-    if (selectedKey === 'custom') {
-      const width = clampExportCaptureDimension(
-        customWidthInput ? customWidthInput.value : EXPORT_CAPTURE_MAP_WIDTH_PX,
-        EXPORT_CAPTURE_MAP_WIDTH_PX,
-        EXPORT_CAPTURE_MIN_WIDTH_PX,
-        EXPORT_CAPTURE_MAX_WIDTH_PX
-      );
-      const height = clampExportCaptureDimension(
-        customHeightInput ? customHeightInput.value : EXPORT_CAPTURE_MAP_HEIGHT_PX,
-        EXPORT_CAPTURE_MAP_HEIGHT_PX,
-        EXPORT_CAPTURE_MIN_HEIGHT_PX,
-        EXPORT_CAPTURE_MAX_HEIGHT_PX
-      );
-      if (customWidthInput) customWidthInput.value = String(width);
-      if (customHeightInput) customHeightInput.value = String(height);
-      return {
-        profile: 'custom',
-        width,
-        height
-      };
-    }
-    const preset = EXPORT_CAPTURE_PRESETS[selectedKey] || EXPORT_CAPTURE_PRESETS[fallbackKey];
     return {
-      profile: EXPORT_CAPTURE_PRESETS[selectedKey] ? selectedKey : fallbackKey,
-      width: Math.max(320, Math.round(Number(preset?.width) || EXPORT_CAPTURE_MAP_WIDTH_PX)),
-      height: Math.max(240, Math.round(Number(preset?.height) || EXPORT_CAPTURE_MAP_HEIGHT_PX))
+      profile: 'a4',
+      width: EXPORT_A4_WIDTH_PX,
+      height: EXPORT_A4_HEIGHT_PX
     };
     }
 
@@ -6333,9 +6300,9 @@ function exportSVG() {
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
   const data = getFilteredGeojson(sourceData);
   if (!data || !Array.isArray(data.features) || !data.features.length) {
-    showPopup("No vector data available for SVG export. Falling back to PNG.", "error");
+    showPopup("No vector data available for SVG export.", "error");
     hideLoading();
-    return exportMap();
+    return;
   }
   if (data.features.length > MAX_FEATURES) {
     showPopup("Dataset too large for client export", "error");
@@ -6378,17 +6345,17 @@ function exportSVG() {
 
   captureMapCanvasWithFixedViewport((mapCanvas) => {
     if (!mapCanvas) {
-      showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
+      showPopup("SVG map capture failed. Check the basemap connection and try again.", "error");
       hideLoading();
-      return exportMap();
+      return;
     }
 
     // detect tainted canvas
     const canvasDataUrlCheck = tryCanvasToDataURL(mapCanvas);
     if (!canvasDataUrlCheck) {
-      showPopup("Export blocked by cross-origin tiles. Enable CORS or use PNG fallback.", "error");
+      showPopup("SVG export blocked by cross-origin tiles.", "error");
       hideLoading();
-      return exportMap();
+      return;
     }
 
     try {
@@ -6933,15 +6900,14 @@ function exportSVG() {
       hideLoading();
     } catch (ex) {
       console.error("SVG export failed:", ex);
-      showPopup("SVG export failed. Falling back to PNG.", "error");
+      showPopup("SVG export failed.", "error");
       hideLoading();
-      exportMap();
+      return;
     }
   }, (err) => {
-    showPopup("Raster capture failed (possible CORS). Exporting PNG instead.", "error");
+    showPopup("SVG map capture failed. Check the basemap connection and try again.", "error");
     console.error("SVG raster capture failed:", err);
     hideLoading();
-    exportMap();
   });
 }
 
@@ -6982,54 +6948,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Wire export and UI buttons (avoid inline onclick handlers)
-  const btnExportImage = document.getElementById('btnExportImage');
-  if (btnExportImage) btnExportImage.addEventListener('click', () => { try { exportMap(); } catch(e){console.error(e);} });
-
-  const btnExportPDF = document.getElementById('btnExportPDF');
-  if (btnExportPDF) btnExportPDF.addEventListener('click', () => { try { exportPDF(); } catch(e){console.error(e);} });
-
+  // Wire the single A4 SVG export action.
   const btnExportSVG = document.getElementById('btnExportSVG');
   if (btnExportSVG) btnExportSVG.addEventListener('click', () => { try { exportSVG(); } catch(e){console.error(e);} });
-
-  const exportProfileSelect = document.getElementById('export-capture-profile');
-  const exportCaptureWidth = document.getElementById('export-capture-width');
-  const exportCaptureHeight = document.getElementById('export-capture-height');
-  if (exportProfileSelect) {
-    const available = Object.keys(EXPORT_CAPTURE_PRESETS);
-    if (available.includes(exportProfileSelect.value)) {
-      exportProfileSelect.value = exportProfileSelect.value;
-    } else {
-      exportProfileSelect.value = 'a4-balanced';
-    }
-    exportProfileSelect.addEventListener('change', () => {
-      syncExportCaptureCustomInputsVisibility();
-    });
-  }
-
-  if (exportCaptureWidth) {
-    exportCaptureWidth.addEventListener('change', () => {
-      exportCaptureWidth.value = String(clampExportCaptureDimension(
-        exportCaptureWidth.value,
-        EXPORT_CAPTURE_MAP_WIDTH_PX,
-        EXPORT_CAPTURE_MIN_WIDTH_PX,
-        EXPORT_CAPTURE_MAX_WIDTH_PX
-      ));
-    });
-  }
-
-  if (exportCaptureHeight) {
-    exportCaptureHeight.addEventListener('change', () => {
-      exportCaptureHeight.value = String(clampExportCaptureDimension(
-        exportCaptureHeight.value,
-        EXPORT_CAPTURE_MAP_HEIGHT_PX,
-        EXPORT_CAPTURE_MIN_HEIGHT_PX,
-        EXPORT_CAPTURE_MAX_HEIGHT_PX
-      ));
-    });
-  }
-
-  syncExportCaptureCustomInputsVisibility();
 
   const btnToggle = document.getElementById('btnToggleClassTable');
   if (btnToggle) btnToggle.addEventListener('click', () => { try { toggleClassTable(); } catch(e){console.error(e);} });
