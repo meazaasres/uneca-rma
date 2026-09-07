@@ -107,7 +107,6 @@ const IS_FRAMED_CONTEXT = (() => {
   try { return window.top !== window.self; } catch (e) { return true; }
 })();
 if (IS_FRAMED_CONTEXT) {
-  try { window.top.location = window.self.location.href; } catch (e) {}
   try {
     document.documentElement.innerHTML = "";
     document.documentElement.setAttribute("data-ui-hidden", "1");
