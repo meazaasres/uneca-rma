@@ -5609,17 +5609,12 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     function captureMapCanvasWithFixedViewport(onSuccess, onError) {
     const mapEl = document.getElementById('map');
-    if (!mapEl || !map || typeof leafletImage !== 'function') {
+    if (!mapEl || !map || typeof html2canvas !== 'function') {
       if (typeof onError === 'function') onError(new Error('Map export is not ready.'));
       return;
     }
 
-    const preset = getSelectedExportCapturePreset();
-    const viewportSession = applyFixedExportViewport(mapEl, preset.width, preset.height);
-
     const finalize = (err, mapCanvas) => {
-      viewportSession.restore();
-      map.invalidateSize({ pan: false });
       if (err || !mapCanvas) {
         if (typeof onError === 'function') onError(err || new Error('No map canvas returned'));
         return;
@@ -5627,8 +5622,9 @@ window.addEventListener('load', resetInitialScrollPositions);
       if (typeof onSuccess === 'function') onSuccess(mapCanvas);
     };
 
-    map.invalidateSize({ pan: false });
-    scheduleLeafletCapture(map, finalize);
+    captureDisplayedBasemapCanvas(mapEl)
+      .then(mapCanvas => finalize(null, mapCanvas))
+      .catch(error => finalize(error, null));
     }
 
     function getSelectedExportCapturePreset() {
@@ -6561,7 +6557,8 @@ function exportSVG() {
       });
       const topVisibleName = visibleOrderedNames.length ? visibleOrderedNames[0] : null;
       // Keep SVG stacking aligned with layer list: only redraw current vectors when current is topmost.
-      const shouldDrawCurrentVectors = !topVisibleName || topVisibleName === currentLayerName;
+      const shouldDrawCurrentVectors = !mapCanvas._exportCaptureSource &&
+        (!topVisibleName || topVisibleName === currentLayerName);
 
       // draw features
       if (shouldDrawCurrentVectors) {
