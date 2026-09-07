@@ -5709,7 +5709,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         const mapEl = document.getElementById('map');
         const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
         const isEdge = isEdgeBrowser();
-        const adjustedMapCanvas = isEdge
+        const adjustedMapCanvas = mapCanvas._exportIncludesOverlay
+          ? mapCanvas
+          : isEdge
           // Edge: combine tile transform with map-pane drift correction.
           ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
           : alignMapCanvasToDisplayedTileTransform(
@@ -6029,7 +6031,9 @@ window.addEventListener('load', resetInitialScrollPositions);
         const mapEl = document.getElementById('map');
         const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
         const isEdge = isEdgeBrowser();
-        const adjustedMapCanvas = isEdge
+        const adjustedMapCanvas = mapCanvas._exportIncludesOverlay
+          ? mapCanvas
+          : isEdge
           ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
           : alignMapCanvasToDisplayedTileTransform(
               alignMapCanvasForFractionalTileZoom(alignMapCanvasForEdge(mapCanvas, mapEl)),
@@ -6043,7 +6047,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
           // Use content-aware side trim to keep widescreen exports horizontally centered.
-          allowBrowserCrop: true,
+          allowBrowserCrop: !mapCanvas._exportIncludesOverlay,
           targetAspectRatio: (() => {
             const p = getSelectedExportCapturePreset();
             return p.width / Math.max(1, p.height);
@@ -6417,7 +6421,9 @@ function exportSVG() {
       // authoritative canvas pixels from leafletImage
       const debugInfo = getExportCorrectionDebug(mapCanvas, mapEl);
       const isEdge = isEdgeBrowser();
-      const adjustedMapCanvas = isEdge
+      const adjustedMapCanvas = mapCanvas._exportIncludesOverlay
+        ? mapCanvas
+        : isEdge
         // Edge: combine tile transform with map-pane drift correction.
         ? alignMapCanvasForEdgeDisplayedState(mapCanvas, mapEl)
         : alignMapCanvasToDisplayedTileTransform(
@@ -6434,7 +6440,7 @@ function exportSVG() {
 
       const exportGeometry = computeExportMapGeometry(adjustedMapCanvas, mapEl, {
         // Use content-aware side trim to keep widescreen exports horizontally centered.
-        allowBrowserCrop: true,
+        allowBrowserCrop: !mapCanvas._exportIncludesOverlay,
         targetAspectRatio: (() => {
           const p = getSelectedExportCapturePreset();
           return p.width / Math.max(1, p.height);
