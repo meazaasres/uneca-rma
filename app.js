@@ -6293,7 +6293,70 @@ function recenterMapCanvasHorizontally(sourceCanvas, maxShiftRatio = 0.12) {
 }
 
 // Assumes MAX_FEATURES, MAX_VERTICES, MAX_TEXT_LENGTH, safeText, tryCanvasToDataURL, getPointRadius, getLineWidth, defaultStyle, sanitizeName, showLoading, hideLoading, showPopup, exportMap, overlayData, geojsonData, currentLayerName, map are defined elsewhere.
+function exportSvgFromPngComposition() {
+  showLoading("Exporting map as A4 SVG...");
+  buildDirectExportCanvas(
+    "svg",
+    (sourceCanvas) => {
+      try {
+        const svgNS = "http://www.w3.org/2000/svg";
+        const imageData = sourceCanvas.toDataURL("image/png");
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute("xmlns", svgNS);
+        svg.setAttribute("width", String(EXPORT_A4_WIDTH_PX));
+        svg.setAttribute("height", String(EXPORT_A4_HEIGHT_PX));
+        svg.setAttribute("viewBox", `0 0 ${EXPORT_A4_WIDTH_PX} ${EXPORT_A4_HEIGHT_PX}`);
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+        const background = document.createElementNS(svgNS, "rect");
+        background.setAttribute("width", String(EXPORT_A4_WIDTH_PX));
+        background.setAttribute("height", String(EXPORT_A4_HEIGHT_PX));
+        background.setAttribute("fill", "#ffffff");
+        svg.appendChild(background);
+
+        const image = document.createElementNS(svgNS, "image");
+        image.setAttribute("href", imageData);
+        image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", imageData);
+        image.setAttribute("x", "0");
+        image.setAttribute("y", "0");
+        image.setAttribute("width", String(EXPORT_A4_WIDTH_PX));
+        image.setAttribute("height", String(EXPORT_A4_HEIGHT_PX));
+        image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        svg.appendChild(image);
+
+        const svgString = new XMLSerializer().serializeToString(svg);
+        const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${sanitizeName(currentLayerName || "map")}-A4.svg`;
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          link.remove();
+        }, 1000);
+        hideLoading();
+      } catch (error) {
+        console.error("SVG composition export failed:", error);
+        hideLoading();
+        showPopup("SVG export failed. Exporting PNG instead.", "success");
+        exportMap();
+      }
+    },
+    (error) => {
+      console.error("SVG composition capture failed:", error);
+      hideLoading();
+      showPopup("SVG capture failed. Exporting PNG instead.", "success");
+      exportMap();
+    }
+  );
+}
+
 function exportSVG() {
+  return exportSvgFromPngComposition();
+
   showLoading("Exporting map as SVG...");
 
   const sourceData = geojsonData || (overlayData[currentLayerName] && overlayData[currentLayerName].geojson);
