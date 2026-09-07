@@ -5650,15 +5650,11 @@ window.addEventListener('load', resetInitialScrollPositions);
         height: mapEl.clientHeight
       }).then(overlayCanvas => {
         if (overlayCanvas && overlayCanvas.width > 0 && overlayCanvas.height > 0) {
-          const mapRect = mapEl.getBoundingClientRect();
-          const paneRect = overlayPane.getBoundingClientRect();
           const scaleX = mapCanvas.width / Math.max(1, mapEl.clientWidth);
           const scaleY = mapCanvas.height / Math.max(1, mapEl.clientHeight);
-          const offsetX = Math.round((paneRect.left - mapRect.left) * scaleX);
-          const offsetY = Math.round((paneRect.top - mapRect.top) * scaleY);
           const ctx = mapCanvas.getContext('2d');
           if (ctx) {
-            ctx.drawImage(overlayCanvas, offsetX, offsetY,
+            ctx.drawImage(overlayCanvas, 0, 0,
               Math.round(overlayCanvas.width * scaleX),
               Math.round(overlayCanvas.height * scaleY));
           }
