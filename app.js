@@ -27,9 +27,6 @@ const ALLOWED_SHAPEFILE_ZIP_EXTENSIONS = new Set([
 ]);
 const EXPORT_SIDE_CROP_RATIO = 0.06;
 const EXPORT_SIDE_CROP_EXTRA_PX = 10;
-const EXPORT_FIXED_LEFT_CROP_PX = 50;
-const EXPORT_FIXED_RIGHT_CROP_PX = 50;
-const EXPORT_FIXED_BOTTOM_CROP_PX = 30;
 const EDGE_EXPORT_SIDE_CROP_MAX_RATIO = 0.16;
 const EDGE_EXPORT_FIXED_SIDE_CROP_PX = 40;
 const CHROME_EXPORT_FIXED_SIDE_CROP_PX = 40;
@@ -5026,19 +5023,12 @@ window.addEventListener('load', resetInitialScrollPositions);
     const safeBaseCropW = Math.max(1, Math.min(Math.round(baseCropW || 1), sourceCanvas?.width || Math.round(baseCropW || 1)));
     const safeCropH = Math.max(1, Math.min(Math.round(cropH || 1), sourceCanvas?.height || Math.round(cropH || 1)));
     const allowBrowserCrop = options.allowBrowserCrop !== false;
-    const automaticSideCropPx = allowBrowserCrop
+    const sideCropPx = allowBrowserCrop
       ? getExportSideCropPxForBrowser(sourceCanvas, safeBaseCropW, safeCropH)
       : 0;
-    const leftCropPx = Math.max(EXPORT_FIXED_LEFT_CROP_PX, automaticSideCropPx);
-    const rightCropPx = Math.max(EXPORT_FIXED_RIGHT_CROP_PX, automaticSideCropPx);
-    const availableW = sourceCanvas?.width || safeBaseCropW;
-    const cropX = Math.max(0, Math.min(leftCropPx, Math.max(0, availableW - 1)));
-    const cropW = Math.max(1, Math.min(
-      safeBaseCropW - leftCropPx - rightCropPx,
-      availableW - cropX
-    ));
-    const cropH = Math.max(1, safeCropH - EXPORT_FIXED_BOTTOM_CROP_PX);
-    return { cropX, cropW, cropH, sideCropPx: Math.max(leftCropPx, rightCropPx) };
+    const cropX = Math.max(0, Math.min(sideCropPx, Math.max(0, (sourceCanvas?.width || safeBaseCropW) - 1)));
+    const cropW = Math.max(1, Math.min(safeBaseCropW - (2 * sideCropPx), (sourceCanvas?.width || safeBaseCropW) - cropX));
+    return { cropX, cropW, cropH: safeCropH, sideCropPx };
     }
 
     function computeExportMapGeometry(mapCanvas, mapEl, options = {}) {
