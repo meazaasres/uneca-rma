@@ -5634,34 +5634,39 @@ window.addEventListener('load', resetInitialScrollPositions);
         return;
       }
 
-      const overlayPane = mapEl.querySelector('.leaflet-overlay-pane');
-      if (!overlayPane || typeof html2canvas !== 'function') {
+      const overlaySvg = mapEl.querySelector('.leaflet-overlay-pane svg');
+      if (!overlaySvg) {
         finalize(null, mapCanvas);
         return;
       }
 
-      html2canvas(overlayPane, {
-        backgroundColor: null,
-        foreignObjectRendering: false,
-        logging: false,
-        scale: 1,
-        useCORS: true,
-        width: mapEl.clientWidth,
-        height: mapEl.clientHeight
-      }).then(overlayCanvas => {
-        if (overlayCanvas && overlayCanvas.width > 0 && overlayCanvas.height > 0) {
-          const scaleX = mapCanvas.width / Math.max(1, mapEl.clientWidth);
-          const scaleY = mapCanvas.height / Math.max(1, mapEl.clientHeight);
-          const ctx = mapCanvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(overlayCanvas, 0, 0,
-              Math.round(overlayCanvas.width * scaleX),
-              Math.round(overlayCanvas.height * scaleY));
-          }
+      const clone = overlaySvg.cloneNode(true);
+      const width = Math.max(1, mapEl.clientWidth);
+      const height = Math.max(1, mapEl.clientHeight);
+      clone.setAttribute('width', String(width));
+      clone.setAttribute('height', String(height));
+      clone.style.transform = 'none';
+      clone.style.position = 'absolute';
+      clone.style.left = '0';
+      clone.style.top = '0';
+      clone.style.background = 'transparent';
+      const serialized = new XMLSerializer().serializeToString(clone);
+      const image = new Image();
+      image.onload = () => {
+        const overlayCanvas = document.createElement('canvas');
+        overlayCanvas.width = mapCanvas.width;
+        overlayCanvas.height = mapCanvas.height;
+        const ctx = overlayCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(image, 0, 0, overlayCanvas.width, overlayCanvas.height);
+          const mapCtx = mapCanvas.getContext('2d');
+          if (mapCtx) mapCtx.drawImage(overlayCanvas, 0, 0);
           mapCanvas._exportIncludesOverlay = true;
         }
         finalize(null, mapCanvas);
-      }).catch(() => finalize(null, mapCanvas));
+      };
+      image.onerror = () => finalize(null, mapCanvas);
+      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(serialized)}`;
     });
     }
 
