@@ -6094,7 +6094,8 @@ window.addEventListener('load', resetInitialScrollPositions);
           return;
         }
         cctx.drawImage(adjustedMapCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-        const exportMapCanvas = cropped;
+        const recentered = recenterMapCanvasHorizontally(cropped, 0.12);
+        const exportMapCanvas = recentered.canvas || cropped;
         const capturePreset = getSelectedExportCapturePreset();
         const normalizedMapCanvas = document.createElement('canvas');
         normalizedMapCanvas.width = capturePreset.width;
