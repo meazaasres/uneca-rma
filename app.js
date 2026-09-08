@@ -6143,6 +6143,16 @@ window.addEventListener('load', resetInitialScrollPositions);
         drawFixedExportOverlaysToCanvas(octx, 0, titleH, normalizedMapCanvas.width, normalizedMapCanvas.height);
 
         if (legendBlocks.length) {
+          const legendWidth = legendBlocks.reduce((maxWidth, block) => {
+            octx.font = '600 20px Segoe UI, sans-serif';
+            let blockWidth = octx.measureText(String(block.title || 'Legend')).width;
+            octx.font = '400 15px Segoe UI, sans-serif';
+            block.rows.forEach((entry) => {
+              blockWidth = Math.max(blockWidth, 30 + octx.measureText(String(entry.label || '')).width);
+            });
+            return Math.max(maxWidth, blockWidth);
+          }, 0);
+          const legendX = Math.max(6, Math.round((outW - legendWidth) / 2));
           let y = titleH + normalizedMapCanvas.height + legendTopPad;
           octx.textAlign = 'left';
           octx.textBaseline = 'top';
@@ -6152,14 +6162,14 @@ window.addEventListener('load', resetInitialScrollPositions);
 
             octx.fillStyle = '#222222';
             octx.font = '600 20px Segoe UI, sans-serif';
-            octx.fillText(String(block.title || 'Legend'), 6, y);
+            octx.fillText(String(block.title || 'Legend'), legendX, y);
             y += legendHeaderH;
 
             octx.font = '400 15px Segoe UI, sans-serif';
             block.rows.forEach((entry) => {
               const color = entry.color || '#cccccc';
               const symbolType = entry.symbolType || 'polygon';
-              const symbolX = 6;
+              const symbolX = legendX;
               const symbolY = y;
               const symbolSize = 16;
 
@@ -6184,7 +6194,7 @@ window.addEventListener('load', resetInitialScrollPositions);
               }
 
               octx.fillStyle = '#333333';
-              octx.fillText(String(entry.label || ''), 30, y - 2);
+              octx.fillText(String(entry.label || ''), legendX + 30, y - 2);
               y += legendRowH;
             });
           });
@@ -6880,7 +6890,6 @@ function exportSVG() {
       if (legendEl && legendEl.children && legendEl.children.length) {
         reorderLegendBlocks();
         const legendGroup = document.createElementNS(svgNS, "g");
-        const legendX = alignedContentOffsetX + marginPx;
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
         const symSize = Math.max(8, Math.round(12 * uiScale));
         const fontSize = Math.max(10, Math.round(12 * uiScale));
@@ -6899,6 +6908,24 @@ function exportSVG() {
         const seen = new Set(orderedBlocks.map(b => b.id));
         const remainingBlocks = Array.from(legendEl.querySelectorAll('.legend-block')).filter(b => !seen.has(b.id));
         const blocks = orderedBlocks.concat(remainingBlocks);
+        const measureContext = document.createElement('canvas').getContext('2d');
+        let legendWidth = 0;
+        if (measureContext) {
+          blocks.forEach((block) => {
+            const header = safeText(block.querySelector('.legend-header')) || 'Legend';
+            measureContext.font = `600 ${fontSize}px Segoe UI, sans-serif`;
+            let blockWidth = measureContext.measureText(header).width;
+            measureContext.font = `${fontSize}px Segoe UI, sans-serif`;
+            Array.from(block.querySelectorAll('.legend-row')).forEach((row) => {
+              blockWidth = Math.max(
+                blockWidth,
+                symSize + Math.round(6 * uiScale) + measureContext.measureText(safeText(row.querySelector('span'))).width
+              );
+            });
+            legendWidth = Math.max(legendWidth, blockWidth);
+          });
+        }
+        const legendX = alignedContentOffsetX + Math.max(marginPx, Math.round((usedCanvasWidth - legendWidth) / 2));
         blocks.forEach(block => {
           const blockHeader = block.querySelector('.legend-header');
           if (blockHeader) {
