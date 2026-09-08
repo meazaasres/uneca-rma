@@ -5664,8 +5664,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       const height = Math.max(1, mapCanvas.height);
       clone.setAttribute('width', String(width));
       clone.setAttribute('height', String(height));
-      clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
-      clone.setAttribute('preserveAspectRatio', 'none');
       clone.style.transform = 'none';
       clone.style.position = 'absolute';
       clone.style.left = '0';
