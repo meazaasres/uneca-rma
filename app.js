@@ -1,15 +1,16 @@
 // --- Globals & Utilities ---
-const MAX_SIZE = 1024 * 1024 * 1024; // 1 GB limit used in handlers
+const MAX_SIZE = 100 * 1024 * 1024; // 100 MB local file limit
 const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_CSV_COLUMNS = 500;
 const MAX_CSV_CELL_LENGTH = 10000;
-const MAX_REMOTE_IMPORT_BYTES = 512 * 1024 * 1024; // 512 MB cap for URL imports
+const MAX_EDITABLE_TEXT_LENGTH = 250;
+const MAX_REMOTE_IMPORT_BYTES = 50 * 1024 * 1024; // 50 MB cap for URL imports
 const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
 const SCALE_BAR_OFFSET_X_PX = 43;
 const SCALE_BAR_OFFSET_Y_PX = 7;
 const MAX_ZIP_ENTRIES = 50;
-const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024; // 1 GB expanded cap
+const MAX_ZIP_UNCOMPRESSED_BYTES = 200 * 1024 * 1024; // 200 MB expanded cap
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const ALLOWED_SHAPEFILE_ZIP_EXTENSIONS = new Set([
   ".shp",
@@ -191,7 +192,8 @@ function sanitizePlainText(value, fallback = "") {
 
 function insertTextAtCaret(targetEl, text) {
   if (!targetEl) return;
-  const safeText = sanitizePlainText(text);
+  const maxLength = Math.max(1, Number(targetEl.dataset?.maxTextLength) || MAX_EDITABLE_TEXT_LENGTH);
+  const safeText = sanitizePlainText(text).slice(0, maxLength);
   targetEl.focus();
   const sel = window.getSelection ? window.getSelection() : null;
   if (!sel || sel.rangeCount === 0) {
@@ -206,6 +208,49 @@ function insertTextAtCaret(targetEl, text) {
   range.setEndAfter(textNode);
   sel.removeAllRanges();
   sel.addRange(range);
+}
+
+function secureEditablePlainText(targetEl, fallback, onCommit) {
+  if (!targetEl) return;
+  targetEl.dataset.maxTextLength = String(MAX_EDITABLE_TEXT_LENGTH);
+
+  const normalize = () => {
+    const next = sanitizePlainText(targetEl.textContent, fallback).slice(0, MAX_EDITABLE_TEXT_LENGTH);
+    if (targetEl.textContent !== next || targetEl.querySelector('*')) {
+      targetEl.textContent = next;
+    }
+    return next;
+  };
+
+  targetEl.addEventListener('beforeinput', (event) => {
+    const inputType = String(event.inputType || '');
+    const allowedInsertTypes = new Set(['insertText', 'insertCompositionText']);
+    if (inputType.startsWith('insert') && !allowedInsertTypes.has(inputType)) {
+      event.preventDefault();
+    }
+    if (inputType.startsWith('format')) {
+      event.preventDefault();
+    }
+  });
+  targetEl.addEventListener('paste', (event) => {
+    event.preventDefault();
+    const text = (event.clipboardData || window.clipboardData)?.getData('text') || '';
+    insertTextAtCaret(targetEl, text);
+    normalize();
+  });
+  targetEl.addEventListener('drop', (event) => event.preventDefault());
+  targetEl.addEventListener('input', normalize);
+  targetEl.addEventListener('blur', () => {
+    const next = normalize();
+    if (typeof onCommit === 'function') onCommit(next);
+  });
+
+  new MutationObserver(normalize).observe(targetEl, {
+    childList: true,
+    characterData: true,
+    subtree: true
+  });
+  normalize();
 }
 
 function stripKnownDataExtension(name) {
@@ -944,8 +989,8 @@ function assertCsvPayloadLooksSafe(csvText, sourceLabel = "CSV") {
   if (headerCells.length < 2) {
     throw new Error(`${sourceLabel} must contain at least 2 columns.`);
   }
-  if (headerCells.length > 1000) {
-    throw new Error(`${sourceLabel} has too many columns (${headerCells.length}; max 1000).`);
+  if (headerCells.length > MAX_CSV_COLUMNS) {
+    throw new Error(`${sourceLabel} has too many columns (${headerCells.length}; max ${MAX_CSV_COLUMNS}).`);
   }
 
   const hasLatField = headerCells.some(v => /(latitude|lat)\b/i.test(v));
@@ -2828,14 +2873,7 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
   header.setAttribute('aria-label', `Legend title for ${layerName}`);
   header.spellcheck = false;
   header.textContent = overlayData[layerName]?.legendTitle || defaultLegendTitle;
-  header.addEventListener('paste', (e) => {
-    e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-    insertTextAtCaret(header, text);
-  });
-  header.addEventListener('blur', () => {
-    const next = sanitizePlainText(header.textContent, defaultLegendTitle);
-    header.textContent = next;
+  secureEditablePlainText(header, defaultLegendTitle, (next) => {
     if (overlayData[layerName]) overlayData[layerName].legendTitle = next;
   });
   block.appendChild(header);
@@ -4149,14 +4187,7 @@ function updateClassificationTableDefaultSymbol(label, color) {
   tdLabel.setAttribute('aria-label', 'Legend label');
   tdLabel.spellcheck = false;
   tdLabel.textContent = sanitizePlainText(label, 'Features');
-  tdLabel.addEventListener('paste', (e) => {
-    e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-    insertTextAtCaret(tdLabel, text);
-  });
-  tdLabel.addEventListener('blur', () => {
-    const next = sanitizePlainText(tdLabel.textContent, 'Features');
-    tdLabel.textContent = next;
+  secureEditablePlainText(tdLabel, 'Features', (next) => {
     const state = overlayData[currentLayerName];
     if (!state) return;
     state.defaultSymbolLabel = next;
@@ -4214,14 +4245,7 @@ function updateClassificationTableCategorical(uniques, cols) {
     tdC.setAttribute('aria-label', `Category label ${i + 1}`);
     tdC.spellcheck = false;
     tdC.textContent = defaultLabel;
-    tdC.addEventListener('paste', (e) => {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-      insertTextAtCaret(tdC, text);
-    });
-    tdC.addEventListener('blur', () => {
-      const next = sanitizePlainText(tdC.textContent, defaultLabel);
-      tdC.textContent = next;
+    secureEditablePlainText(tdC, defaultLabel, (next) => {
       if (layerState) {
         if (!Array.isArray(layerState.legendLabels)) {
           layerState.legendLabels = uniques.map((val) => sanitizePlainText(val, "Category"));
@@ -7059,14 +7083,7 @@ document.addEventListener("DOMContentLoaded", () => {
     mapTitle.setAttribute("aria-label", "Map title");
     mapTitle.spellcheck = false;
     mapTitle.textContent = sanitizePlainText(mapTitle.textContent, "Custom Map Title");
-    mapTitle.addEventListener("paste", (e) => {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData)?.getData("text") || "";
-      insertTextAtCaret(mapTitle, text);
-    });
-    mapTitle.addEventListener("blur", () => {
-      mapTitle.textContent = sanitizePlainText(mapTitle.textContent, "Custom Map Title");
-    });
+    secureEditablePlainText(mapTitle, "Custom Map Title");
   }
 
   // Wire export and UI buttons (avoid inline onclick handlers)
