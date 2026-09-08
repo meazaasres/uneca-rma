@@ -3001,6 +3001,38 @@ function defaultPoint(feature, latlng) {
   });
 }
 
+function openNearbyPointPopup(event) {
+  if (!event?.containerPoint || !map) return;
+  const hitRadiusPx = 18;
+  let nearestPoint = null;
+  let nearestDistanceSq = hitRadiusPx * hitRadiusPx;
+
+  const inspectLayer = (layer) => {
+    if (!layer) return;
+    if (layer instanceof L.CircleMarker && typeof layer.getLatLng === 'function' && typeof layer.getPopup === 'function' && layer.getPopup()) {
+      const point = map.latLngToContainerPoint(layer.getLatLng());
+      const dx = point.x - event.containerPoint.x;
+      const dy = point.y - event.containerPoint.y;
+      const distanceSq = (dx * dx) + (dy * dy);
+      if (distanceSq <= nearestDistanceSq) {
+        nearestDistanceSq = distanceSq;
+        nearestPoint = layer;
+      }
+      return;
+    }
+    if (typeof layer.eachLayer === 'function') layer.eachLayer(inspectLayer);
+  };
+
+  Object.values(overlayData).forEach((state) => {
+    const group = state?.layerGroup;
+    if (group && map.hasLayer(group)) inspectLayer(group);
+  });
+
+  if (nearestPoint) nearestPoint.openPopup(nearestPoint.getLatLng());
+}
+
+map.on('click', openNearbyPointPopup);
+
 // Refresh styles for existing layers (works before and after classification)
 function refreshStyles() {
   if (!layerGroup) return;
