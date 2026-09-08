@@ -5843,7 +5843,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         clone.style.maxWidth = '100%';
         clone.style.marginLeft = 'auto';
         clone.style.marginRight = 'auto';
-        clone.style.textAlign = 'left';
+        clone.style.textAlign = 'center';
         clone.style.clear = 'both';
         clone.style.zIndex = '4';
         clone.style.background = 'transparent';
@@ -5864,7 +5864,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         Array.from(clone.querySelectorAll('.legend-row')).forEach((row) => {
           row.style.display = 'flex';
           row.style.alignItems = 'center';
-          row.style.justifyContent = 'flex-start';
+          row.style.justifyContent = 'center';
           row.style.minHeight = '18px';
         });
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
@@ -6150,24 +6150,15 @@ window.addEventListener('load', resetInitialScrollPositions);
 
         if (legendBlocks.length) {
           let y = titleH + normalizedMapCanvas.height + legendTopPad;
-          octx.textAlign = 'left';
+          octx.textAlign = 'center';
           octx.textBaseline = 'top';
-          const legendContainerWidth = legendBlocks.reduce((maxWidth, block) => {
-            const titleWidth = measureExportTextWidth(String(block.title || 'Legend'), '600 20px Segoe UI, sans-serif');
-            const rowsWidth = block.rows.reduce((max, entry) => {
-              const labelWidth = measureExportTextWidth(String(entry.label || ''), '400 15px Segoe UI, sans-serif');
-              return Math.max(max, 16 + 8 + labelWidth);
-            }, 0);
-            return Math.max(maxWidth, titleWidth, rowsWidth);
-          }, 0);
-          const legendLeft = Math.max(0, Math.round((outW - legendContainerWidth) / 2));
 
           legendBlocks.forEach((block, blockIdx) => {
             if (blockIdx > 0) y += legendBlockGap;
 
             octx.fillStyle = '#222222';
             octx.font = '600 20px Segoe UI, sans-serif';
-            octx.fillText(String(block.title || 'Legend'), legendLeft, y);
+            octx.fillText(String(block.title || 'Legend'), Math.round(outW / 2), y);
             y += legendHeaderH;
 
             octx.font = '400 15px Segoe UI, sans-serif';
@@ -6181,7 +6172,7 @@ window.addEventListener('load', resetInitialScrollPositions);
               const labelText = String(entry.label || '');
               const labelWidth = octx.measureText(labelText).width;
               const rowWidth = symbolSize + 8 + labelWidth;
-              const rowLeft = legendLeft;
+              const rowLeft = Math.max(0, Math.round((outW - rowWidth) / 2));
               const centeredSymbolX = rowLeft;
               if (symbolType === 'line') {
                 octx.strokeStyle = color;
@@ -6934,7 +6925,8 @@ function exportSVG() {
             h.setAttribute("y", String(yOff + fontSize));
             h.setAttribute("font-size", String(fontSize));
             h.setAttribute("font-weight", "600");
-            h.setAttribute("text-anchor", "start");
+            h.setAttribute("text-anchor", "middle");
+            h.setAttribute("x", String(legendX + Math.round(legendRowsWidth / 2)));
             h.textContent = safeText(blockHeader) || "Legend";
             legendGroup.appendChild(h);
             yOff += Math.round(fontSize + rowGap + 2);
