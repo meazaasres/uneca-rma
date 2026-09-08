@@ -5839,14 +5839,11 @@ window.addEventListener('load', resetInitialScrollPositions);
         copyVisualStylesRecursive(legend, clone);
         clone.style.position = 'relative';
         clone.style.display = 'block';
-<<<<<<< HEAD
         clone.style.width = 'fit-content';
         clone.style.maxWidth = '100%';
         clone.style.marginLeft = 'auto';
         clone.style.marginRight = 'auto';
         clone.style.textAlign = 'left';
-=======
->>>>>>> parent of 2b43917 (Legend position)
         clone.style.clear = 'both';
         clone.style.zIndex = '4';
         clone.style.background = 'transparent';
@@ -5867,10 +5864,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         Array.from(clone.querySelectorAll('.legend-row')).forEach((row) => {
           row.style.display = 'flex';
           row.style.alignItems = 'center';
-<<<<<<< HEAD
           row.style.justifyContent = 'flex-start';
-=======
->>>>>>> parent of 2b43917 (Legend position)
           row.style.minHeight = '18px';
         });
         const sourceSyms = Array.from(legend.querySelectorAll('.legend-sym'));
@@ -6173,11 +6167,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
             octx.fillStyle = '#222222';
             octx.font = '600 20px Segoe UI, sans-serif';
-<<<<<<< HEAD
             octx.fillText(String(block.title || 'Legend'), legendLeft, y);
-=======
-            octx.fillText(String(block.title || 'Legend'), 6, y);
->>>>>>> parent of 2b43917 (Legend position)
             y += legendHeaderH;
 
             octx.font = '400 15px Segoe UI, sans-serif';
@@ -6188,36 +6178,33 @@ window.addEventListener('load', resetInitialScrollPositions);
               const symbolY = y;
               const symbolSize = 16;
 
-<<<<<<< HEAD
               const labelText = String(entry.label || '');
               const labelWidth = octx.measureText(labelText).width;
               const rowWidth = symbolSize + 8 + labelWidth;
               const rowLeft = legendLeft;
               const centeredSymbolX = rowLeft;
-=======
->>>>>>> parent of 2b43917 (Legend position)
               if (symbolType === 'line') {
                 octx.strokeStyle = color;
                 octx.lineWidth = 3;
                 octx.beginPath();
-                octx.moveTo(symbolX, symbolY + 8);
-                octx.lineTo(symbolX + symbolSize, symbolY + 8);
+                octx.moveTo(centeredSymbolX, symbolY + 8);
+                octx.lineTo(centeredSymbolX + symbolSize, symbolY + 8);
                 octx.stroke();
               } else if (symbolType === 'point') {
                 octx.fillStyle = color;
                 octx.beginPath();
-                octx.arc(symbolX + 8, symbolY + 8, 7, 0, Math.PI * 2);
+                octx.arc(centeredSymbolX + 8, symbolY + 8, 7, 0, Math.PI * 2);
                 octx.fill();
               } else {
                 octx.fillStyle = color;
-                octx.fillRect(symbolX, symbolY, symbolSize, symbolSize);
+                octx.fillRect(centeredSymbolX, symbolY, symbolSize, symbolSize);
                 octx.strokeStyle = '#333333';
                 octx.lineWidth = 1;
-                octx.strokeRect(symbolX, symbolY, symbolSize, symbolSize);
+                octx.strokeRect(centeredSymbolX, symbolY, symbolSize, symbolSize);
               }
 
               octx.fillStyle = '#333333';
-              octx.fillText(String(entry.label || ''), 30, y - 2);
+              octx.fillText(labelText, centeredSymbolX + symbolSize + 8 + (labelWidth / 2), y - 2);
               y += legendRowH;
             });
           });
@@ -6913,7 +6900,6 @@ function exportSVG() {
       if (legendEl && legendEl.children && legendEl.children.length) {
         reorderLegendBlocks();
         const legendGroup = document.createElementNS(svgNS, "g");
-        const legendX = alignedContentOffsetX + marginPx;
         let yOff = titleHeightPx + usedCanvasHeight + marginPx;
         const symSize = Math.max(8, Math.round(12 * uiScale));
         const fontSize = Math.max(10, Math.round(12 * uiScale));
@@ -6926,6 +6912,14 @@ function exportSVG() {
           const group = overlayData[name] && overlayData[name].layerGroup;
           return !!(group && map && map.hasLayer(group));
         });
+        const legendRowsWidth = orderedVisibleLegendNames.reduce((maxWidth, name) => {
+          const block = document.getElementById('legend-' + sanitizeId(name));
+          if (!block) return maxWidth;
+          const labelsWidth = Array.from(block.querySelectorAll('.legend-row span'))
+            .reduce((max, label) => Math.max(max, measureExportTextWidth(label.textContent || '', `${fontSize}px Segoe UI, sans-serif`)), 0);
+          return Math.max(maxWidth, symSize + 6 + labelsWidth);
+        }, 0);
+        const legendX = alignedContentOffsetX + Math.max(marginPx, Math.round((usedCanvasWidth - legendRowsWidth) / 2));
         const orderedBlocks = orderedVisibleLegendNames
           .map(name => document.getElementById('legend-' + sanitizeId(name)))
           .filter(Boolean);
@@ -6940,10 +6934,7 @@ function exportSVG() {
             h.setAttribute("y", String(yOff + fontSize));
             h.setAttribute("font-size", String(fontSize));
             h.setAttribute("font-weight", "600");
-<<<<<<< HEAD
             h.setAttribute("text-anchor", "start");
-=======
->>>>>>> parent of 2b43917 (Legend position)
             h.textContent = safeText(blockHeader) || "Legend";
             legendGroup.appendChild(h);
             yOff += Math.round(fontSize + rowGap + 2);
