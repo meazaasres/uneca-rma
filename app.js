@@ -3301,20 +3301,29 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   }
   const isoFamily = isoKey ? getIsoCodeFamily(isoKey) : "";
   const resolvedIsoFamily = isoKey ? "iso3" : "";
-  if (!hasCoordinates && isoKey) {
-    const invalidIso3 = rows.some(row => {
-      const value = normalizeIsoJoinValue(row?.[isoKey]);
-      return !/^[A-Z]{3}$/.test(value);
-    });
-    if (invalidIso3) {
-      throw new Error("CSV country values must be valid three-letter ISO3 codes.");
-    }
+  const validIsoRows = !hasCoordinates && isoKey
+    ? rows.filter(row => {
+        const value = normalizeIsoJoinValue(row?.[isoKey]);
+        return /^[A-Z]{3}$/.test(value);
+      })
+    : rows;
+  const unmatchedIsoValues = !hasCoordinates && isoKey
+    ? Array.from(new Set(
+        rows
+          .filter(row => !/^[A-Z]{3}$/.test(normalizeIsoJoinValue(row?.[isoKey])))
+          .map(row => String(row?.[isoKey] ?? "").trim())
+          .filter(Boolean)
+      )).slice(0, 10)
+    : [];
+
+  if (!hasCoordinates && isoKey && !validIsoRows.length) {
+    throw new Error("No CSV rows contained valid three-letter ISO3 country codes.");
   }
 
-  const features = rows.map((r, rowIdx) => {
+  const features = validIsoRows.map((r, rowIdx) => {
     if (!hasCoordinates && isoKey) {
-      const iso = sanitizePlainText(r?.[isoKey]);
-      if (!iso) return null;
+      const iso = normalizeIsoJoinValue(r?.[isoKey]);
+      if (!/^[A-Z]{3}$/.test(iso)) return null;
       return {
         type: "Feature",
         geometry: null,
@@ -3341,7 +3350,9 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
       isoKey,
       isoFamily: resolvedIsoFamily,
       valueKeys: keys.filter(key => key !== isoKey),
-      preferredAttribute: chooseCsvThematicKey(rows, keys, isoKey)
+      preferredAttribute: chooseCsvThematicKey(validIsoRows, keys, isoKey),
+      unmatchedRowCount: Math.max(0, rows.length - validIsoRows.length),
+      unmatchedIsoValues
     };
   }
   return geojson;
@@ -3456,11 +3467,20 @@ async function importFile(file) {
         throw new Error("No CSV ISO codes matched the global country reference.");
       }
       geojson = countryGeojson;
+      const csvMeta = geojson.__rmaCsvImport || {};
+      const unmatchedCount = Number(csvMeta.unmatchedRowCount || 0);
+      const unmatchedValues = Array.isArray(csvMeta.unmatchedIsoValues) ? csvMeta.unmatchedIsoValues : [];
+      if (unmatchedCount > 0) {
+        const examples = unmatchedValues.length ? ` Examples: ${unmatchedValues.join(", ")}` : "";
+        showPopup(`Mapped valid ISO3 rows. Skipped ${unmatchedCount} unmatched entries.${examples}`, "success");
+      }
     }
 
     const safeName = await addImportedLayer(geojson, file.name, "Imported file");
     if (fileNameEl) fileNameEl.textContent = safeName;
-    showPopup(`File "${safeName}" uploaded successfully`, "success");
+    if (!ext || ext !== ".csv") {
+      showPopup(`File "${safeName}" uploaded successfully`, "success");
+    }
   } finally {
     hideLoading();
   }
@@ -3494,12 +3514,21 @@ async function importUrl(rawUrl) {
         throw new Error("No CSV ISO codes matched the global country reference.");
       }
       geojson = countryGeojson;
+      const csvMeta = geojson.__rmaCsvImport || {};
+      const unmatchedCount = Number(csvMeta.unmatchedRowCount || 0);
+      const unmatchedValues = Array.isArray(csvMeta.unmatchedIsoValues) ? csvMeta.unmatchedIsoValues : [];
+      if (unmatchedCount > 0) {
+        const examples = unmatchedValues.length ? ` Examples: ${unmatchedValues.join(", ")}` : "";
+        showPopup(`Mapped valid ISO3 rows. Skipped ${unmatchedCount} unmatched entries.${examples}`, "success");
+      }
     }
 
     const safeName = await addImportedLayer(geojson, fallbackName, "Imported URL data");
     if (urlInput) urlInput.value = "";
     if (fileNameEl) fileNameEl.textContent = safeName;
-    showPopup(`Layer "${safeName}" added successfully`, "success");
+    if (!ext || ext !== ".csv") {
+      showPopup(`Layer "${safeName}" added successfully`, "success");
+    }
   } finally {
     hideLoading();
   }
