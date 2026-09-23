@@ -6912,13 +6912,21 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const rawDiscX = alignedContentOffsetX + Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX);
-        // Clamp so a large negative raster shift can't push the box left of the map's visible edge.
-        const discX = Math.max(marginPx, Math.min(rawDiscX, usedCanvasWidth - 120 - marginPx));
+        // Bound the disclaimer to the actual rendered map content, not the (possibly letterboxed) canvas slot.
+        const mapContentX = alignedContentOffsetX + mapFit.x;
+        const mapContentY = titleHeightPx + mapFit.y;
+        const mapContentW = mapFit.width;
+        const mapContentH = mapFit.height;
+        // Use the disclaimer's real on-screen offset (like the north arrow below), not a fixed constant.
+        const rawDiscX = discRect && mapRect
+          ? mapContentX + Math.round((((discRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX)
+          : mapContentX + Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX);
+        // Clamp so a large negative raster shift or letterboxing can't push the box outside the visible map.
+        const discX = Math.max(mapContentX, Math.min(rawDiscX, mapContentX + mapContentW - 120 - marginPx));
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
         let discWidth = Math.max(
           Math.round(120 * uiScale),
-          Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discX - marginPx))
+          Math.min(desiredWidth, Math.max(120, mapContentX + mapContentW - discX - marginPx))
         );
         const fontSizeDisc = Math.max(8, Math.round(10 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
@@ -6963,13 +6971,13 @@ function exportSVG() {
               const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
               const bottomPx = Math.max(0, Math.round(bottomCss * rawScaleY));
               return Math.max(
-                titleHeightPx,
-                titleHeightPx + usedCanvasHeight - discHeight - bottomPx
+                mapContentY,
+                mapContentY + mapContentH - discHeight - bottomPx
               );
             })()
-          : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
-        const discYMin = titleHeightPx + 2;
-        const discYMax = Math.max(discYMin, (titleHeightPx + usedCanvasHeight - discHeight - 2));
+          : (mapContentY + mapContentH - discHeight - marginPx);
+        const discYMin = mapContentY + 2;
+        const discYMax = Math.max(discYMin, (mapContentY + mapContentH - discHeight - 2));
         discY = Math.max(discYMin, Math.min(discYMax, discY));
 
         const discBg = document.createElementNS(svgNS, "rect");
