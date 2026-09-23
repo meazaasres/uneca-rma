@@ -3114,6 +3114,13 @@ function normalizeCsvCountryCode(value, family) {
   return code;
 }
 
+function getPropertyByNormalizedKey(properties, key) {
+  if (!properties || typeof properties !== "object") return "";
+  const target = normKey(key);
+  const actualKey = Object.keys(properties).find(candidate => normKey(candidate) === target);
+  return actualKey ? properties[actualKey] : "";
+}
+
 function isUnsafeCsvPropertyKey(key) {
   const normalized = String(key || "").trim().toLowerCase();
   return normalized === "__proto__" || normalized === "prototype" || normalized === "constructor";
@@ -3162,11 +3169,16 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   query.searchParams.set("f", "geojson");
   const boundaryPayload = await fetchJsonWithLimits(query.href, "UN country boundaries");
   const boundaryFeatures = Array.isArray(boundaryPayload?.features) ? boundaryPayload.features : [];
-  const boundaries = boundaryFeatures.map(feature => ({
-    country: sanitizePlainText(feature?.properties?.ROMNAM || feature?.properties?.ISO3CD || ""),
-    iso3: normalizeIsoJoinValue(feature?.properties?.ISO3CD || ""),
-    geometry: feature?.geometry || null
-  })).filter(boundary => boundary.iso3 && boundary.geometry);
+  const boundaries = boundaryFeatures.map(feature => {
+    const boundaryProperties = feature?.properties || {};
+    const iso3 = getPropertyByNormalizedKey(boundaryProperties, "ISO3CD");
+    const country = getPropertyByNormalizedKey(boundaryProperties, "ROMNAM") || iso3;
+    return {
+      country: sanitizePlainText(country),
+      iso3: normalizeIsoJoinValue(iso3),
+      geometry: feature?.geometry || null
+    };
+  }).filter(boundary => boundary.iso3 && boundary.geometry);
   const codeToCountry = new Map();
   (Array.isArray(referenceRows) ? referenceRows : []).forEach(row => {
     const code = normalizeIsoJoinValue(row?.iso3 || "");
@@ -3212,6 +3224,8 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     type: "FeatureCollection",
     features,
     __rmaCsvImport: {
+      unmatchedRowCount: csvInfo.unmatchedRowCount || 0,
+      unmatchedIsoValues: csvInfo.unmatchedIsoValues || [],
       valueKeys: csvInfo.valueKeys,
       preferredAttribute: csvInfo.preferredAttribute || ""
     }
@@ -3462,12 +3476,12 @@ async function importFile(file) {
     }
 
     if (ext === ".csv" && geojson.__rmaCsvImport) {
-      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
+      const csvMeta = geojson.__rmaCsvImport;
+      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, csvMeta);
       if (!countryGeojson) {
         throw new Error("No CSV ISO codes matched the global country reference.");
       }
       geojson = countryGeojson;
-      const csvMeta = geojson.__rmaCsvImport || {};
       const unmatchedCount = Number(csvMeta.unmatchedRowCount || 0);
       const unmatchedValues = Array.isArray(csvMeta.unmatchedIsoValues) ? csvMeta.unmatchedIsoValues : [];
       if (unmatchedCount > 0) {
@@ -3509,12 +3523,12 @@ async function importUrl(rawUrl) {
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
     let geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     if (ext === ".csv" && geojson.__rmaCsvImport) {
-      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
+      const csvMeta = geojson.__rmaCsvImport;
+      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, csvMeta);
       if (!countryGeojson) {
         throw new Error("No CSV ISO codes matched the global country reference.");
       }
       geojson = countryGeojson;
-      const csvMeta = geojson.__rmaCsvImport || {};
       const unmatchedCount = Number(csvMeta.unmatchedRowCount || 0);
       const unmatchedValues = Array.isArray(csvMeta.unmatchedIsoValues) ? csvMeta.unmatchedIsoValues : [];
       if (unmatchedCount > 0) {
@@ -7184,5 +7198,3 @@ document.addEventListener("DOMContentLoaded", () => {
     console.warn("Some expected import UI elements are missing.");
   }
 });
-
-
