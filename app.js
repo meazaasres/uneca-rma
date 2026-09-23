@@ -5265,10 +5265,22 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     const northW = Math.max(34, Math.min(56, Math.round(exportMapW * 0.05)));
     const northH = Math.max(44, Math.min(72, Math.round(northW * 1.35)));
-    const northPos = {
-      x: Math.max(12, exportMapW - northW - 24),
-      y: 24
-    };
+    const northArrowPosition = getElementExportNormalizedPosition(
+      northArrowEl,
+      mapEl,
+      (el, mapNode) => {
+        const pos = getTopRightPosition(el, mapNode, 12);
+        return { left: pos.left, top: pos.top + 30 };
+      }
+    );
+    const northPos = resolveExportPositionFromNorm(
+      northArrowPosition.normX,
+      northArrowPosition.normY,
+      northW,
+      northH,
+      exportMapW,
+      exportMapH
+    );
 
     const scaleFontSize = Math.max(9, Math.min(13, Math.round(exportMapW * 0.008)));
     const scalePaddingX = Math.max(6, Math.round(scaleFontSize * 0.7));
