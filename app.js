@@ -3220,12 +3220,18 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   }).filter(Boolean);
 
   if (!features.length) return null;
+  const matchedCodes = new Set(features.map(f => normalizeCsvCountryCode(f?.properties?.iso3 || "", "iso3")));
+  const boundaryUnmatchedCodes = requestedIso3.filter(code => !matchedCodes.has(code));
+  const combinedUnmatchedValues = Array.from(new Set([
+    ...(csvInfo.unmatchedIsoValues || []),
+    ...boundaryUnmatchedCodes
+  ]));
   return {
     type: "FeatureCollection",
     features,
     __rmaCsvImport: {
-      unmatchedRowCount: csvInfo.unmatchedRowCount || 0,
-      unmatchedIsoValues: csvInfo.unmatchedIsoValues || [],
+      unmatchedRowCount: (csvInfo.unmatchedRowCount || 0) + boundaryUnmatchedCodes.length,
+      unmatchedIsoValues: combinedUnmatchedValues,
       valueKeys: csvInfo.valueKeys,
       preferredAttribute: csvInfo.preferredAttribute || ""
     }
@@ -3327,7 +3333,7 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
           .filter(row => !/^[A-Z]{3}$/.test(normalizeIsoJoinValue(row?.[isoKey])))
           .map(row => String(row?.[isoKey] ?? "").trim())
           .filter(Boolean)
-      )).slice(0, 10)
+      ))
     : [];
 
   if (!hasCoordinates && isoKey && !validIsoRows.length) {
@@ -3482,11 +3488,13 @@ async function importFile(file) {
         throw new Error("No CSV ISO codes matched the global country reference.");
       }
       geojson = countryGeojson;
-      const unmatchedCount = Number(csvMeta.unmatchedRowCount || 0);
-      const unmatchedValues = Array.isArray(csvMeta.unmatchedIsoValues) ? csvMeta.unmatchedIsoValues : [];
+      const finalMeta = geojson.__rmaCsvImport || csvMeta;
+      const unmatchedCount = Number(finalMeta.unmatchedRowCount || 0);
+      const unmatchedValues = Array.isArray(finalMeta.unmatchedIsoValues) ? finalMeta.unmatchedIsoValues : [];
       if (unmatchedCount > 0) {
-        const examples = unmatchedValues.length ? ` Examples: ${unmatchedValues.join(", ")}` : "";
-        showPopup(`Mapped valid ISO3 rows. Skipped ${unmatchedCount} unmatched entries.${examples}`, "success");
+        showUnmatchedCodesModal(unmatchedValues, geojson.features.length);
+      } else {
+        showPopup("Mapped valid ISO3 rows successfully.", "success");
       }
     }
 
@@ -3529,11 +3537,13 @@ async function importUrl(rawUrl) {
         throw new Error("No CSV ISO codes matched the global country reference.");
       }
       geojson = countryGeojson;
-      const unmatchedCount = Number(csvMeta.unmatchedRowCount || 0);
-      const unmatchedValues = Array.isArray(csvMeta.unmatchedIsoValues) ? csvMeta.unmatchedIsoValues : [];
+      const finalMeta = geojson.__rmaCsvImport || csvMeta;
+      const unmatchedCount = Number(finalMeta.unmatchedRowCount || 0);
+      const unmatchedValues = Array.isArray(finalMeta.unmatchedIsoValues) ? finalMeta.unmatchedIsoValues : [];
       if (unmatchedCount > 0) {
-        const examples = unmatchedValues.length ? ` Examples: ${unmatchedValues.join(", ")}` : "";
-        showPopup(`Mapped valid ISO3 rows. Skipped ${unmatchedCount} unmatched entries.${examples}`, "success");
+        showUnmatchedCodesModal(unmatchedValues, geojson.features.length);
+      } else {
+        showPopup("Mapped valid ISO3 rows successfully.", "success");
       }
     }
 
@@ -4606,6 +4616,57 @@ function showPopup(msg, type = "error") {
 
   setTimeout(() => { setDynamicStyle(popup, { display: "none" }); }, 6000);
 }
+
+// --- Unmatched ISO3 codes modal (copyable list) ---
+function showUnmatchedCodesModal(codes, matchedCount) {
+  const overlay = document.getElementById("unmatched-codes-overlay");
+  const textarea = document.getElementById("unmatched-codes-textarea");
+  const desc = document.getElementById("unmatched-codes-desc");
+  if (!overlay || !textarea) return;
+  const list = Array.isArray(codes) ? codes.filter(Boolean) : [];
+  textarea.value = list.join("\n");
+  if (desc) {
+    desc.textContent = `Mapped ${Number(matchedCount) || 0} rows. ${list.length} code(s) could not be matched. Copy the list below to review or correct them.`;
+  }
+  overlay.classList.add("open");
+}
+
+function hideUnmatchedCodesModal() {
+  const overlay = document.getElementById("unmatched-codes-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const overlay = document.getElementById("unmatched-codes-overlay");
+  const closeBtn = document.getElementById("unmatched-codes-close");
+  const dismissBtn = document.getElementById("unmatched-codes-dismiss");
+  const copyBtn = document.getElementById("unmatched-codes-copy");
+  const textarea = document.getElementById("unmatched-codes-textarea");
+
+  [closeBtn, dismissBtn].forEach(btn => {
+    if (btn) btn.addEventListener("click", hideUnmatchedCodesModal);
+  });
+  if (overlay) {
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) hideUnmatchedCodesModal();
+    });
+  }
+  if (copyBtn && textarea) {
+    copyBtn.addEventListener("click", async () => {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(textarea.value);
+        } else {
+          textarea.select();
+          document.execCommand("copy");
+        }
+        showPopup("Unmatched codes copied to clipboard", "success");
+      } catch (e) {
+        showPopup("Could not copy to clipboard. Select the text manually.", "error");
+      }
+    });
+  }
+});
 
 // --- Sidebar toggle helpers (buttons cached) ---
 const btnClassTable = document.getElementById('btnToggleClassTable');

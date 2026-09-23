@@ -299,5 +299,21 @@
   <footer class="text-center py-2">
     United Nations Standardized Rapid Mapping Application | Powered by ECA © 2025
   </footer>
+
+  <!-- Unmatched ISO3 codes modal -->
+  <div id="unmatched-codes-overlay" class="unmatched-modal-overlay">
+    <div id="unmatched-codes-modal" class="unmatched-modal" role="dialog" aria-modal="true" aria-labelledby="unmatched-codes-title">
+      <div class="unmatched-modal-header">
+        <h5 id="unmatched-codes-title" class="mb-0">Unmatched ISO3 codes</h5>
+        <button type="button" id="unmatched-codes-close" class="btn-close" aria-label="Close"></button>
+      </div>
+      <p id="unmatched-codes-desc" class="unmatched-modal-desc"></p>
+      <textarea id="unmatched-codes-textarea" class="unmatched-modal-textarea form-control" readonly></textarea>
+      <div class="unmatched-modal-actions">
+        <button type="button" id="unmatched-codes-copy" class="btn btn-sm btn-primary">Copy to clipboard</button>
+        <button type="button" id="unmatched-codes-dismiss" class="btn btn-sm btn-outline-secondary">Close</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
