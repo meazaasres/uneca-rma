@@ -1,5 +1,5 @@
 // --- Globals & Utilities ---
-const MAX_SIZE = 500 * 1024 * 1024; // 300 MB local file limit
+const MAX_SIZE = 500 * 1024 * 1024; // 500 MB local file limit
 const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_CSV_COLUMNS = 500;
@@ -10,7 +10,7 @@ const REMOTE_IMPORT_TIMEOUT_MS = 300000; // 300s timeout for URL imports
 const SCALE_BAR_OFFSET_X_PX = 43;
 const SCALE_BAR_OFFSET_Y_PX = 7;
 const MAX_ZIP_ENTRIES = 50;
-const MAX_ZIP_UNCOMPRESSED_BYTES = 200 * 1024 * 1024; // 200 MB expanded cap
+const MAX_ZIP_UNCOMPRESSED_BYTES = MAX_SIZE; // expanded ZIP cap matches local file limit
 const MAX_ZIP_EXPANSION_RATIO = 100; // expanded/compressed ratio
 const ALLOWED_SHAPEFILE_ZIP_EXTENSIONS = new Set([
   ".shp",
