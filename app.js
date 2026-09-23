@@ -1,5 +1,5 @@
 // --- Globals & Utilities ---
-const MAX_SIZE = 100 * 1024 * 1024; // 100 MB local file limit
+const MAX_SIZE = 300 * 1024 * 1024; // 300 MB local file limit
 const MAX_FEATURES = 1000000;// adjust to device expectations
 const MAX_VERTICES = 10000000; // total coordinate points across all features
 const MAX_CSV_COLUMNS = 500;
