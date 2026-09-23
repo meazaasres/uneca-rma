@@ -44,6 +44,17 @@ const EXPORT_CAPTURE_MIN_HEIGHT_PX = 480;
 const EXPORT_CAPTURE_MAX_HEIGHT_PX = 4096;
 const OVERLAY_POLYGON_FILL_OPACITY = 0.35;
 const OVERLAY_POINT_FILL_OPACITY = 0.55;
+
+// Renders a legend swatch at the same opacity as the on-map fill so it matches what's drawn over the basemap.
+function hexToRgbaAlpha(hex, alpha) {
+  const match = /^#([0-9A-Fa-f]{6})$/.exec(String(hex || ""));
+  if (!match) return hex;
+  const num = parseInt(match[1], 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 const EXPORT_CAPTURE_PRESETS = {
   "a4-balanced": {
     label: "A4 Balanced (fast)",
@@ -2905,7 +2916,9 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
       if (symbolKind === 'line') {
         setDynamicStyle(sym, { "color": color, "background-color": "transparent" });
       } else {
-        setDynamicStyle(sym, { "background-color": color, "color": "inherit" });
+        const fillOpacity = symbolKind === 'point' ? OVERLAY_POINT_FILL_OPACITY : OVERLAY_POLYGON_FILL_OPACITY;
+        const swatchColor = /^#[0-9A-Fa-f]{6}$/.test(color) ? hexToRgbaAlpha(color, fillOpacity) : color;
+        setDynamicStyle(sym, { "background-color": swatchColor, "color": "inherit" });
       }
     } else {
       setDynamicStyle(sym, { "background-color": "#ccc" });
@@ -4262,7 +4275,9 @@ function updateClassificationTableDefaultSymbol(label, color) {
       "background-color": "transparent"
     });
   } else {
-    setDynamicStyle(sym, { "background-color": /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#ccc' });
+    const fillOpacity = symbolKind === 'point' ? OVERLAY_POINT_FILL_OPACITY : OVERLAY_POLYGON_FILL_OPACITY;
+    const swatchColor = /^#[0-9A-Fa-f]{6}$/.test(color) ? hexToRgbaAlpha(color, fillOpacity) : '#ccc';
+    setDynamicStyle(sym, { "background-color": swatchColor });
   }
   tdSym.appendChild(sym);
 
