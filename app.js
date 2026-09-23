@@ -6344,7 +6344,8 @@ window.addEventListener('load', resetInitialScrollPositions);
         octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
 
         octx.drawImage(normalizedMapCanvas, 0, titleH);
-        drawFixedExportOverlaysToCanvas(octx, 0, titleH, normalizedMapCanvas.width, normalizedMapCanvas.height);
+        // Anchor overlays to the actual (possibly letterboxed) map content rect, not the full normalized slot.
+        drawFixedExportOverlaysToCanvas(octx, mapFit.x, titleH + mapFit.y, mapFit.width, mapFit.height);
 
         if (legendBlocks.length) {
           const legendWidth = legendBlocks.reduce((maxWidth, block) => {
