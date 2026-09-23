@@ -6912,7 +6912,9 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = alignedContentOffsetX + Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX);
+        const rawDiscX = alignedContentOffsetX + Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX);
+        // Clamp so a large negative raster shift can't push the box left of the map's visible edge.
+        const discX = Math.max(marginPx, Math.min(rawDiscX, usedCanvasWidth - 120 - marginPx));
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
         let discWidth = Math.max(
           Math.round(120 * uiScale),
