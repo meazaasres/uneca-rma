@@ -5253,7 +5253,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       y: 24
     };
 
-    const scaleFontSize = Math.max(9, Math.min(13, Math.round(exportMapW * 0.008)));
+    const scaleFontSize = Math.max(10, Math.min(14, Math.round(exportMapW * 0.008) + 1));
     const scalePaddingX = Math.max(6, Math.round(scaleFontSize * 0.7));
     const scalePaddingY = Math.max(4, Math.round(scaleFontSize * 0.4));
     const scaleFont = `${scaleFontSize}px Segoe UI, sans-serif`;
@@ -5267,7 +5267,7 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     let disclaimer = null;
     if (disclaimerText) {
-      const discFontSize = Math.max(10, Math.min(14, Math.round(exportMapW * 0.0085)));
+      const discFontSize = Math.max(11, Math.min(15, Math.round(exportMapW * 0.0085) + 1));
       const discPadding = Math.max(6, Math.round(discFontSize * 0.55));
       const discMaxWidth = Math.max(160, Math.min(Math.round(exportMapW * 0.42), Math.round(exportMapW * 0.52)));
       const discLayout = buildWrappedExportTextLayout(disclaimerText, {
@@ -5873,7 +5873,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;display:block !important;width:100% !important}
-        .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
+        .export-map-wrapper .export-disclaimer-clone{background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
         .export-map-wrapper .export-north-arrow-clone{display:flex !important;align-items:center !important;justify-content:center !important;flex-direction:column !important}
         .export-map-wrapper .export-north-arrow-clone .north-arrow-symbol{display:block !important;width:100% !important;text-align:center !important;padding-top:0 !important;line-height:1 !important}
         .export-img{width:100%;height:auto;display:block}
@@ -6796,7 +6796,7 @@ function exportSVG() {
           Math.round(120 * uiScale),
           Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discX - marginPx))
         );
-        const fontSizeDisc = Math.max(8, Math.round(10 * uiScale));
+        const fontSizeDisc = Math.max(9, Math.round(11 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
         const padding = Math.max(4, Math.round(5 * uiScale));
         const maxLines = 5;
@@ -6960,7 +6960,7 @@ function exportSVG() {
         sbTextEl.setAttribute("x", String(sbX + Math.round(sbW / 2)));
         sbTextEl.setAttribute("y", String(sbY + Math.round(sbH / 2) + Math.round(3 * uiScale)));
         sbTextEl.setAttribute("text-anchor", "middle");
-        sbTextEl.setAttribute("font-size", String(Math.max(8, Math.round(8 * uiScale))));
+        sbTextEl.setAttribute("font-size", String(Math.max(9, Math.round(9 * uiScale))));
         sbTextEl.setAttribute("font-family", "Segoe UI, sans-serif");
         sbTextEl.setAttribute("font-weight", "400");
         sbTextEl.setAttribute("fill", "#102a43");
@@ -7181,4 +7181,3 @@ document.addEventListener("DOMContentLoaded", () => {
     console.warn("Some expected import UI elements are missing.");
   }
 });
-
