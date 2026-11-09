@@ -215,9 +215,35 @@ function secureEditablePlainText(targetEl, fallback, onCommit) {
   targetEl.dataset.maxTextLength = String(MAX_EDITABLE_TEXT_LENGTH);
 
   const normalize = () => {
-    const next = sanitizePlainText(targetEl.textContent, fallback).slice(0, MAX_EDITABLE_TEXT_LENGTH);
+    const editing = document.activeElement === targetEl;
+    const normalizeEditingText = (text) =>
+      text.replace(/[\r\n\t]+/g, " ").slice(0, MAX_EDITABLE_TEXT_LENGTH);
+    const next = editing
+      ? normalizeEditingText(targetEl.textContent || "")
+      : sanitizePlainText(targetEl.textContent, fallback).slice(0, MAX_EDITABLE_TEXT_LENGTH);
     if (targetEl.textContent !== next || targetEl.querySelector('*')) {
+      const selection = editing ? window.getSelection() : null;
+      let anchorOffset;
+      let focusOffset;
+      if (selection && selection.rangeCount &&
+          targetEl.contains(selection.anchorNode) && targetEl.contains(selection.focusNode)) {
+        const getOffset = (node, offset) => {
+          const range = document.createRange();
+          range.selectNodeContents(targetEl);
+          range.setEnd(node, offset);
+          return normalizeEditingText(range.toString()).length;
+        };
+        anchorOffset = getOffset(selection.anchorNode, selection.anchorOffset);
+        focusOffset = getOffset(selection.focusNode, selection.focusOffset);
+      }
       targetEl.textContent = next;
+      if (anchorOffset !== undefined && focusOffset !== undefined) {
+        const node = targetEl.firstChild || targetEl;
+        selection.setBaseAndExtent(
+          node, Math.min(anchorOffset, next.length),
+          node, Math.min(focusOffset, next.length)
+        );
+      }
     }
     return next;
   };
@@ -7155,5 +7181,4 @@ document.addEventListener("DOMContentLoaded", () => {
     console.warn("Some expected import UI elements are missing.");
   }
 });
-
 
