@@ -2207,16 +2207,6 @@ function getBottomCenterPosition(el, mapEl, bottomPx = 14, offsetXPx = 0) {
   return { left, top };
 }
 
-function getTopRightPosition(el, mapEl, marginPx = 12) {
-  const mapW = mapEl.clientWidth || 0;
-  const left = Math.max(
-    MAP_SIDE_VISIBLE_INSET_PX,
-    Math.round(mapW - MAP_SIDE_VISIBLE_INSET_PX - el.offsetWidth - marginPx)
-  );
-  const top = Math.max(0, marginPx);
-  return { left, top };
-}
-
 function formatScaleDistance(meters) {
   if (!isFinite(meters) || meters <= 0) return "--";
   if (meters >= 1000) {
@@ -2346,8 +2336,7 @@ makeControlDraggable(scaleControl, (el, mapEl) => {
 });
 placeScaleBarOnMapBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
-  const pos = getTopRightPosition(el, mapEl, 12);
-  return { left: pos.left, top: pos.top + 30 };
+  return { left: MAP_SIDE_VISIBLE_INSET_PX + 56, top: 42 };
 });
 
 // Base layer
@@ -5249,8 +5238,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     const northW = Math.max(34, Math.min(56, Math.round(exportMapW * 0.05)));
     const northH = Math.max(44, Math.min(72, Math.round(northW * 1.35)));
     const northPos = {
-      x: Math.max(12, exportMapW - northW - 24),
-      y: 24
+      x: Math.min(56, Math.max(0, exportMapW - northW)),
+      y: 42
     };
 
     const scaleFontSize = Math.max(10, Math.min(14, Math.round(exportMapW * 0.008) + 1));
