@@ -2211,12 +2211,12 @@ function formatScaleDistance(meters) {
   if (!isFinite(meters) || meters <= 0) return "--";
   if (meters >= 1000) {
     const km = meters / 1000;
-    if (km >= 1000) return `${Math.round(km)} kilometer`;
-    if (km >= 100) return `${km.toFixed(1)} kilometer`;
-    if (km >= 10) return `${km.toFixed(2)} kilometer`;
-    return `${km.toFixed(3)} kilometer`;
+    if (km >= 1000) return `${Math.round(km)} kilometres`;
+    if (km >= 100) return `${km.toFixed(1)} kilometres`;
+    if (km >= 10) return `${km.toFixed(2)} kilometres`;
+    return `${km.toFixed(3)} kilometres`;
   }
-  return `${Math.round(meters)} meter`;
+  return `${Math.round(meters)} metres`;
 }
 
 const ExactScaleControl = L.Control.extend({
@@ -2227,7 +2227,7 @@ const ExactScaleControl = L.Control.extend({
     const label = L.DomUtil.create("div", "exact-scale-label", container);
     const prefix = L.DomUtil.create("span", "exact-scale-prefix", label);
     const value = L.DomUtil.create("span", "exact-scale-value", label);
-    prefix.textContent = "Scale: ";
+    prefix.textContent = "Scale 1: ";
     value.textContent = "--";
     this._value = value;
     L.DomEvent.disableClickPropagation(container);
@@ -5246,7 +5246,7 @@ window.addEventListener('load', resetInitialScrollPositions);
     const scalePaddingX = Math.max(6, Math.round(scaleFontSize * 0.7));
     const scalePaddingY = Math.max(4, Math.round(scaleFontSize * 0.4));
     const scaleFont = `${scaleFontSize}px Segoe UI, sans-serif`;
-    const scaleMeasuredW = measureExportTextWidth(scaleText || 'Scale: --', scaleFont);
+    const scaleMeasuredW = measureExportTextWidth(scaleText || 'Scale 1: --', scaleFont);
     const scaleW = Math.max(90, Math.min(Math.round(exportMapW * 0.28), scaleMeasuredW + (scalePaddingX * 2)));
     const scaleH = Math.max(20, Math.round(scaleFontSize + (scalePaddingY * 2) + 2));
     const scalePos = {
@@ -5298,7 +5298,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         triangleH: Math.max(10, Math.round(northH * 0.24))
       },
       scale: {
-        text: scaleText || 'Scale: --',
+        text: scaleText || 'Scale 1: --',
         x: scalePos.x,
         y: scalePos.y,
         width: scaleW,
@@ -6926,7 +6926,7 @@ function exportSVG() {
         let sbX = Math.max(0, Math.round((((sbRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX) + alignedContentOffsetX);
         let sbY = titleHeightPx + Math.max(0, Math.round((((sbRect.top - mapRect.top) * rawScaleY) - cropY) * mapScaleY));
         sbY -= Math.max(2, Math.round(4 * uiScale));
-        const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale: --";
+        const sbTextRaw = scaleBarEl.querySelector('.exact-scale-label')?.textContent || "Scale 1: --";
         const sbText = String(sbTextRaw).slice(0, MAX_TEXT_LENGTH);
         const sbXMin = alignedContentOffsetX;
         const sbXMax = Math.max(sbXMin, alignedContentOffsetX + usedCanvasWidth - sbW - 2);
