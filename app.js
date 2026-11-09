@@ -2336,7 +2336,9 @@ makeControlDraggable(scaleControl, (el, mapEl) => {
 });
 placeScaleBarOnMapBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
-  return { left: MAP_SIDE_VISIBLE_INSET_PX + 56, top: 42 };
+  const mapWidth = mapEl.clientWidth || 0;
+  const left = Math.max(0, mapWidth - MAP_SIDE_VISIBLE_INSET_PX - el.offsetWidth);
+  return { left, top: 42 };
 });
 
 // Base layer
