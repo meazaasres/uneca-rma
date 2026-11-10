@@ -42,8 +42,9 @@ const EXPORT_CAPTURE_MIN_WIDTH_PX = 640;
 const EXPORT_CAPTURE_MAX_WIDTH_PX = 4096;
 const EXPORT_CAPTURE_MIN_HEIGHT_PX = 480;
 const EXPORT_CAPTURE_MAX_HEIGHT_PX = 4096;
-const OVERLAY_POLYGON_FILL_OPACITY = 1;
+const OVERLAY_POLYGON_FILL_OPACITY = 0.35;
 const OVERLAY_POINT_FILL_OPACITY = 1;
+const OVERLAY_LINE_OPACITY = 1;
 const EXPORT_CAPTURE_PRESETS = {
   "a4-balanced": {
     label: "A4 Balanced (fast)",
@@ -2965,6 +2966,9 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
       setDynamicStyle(sym, { "background-color": "#ccc" });
       console.warn("Invalid color blocked:", color);
     }
+    setDynamicStyle(sym, {
+      opacity: symbolKind === "polygon" ? OVERLAY_POLYGON_FILL_OPACITY : 1
+    });
 
     const lbl = document.createElement('span');
     lbl.textContent = label;
@@ -3033,7 +3037,7 @@ function defaultStyle(feature) {
     ? activeLayerState.defaultSymbolColor
     : (/LineString/.test(t) ? '#007aff' : '#ccc');
   if (/Polygon/.test(t)) return { color: 'transparent', weight: 0, fillColor: defaultColor, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
-  if (/LineString/.test(t)) return { color: defaultColor, weight: getLineWidth() };
+  if (/LineString/.test(t)) return { color: defaultColor, weight: getLineWidth(), opacity: OVERLAY_LINE_OPACITY };
   return { color: '#000', weight: 1, fillColor: defaultColor, fillOpacity: OVERLAY_POINT_FILL_OPACITY };
 }
 
@@ -4057,7 +4061,7 @@ function applyClassification() {
         const idx = uniques.indexOf(f.properties?.[currentAttribute]);
         const col = cols[idx] || '#ccc';
         const t = f.geometry?.type || "";
-        if (/LineString/.test(t)) return { color: col, weight: getLineWidth() };
+        if (/LineString/.test(t)) return { color: col, weight: getLineWidth(), opacity: OVERLAY_LINE_OPACITY };
         if (/Polygon/.test(t)) return { color: 'transparent', weight: 0, fillColor: col, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
         return { color: '#000', weight: 1, fillColor: col, fillOpacity: OVERLAY_POINT_FILL_OPACITY };
       },
@@ -4150,7 +4154,7 @@ function applyClassification() {
       style: f => {
         const col = colorForVal(f.properties?.[currentAttribute]);
         const t = f.geometry?.type || "";
-        if (/LineString/.test(t)) return { color: col, weight: getLineWidth() };
+        if (/LineString/.test(t)) return { color: col, weight: getLineWidth(), opacity: OVERLAY_LINE_OPACITY };
         if (/Polygon/.test(t)) return { color: 'transparent', weight: 0, fillColor: col, fillOpacity: OVERLAY_POLYGON_FILL_OPACITY };
         return { color: '#000', weight: 1, fillColor: col, fillOpacity: OVERLAY_POINT_FILL_OPACITY };
       },
