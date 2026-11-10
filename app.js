@@ -3850,6 +3850,8 @@ async function setActiveLayer(name) {
   geojsonData = obj.geojson;
   layerGroup  = obj.layerGroup;
   currentAttribute = obj.preferredAttribute || null;
+  numericUserColors = obj.isNumeric && Array.isArray(obj.cols) ? obj.cols.slice() : null;
+  categoricalUserColors = !obj.isNumeric && Array.isArray(obj.cols) ? obj.cols.slice() : null;
 
   try {
     if (geojsonData && geojsonData.type === "FeatureCollection") {
@@ -3859,6 +3861,15 @@ async function setActiveLayer(name) {
       updatePointSizeControl();
       updateLineWidthControl();
       updateClassificationOptions();
+      const classType = document.getElementById('classification-type');
+      if (classType && obj.classificationType &&
+          Array.from(classType.options).some((option) => option.value === obj.classificationType)) {
+        classType.value = obj.classificationType;
+      }
+      const numClasses = document.getElementById('num-classes');
+      if (numClasses && Number.isInteger(obj.numClasses)) {
+        numClasses.value = String(obj.numClasses);
+      }
       // Do not force classification; apply only if attribute already selected
       if (currentAttribute) applyClassification();
       else renderDefaultFilteredLayer();
@@ -3986,6 +3997,9 @@ function applyClassification() {
   const sel = document.getElementById('classification-type');
   if (!sel) return;
   const method = sel.value;
+  if (overlayData[currentLayerName]) {
+    overlayData[currentLayerName].classificationType = method;
+  }
 
   if (!currentAttribute) {
     console.warn("No attribute selected for classification");
@@ -4174,6 +4188,7 @@ function applyClassification() {
       overlayData[currentLayerName].vals = breaks;
       overlayData[currentLayerName].cols = cols;
       overlayData[currentLayerName].isNumeric = true;
+      overlayData[currentLayerName].numClasses = n;
       overlayData[currentLayerName].legendGeomType = filteredGeojson?.features?.[0]?.geometry?.type || overlayData[currentLayerName].legendGeomType || 'Polygon';
     }
 
@@ -4467,6 +4482,9 @@ function updateCustomBreaks() {
       } else {
         currentAttribute = selected;
       }
+      if (overlayData[currentLayerName]) {
+        overlayData[currentLayerName].preferredAttribute = currentAttribute;
+      }
       refreshLegendTitle(currentLayerName);
       updateClassificationOptions();
       applyClassification();
@@ -4477,6 +4495,9 @@ function updateCustomBreaks() {
   const classType = document.getElementById('classification-type');
   if (classType) {
     classType.addEventListener('change', () => {
+      if (overlayData[currentLayerName]) {
+        overlayData[currentLayerName].classificationType = classType.value;
+      }
       applyClassification();
     });
   }
