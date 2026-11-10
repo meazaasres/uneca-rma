@@ -471,7 +471,7 @@ function isBlockedPrivateImportHost(hostname) {
   return false;
 }
 
-async function fetchWithLimits(url) {
+async function fetchWithLimits(url, validateRemoteUrl = false) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REMOTE_IMPORT_TIMEOUT_MS);
   const maxRemoteMb = Math.round(MAX_REMOTE_IMPORT_BYTES / (1024 * 1024));
@@ -481,10 +481,15 @@ async function fetchWithLimits(url) {
       headers: { "Accept": "*/*" },
       mode: "cors",
       credentials: "omit",
+      redirect: "error",
       signal: controller.signal
     });
 
     if (!response.ok) throw new Error("Network error: " + response.status);
+    const finalUrl = response.url || url;
+    if (validateRemoteUrl) {
+      assertFinalImportUrlAllowed(finalUrl);
+    }
 
     const contentLenHeader = response.headers.get("Content-Length");
     const contentLen = contentLenHeader ? Number(contentLenHeader) : 0;
@@ -497,7 +502,11 @@ async function fetchWithLimits(url) {
       if (textFallback.length > MAX_REMOTE_IMPORT_BYTES) {
         throw new Error(`Remote file too large (max ${maxRemoteMb} MB).`);
       }
-      return { text: textFallback, contentType: response.headers.get("Content-Type") || "" };
+      return {
+        text: textFallback,
+        contentType: response.headers.get("Content-Type") || "",
+        finalUrl
+      };
     }
 
     const reader = response.body.getReader();
@@ -522,7 +531,7 @@ async function fetchWithLimits(url) {
     return {
       text,
       contentType: response.headers.get("Content-Type") || "",
-      finalUrl: response.url || url
+      finalUrl
     };
   } catch (err) {
     if (err && err.name === "AbortError") {
@@ -2880,7 +2889,14 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
     humanizeLabel(layerName)
   );
   if (overlayData[layerName]) {
-    overlayData[layerName].legendTitle = sanitizePlainText(overlayData[layerName].legendTitle, defaultLegendTitle);
+    const savedTitle = sanitizePlainText(overlayData[layerName].legendTitle, "");
+    const savedDefaultTitle = sanitizePlainText(overlayData[layerName].legendTitleDefault, "");
+    if (!savedTitle || savedTitle === savedDefaultTitle) {
+      overlayData[layerName].legendTitle = defaultLegendTitle;
+    } else {
+      overlayData[layerName].legendTitle = savedTitle;
+    }
+    overlayData[layerName].legendTitleDefault = defaultLegendTitle;
   }
 
   const header = document.createElement('div');
@@ -2891,7 +2907,10 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
   header.spellcheck = false;
   header.textContent = overlayData[layerName]?.legendTitle || defaultLegendTitle;
   secureEditablePlainText(header, defaultLegendTitle, (next) => {
-    if (overlayData[layerName]) overlayData[layerName].legendTitle = next;
+    if (overlayData[layerName]) {
+      overlayData[layerName].legendTitle = next;
+      overlayData[layerName].legendTitleDefault = "";
+    }
   });
   block.appendChild(header);
 
@@ -3492,7 +3511,7 @@ async function importUrl(rawUrl) {
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
     const { parsed, ext: requestedExt } = validateImportUrl(rawUrl);
-    const fetched = await fetchWithLimits(parsed.href);
+    const fetched = await fetchWithLimits(parsed.href, true);
     const finalParsed = assertFinalImportUrlAllowed(fetched.finalUrl);
     const ext = resolveRemoteImportExtension(requestedExt, finalParsed?.pathname || fetched.finalUrl || "", fetched.contentType);
     if (!ext) {
