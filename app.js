@@ -2869,6 +2869,27 @@ function getLegendSymbolKindFromGeometryType(geometryType) {
   return "polygon";
 }
 
+function getDefaultLegendTitle(layerName) {
+  return sanitizePlainText(
+    `${humanizeLabel(layerName)}: ${humanizeLabel(currentAttribute || "")}`,
+    humanizeLabel(layerName)
+  );
+}
+
+function refreshLegendTitle(layerName) {
+  const title = getDefaultLegendTitle(layerName);
+  const state = overlayData[layerName];
+  if (state) {
+    state.legendTitle = title;
+    state.legendTitleDefault = title;
+  }
+
+  const safeId = 'legend-' + String(layerName).replace(/[^\w\-]/g, "_");
+  const block = document.getElementById(safeId);
+  const header = block ? block.querySelector(".legend-header") : null;
+  if (header) header.textContent = title;
+}
+
 function updateLegend(layerName, vals, cols, isNumeric, geojson) {
   const leg = document.getElementById('legend-items');
   if (!leg) return;
@@ -2884,10 +2905,7 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
 
   block.textContent = "";
 
-  const defaultLegendTitle = sanitizePlainText(
-    `${humanizeLabel(layerName)}: ${humanizeLabel(currentAttribute || "")}`,
-    humanizeLabel(layerName)
-  );
+  const defaultLegendTitle = getDefaultLegendTitle(layerName);
   if (overlayData[layerName]) {
     const savedTitle = sanitizePlainText(overlayData[layerName].legendTitle, "");
     const savedDefaultTitle = sanitizePlainText(overlayData[layerName].legendTitleDefault, "");
@@ -4449,6 +4467,7 @@ function updateCustomBreaks() {
       } else {
         currentAttribute = selected;
       }
+      refreshLegendTitle(currentLayerName);
       updateClassificationOptions();
       applyClassification();
     });
