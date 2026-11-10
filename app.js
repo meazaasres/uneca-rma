@@ -4353,9 +4353,6 @@ function updateClassificationTableCategorical(uniques, cols) {
     inputCol.addEventListener('change', () => {
       cols[i] = inputCol.value;
       categoricalUserColors = cols.slice();
-      if (overlayData[currentLayerName]) {
-        overlayData[currentLayerName].cols = cols.slice();
-      }
       applyClassification();
     });
     tdCol.append(inputCol);
