@@ -2955,19 +2955,22 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
     else if (symbolKind === 'point') sym.classList.add('legend-sym-point');
     else sym.classList.add('legend-sym-polygon');
 
+    const symbolStyle = {
+      opacity: symbolKind === "polygon" ? OVERLAY_POLYGON_FILL_OPACITY : 1
+    };
     if (/^#[0-9A-Fa-f]{3,6}$/.test(color) || /^[a-zA-Z]+$/.test(color)) {
       if (symbolKind === 'line') {
-        setDynamicStyle(sym, { "color": color, "background-color": "transparent" });
+        symbolStyle.color = color;
+        symbolStyle["background-color"] = "transparent";
       } else {
-        setDynamicStyle(sym, { "background-color": color, "color": "inherit" });
+        symbolStyle["background-color"] = color;
+        symbolStyle.color = "inherit";
       }
     } else {
-      setDynamicStyle(sym, { "background-color": "#ccc" });
+      symbolStyle["background-color"] = "#ccc";
       console.warn("Invalid color blocked:", color);
     }
-    setDynamicStyle(sym, {
-      opacity: symbolKind === "polygon" ? OVERLAY_POLYGON_FILL_OPACITY : 0.35
-    });
+    setDynamicStyle(sym, symbolStyle);
 
     const lbl = document.createElement('span');
     lbl.textContent = label;
