@@ -43,7 +43,7 @@ const EXPORT_CAPTURE_MAX_WIDTH_PX = 4096;
 const EXPORT_CAPTURE_MIN_HEIGHT_PX = 480;
 const EXPORT_CAPTURE_MAX_HEIGHT_PX = 4096;
 const OVERLAY_POLYGON_FILL_OPACITY = 0.35;
-const OVERLAY_POINT_FILL_OPACITY = 0.55;
+const OVERLAY_POINT_FILL_OPACITY = 1;
 const EXPORT_CAPTURE_PRESETS = {
   "a4-balanced": {
     label: "A4 Balanced (fast)",
@@ -2965,6 +2965,9 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
       setDynamicStyle(sym, { "background-color": "#ccc" });
       console.warn("Invalid color blocked:", color);
     }
+    setDynamicStyle(sym, {
+      opacity: symbolKind === "polygon" ? OVERLAY_POLYGON_FILL_OPACITY : 0.35
+    });
 
     const lbl = document.createElement('span');
     lbl.textContent = label;
