@@ -2991,6 +2991,44 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
 }
 //Overlay Add/Remove Wiring
 // --- Overlay add/remove legend wiring ---
+function getVisibleOverlayLayerName(excludedName = "") {
+  const candidates = [
+    ...layerOrder,
+    ...Object.keys(overlayData)
+  ];
+  return candidates.find((name, index) =>
+    name &&
+    name !== excludedName &&
+    candidates.indexOf(name) === index &&
+    overlayData[name]?.layerGroup &&
+    map.hasLayer(overlayData[name].layerGroup)
+  ) || null;
+}
+
+function clearActiveLayerUi() {
+  currentLayerName = null;
+  geojsonData = null;
+  layerGroup = null;
+  currentAttribute = null;
+  numericUserColors = null;
+  categoricalUserColors = null;
+
+  const layerSel = document.getElementById('layer-select');
+  if (layerSel) layerSel.value = "";
+  const attrSel = document.getElementById('attribute-select');
+  if (attrSel) attrSel.textContent = "";
+  hideRow('attribute-select-col');
+  hideRow('classification-type-col');
+  hideRow('num-classes-col');
+
+  const table = document.getElementById('table-container');
+  if (table) setDynamicStyle(table, { display: "none" });
+  const thead = document.querySelector('#table-container thead');
+  const tbody = document.getElementById('classification-table');
+  if (thead) thead.textContent = "";
+  if (tbody) tbody.textContent = "";
+}
+
 map.on('overlayadd', (e) => {
   const name = Object.keys(overlayData).find(
     key => overlayData[key].layerGroup === e.layer
@@ -3003,6 +3041,11 @@ map.on('overlayadd', (e) => {
   updateLegend(name, data.vals, data.cols, data.isNumeric, data.geojson);
   applyLayerStackOrder();
   reorderLegendBlocks();
+  if (!currentLayerName ||
+      !overlayData[currentLayerName]?.layerGroup ||
+      !map.hasLayer(overlayData[currentLayerName].layerGroup)) {
+    setActiveLayer(name);
+  }
 });
 
 map.on('overlayremove', (e) => {
@@ -3014,6 +3057,11 @@ map.on('overlayremove', (e) => {
   const block = document.getElementById('legend-' + sanitizeId(name));
   if (block) block.remove();
   reorderLegendBlocks();
+  if (currentLayerName === name) {
+    const nextName = getVisibleOverlayLayerName(name);
+    if (nextName) setActiveLayer(nextName);
+    else clearActiveLayerUi();
+  }
 });
 //Styling, Defaults, and Live Refresh Helpers
 // --- Default styles (use getLineWidth/getPointRadius) ---
@@ -3928,6 +3976,12 @@ function populateAttributeList(data) {
     if (currentAttribute && k === currentAttribute) o.selected = true;
     sel.appendChild(o);
   });
+  if (currentAttribute) {
+    const selectedKey = attributeKeys.find((key) => key === currentAttribute);
+    if (selectedKey !== undefined) {
+      sel.value = String(selectedKey).replace(/[^\w\-]/g, "_");
+    }
+  }
 
   showRow(wrap);
 }
