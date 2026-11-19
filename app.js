@@ -3272,12 +3272,19 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   query.searchParams.set("outSR", "4326");
   query.searchParams.set("f", "geojson");
   const boundaryPayload = await fetchJsonWithLimits(query.href, "UN country boundaries");
-  const boundaryFeatures = Array.isArray(boundaryPayload?.features) ? boundaryPayload.features : [];
-  const boundaries = boundaryFeatures.map(feature => ({
-    country: sanitizePlainText(feature?.properties?.ROMNAM || feature?.properties?.ISO3CD || ""),
-    iso3: normalizeIsoJoinValue(feature?.properties?.ISO3CD || ""),
-    geometry: feature?.geometry || null
-  })).filter(boundary => boundary.iso3 && boundary.geometry);
+  if (!Array.isArray(boundaryPayload?.features)) {
+    const detail = sanitizePlainText(boundaryPayload?.error?.message || "");
+    throw new Error(`UN country boundaries response is invalid.${detail ? ` ${detail}` : ""}`);
+  }
+  const boundaries = boundaryPayload.features.map(feature => {
+    const properties = feature?.properties || {};
+    const iso3 = firstNonEmptyValue(properties, ["ISO3CD", "iso3cd"]);
+    return {
+      country: firstNonEmptyValue(properties, ["ROMNAM", "romnam"]) || iso3,
+      iso3: normalizeIsoJoinValue(iso3),
+      geometry: feature?.geometry || null
+    };
+  }).filter(boundary => boundary.iso3 && boundary.geometry);
   const codeToCountry = new Map();
   (Array.isArray(referenceRows) ? referenceRows : []).forEach(row => {
     const code = normalizeIsoJoinValue(row?.iso3 || "");
