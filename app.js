@@ -3256,11 +3256,14 @@ function chooseCsvThematicKey(rows, keys, isoKey) {
 
 async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   if (!csvGeojson || !csvInfo) return null;
-  const referenceRows = await loadCountryReferenceRows();
   const requestedIso3 = Array.from(new Set(csvGeojson.features
     .map(feature => normalizeIsoJoinValue(feature?.properties?.[csvInfo.isoKey]))
     .filter(value => /^[A-Z]{3}$/.test(value))));
-  if (!requestedIso3.length) return null;
+  const unmatchedValues = new Set(csvInfo.unmatchedIsoValues || []);
+  if (!requestedIso3.length) {
+    return { type: "FeatureCollection", features: [], __rmaCsvImport: { unmatchedIsoValues: Array.from(unmatchedValues) } };
+  }
+  const referenceRows = await loadCountryReferenceRows();
   const where = `ISO3CD IN (${requestedIso3.map(value => `'${value}'`).join(",")})`;
   const query = new URL(UN_COUNTRY_BOUNDARY_QUERY_URL);
   query.searchParams.set("where", where);
@@ -3287,19 +3290,23 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     if (code) valuesByCode.set(code, properties);
   });
 
+  const matchedCodes = new Set();
   const features = boundaries.map(boundary => {
     const boundaryCode = normalizeCsvCountryCode(boundary?.iso3 || "", "iso3");
     const boundaryCountry = normalizeCountryName(boundary?.country || "");
-    let csvProperties = boundaryCode ? valuesByCode.get(boundaryCode) : null;
+    let matchedCode = boundaryCode;
+    let csvProperties = matchedCode ? valuesByCode.get(matchedCode) : null;
     if (!csvProperties && boundaryCountry) {
       for (const [code, country] of codeToCountry) {
         if (country === boundaryCountry && valuesByCode.has(code)) {
           csvProperties = valuesByCode.get(code);
+          matchedCode = code;
           break;
         }
       }
     }
     if (!csvProperties) return null;
+    matchedCodes.add(matchedCode);
     const properties = Object.create(null);
     properties.country = boundary.country;
     properties.iso2 = boundary.iso2;
@@ -3315,11 +3322,14 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     };
   }).filter(Boolean);
 
-  if (!features.length) return null;
+  requestedIso3.forEach(code => {
+    if (!matchedCodes.has(code)) unmatchedValues.add(code);
+  });
   return {
     type: "FeatureCollection",
     features,
     __rmaCsvImport: {
+      unmatchedIsoValues: Array.from(unmatchedValues),
       valueKeys: csvInfo.valueKeys,
       preferredAttribute: csvInfo.preferredAttribute || ""
     }
@@ -3407,22 +3417,20 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   if (!hasCoordinates && !isoKey) {
     throw new Error("CSV must have latitude/longitude columns or an ISO3 code column.");
   }
-  const isoFamily = isoKey ? getIsoCodeFamily(isoKey) : "";
   const resolvedIsoFamily = isoKey ? "iso3" : "";
-  if (!hasCoordinates && isoKey) {
-    const invalidIso3 = rows.some(row => {
-      const value = normalizeIsoJoinValue(row?.[isoKey]);
-      return !/^[A-Z]{3}$/.test(value);
-    });
-    if (invalidIso3) {
-      throw new Error("CSV country values must be valid three-letter ISO3 codes.");
-    }
-  }
+  const unmatchedIsoValues = new Set();
 
   const features = rows.map((r, rowIdx) => {
     if (!hasCoordinates && isoKey) {
-      const iso = sanitizePlainText(r?.[isoKey]);
-      if (!iso) return null;
+      const rawIso = r?.[isoKey] ?? "";
+      if (typeof rawIso === "string" && rawIso.length > MAX_CSV_CELL_LENGTH) {
+        throw new Error(`CSV cell in column "${String(isoKey)}" is too long.`);
+      }
+      const iso = normalizeIsoJoinValue(rawIso);
+      if (!/^[A-Z]{3}$/.test(iso)) {
+        unmatchedIsoValues.add(String(rawIso).trim() || "(empty)");
+        return null;
+      }
       return {
         type: "Feature",
         geometry: null,
@@ -3448,6 +3456,7 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
     geojson.__rmaCsvImport = {
       isoKey,
       isoFamily: resolvedIsoFamily,
+      unmatchedIsoValues: Array.from(unmatchedIsoValues),
       valueKeys: keys.filter(key => key !== isoKey),
       preferredAttribute: chooseCsvThematicKey(rows, keys, isoKey)
     };
@@ -3560,8 +3569,11 @@ async function importFile(file) {
 
     if (ext === ".csv" && geojson.__rmaCsvImport) {
       const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
-      if (!countryGeojson) {
-        throw new Error("No CSV ISO codes matched the global country reference.");
+      if (!countryGeojson.features.length) {
+        const message = "No CSV ISO codes matched the global country boundaries.";
+        if (fileNameEl) fileNameEl.textContent = "Error: " + message;
+        showPopup(message, "error");
+        return { codes: countryGeojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: 0 };
       }
       geojson = countryGeojson;
     }
@@ -3569,6 +3581,9 @@ async function importFile(file) {
     const safeName = await addImportedLayer(geojson, file.name, "Imported file");
     if (fileNameEl) fileNameEl.textContent = safeName;
     showPopup(`File "${safeName}" uploaded successfully`, "success");
+    if (geojson.__rmaCsvImport?.unmatchedIsoValues?.length) {
+      return { codes: geojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: geojson.features.length };
+    }
   } finally {
     hideLoading();
   }
@@ -3598,8 +3613,11 @@ async function importUrl(rawUrl) {
     let geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     if (ext === ".csv" && geojson.__rmaCsvImport) {
       const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
-      if (!countryGeojson) {
-        throw new Error("No CSV ISO codes matched the global country reference.");
+      if (!countryGeojson.features.length) {
+        const message = "No CSV ISO codes matched the global country boundaries.";
+        if (fileNameEl) fileNameEl.textContent = "Error: " + message;
+        showPopup(message, "error");
+        return { codes: countryGeojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: 0 };
       }
       geojson = countryGeojson;
     }
@@ -3608,6 +3626,9 @@ async function importUrl(rawUrl) {
     if (urlInput) urlInput.value = "";
     if (fileNameEl) fileNameEl.textContent = safeName;
     showPopup(`Layer "${safeName}" added successfully`, "success");
+    if (geojson.__rmaCsvImport?.unmatchedIsoValues?.length) {
+      return { codes: geojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: geojson.features.length };
+    }
   } finally {
     hideLoading();
   }
@@ -3620,7 +3641,8 @@ if (fileUploadEl) {
     const files = Array.from(evt?.target?.files || []);
     for (const file of files) {
       try {
-        await importFile(file);
+        const unmatched = await importFile(file);
+        if (unmatched) await showUnmatchedCodesModal(unmatched.codes, unmatched.matchedCount);
       } catch (err) {
         console.error("File import error:", err);
         showPopup(String(err?.message || "Error loading file"), "error");
@@ -3637,7 +3659,8 @@ if (addGeojsonUrlEl) {
   addGeojsonUrlEl.addEventListener("click", async function() {
     const rawUrl = document.getElementById("geojson-url")?.value.trim() || "";
     try {
-      await importUrl(rawUrl);
+      const unmatched = await importUrl(rawUrl);
+      if (unmatched) await showUnmatchedCodesModal(unmatched.codes, unmatched.matchedCount);
     } catch (err) {
       console.error("Data load error:", err);
       showPopup("Error loading data: " + String(err?.message || err), "error");
@@ -4698,6 +4721,66 @@ function showPopup(msg, type = "error") {
   setDynamicStyle(popup, { display: "block" });
 
   setTimeout(() => { setDynamicStyle(popup, { display: "none" }); }, 6000);
+}
+
+function showUnmatchedCodesModal(codes, matchedCount) {
+  const overlay = document.getElementById("unmatched-codes-overlay");
+  const textarea = document.getElementById("unmatched-codes-textarea");
+  const description = document.getElementById("unmatched-codes-desc");
+  const status = document.getElementById("unmatched-codes-status");
+  const copyButton = document.getElementById("unmatched-codes-copy");
+  const closeButton = document.getElementById("unmatched-codes-close");
+  const dismissButton = document.getElementById("unmatched-codes-dismiss");
+  if (!overlay || !textarea || !description || !status || !copyButton || !closeButton || !dismissButton) {
+    throw new Error("Unmatched ISO3 codes dialog is unavailable.");
+  }
+
+  const previousFocus = document.activeElement;
+  textarea.value = codes.join("\n");
+  description.textContent = `Mapped ${matchedCount} country polygon(s). ${codes.length} distinct value(s) could not be matched. Correct or review the list below.`;
+  status.textContent = "";
+  overlay.classList.add("open");
+  textarea.focus();
+
+  return new Promise(resolve => {
+    const close = () => {
+      overlay.classList.remove("open");
+      closeButton.removeEventListener("click", close);
+      dismissButton.removeEventListener("click", close);
+      copyButton.removeEventListener("click", copy);
+      overlay.removeEventListener("click", dismissOnBackdrop);
+      document.removeEventListener("keydown", dismissOnEscape);
+      if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
+      resolve();
+    };
+    const dismissOnBackdrop = event => {
+      if (event.target === overlay) close();
+    };
+    const dismissOnEscape = event => {
+      if (event.key === "Escape") close();
+    };
+    const copy = async () => {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(textarea.value);
+        } else {
+          textarea.select();
+          if (!document.execCommand("copy")) throw new Error("Copy command failed.");
+        }
+        status.textContent = "Copied to clipboard.";
+      } catch (error) {
+        console.warn("Could not copy unmatched ISO3 values:", error);
+        status.textContent = "Could not copy automatically. Select and copy the list manually.";
+        textarea.focus();
+        textarea.select();
+      }
+    };
+    closeButton.addEventListener("click", close);
+    dismissButton.addEventListener("click", close);
+    copyButton.addEventListener("click", copy);
+    overlay.addEventListener("click", dismissOnBackdrop);
+    document.addEventListener("keydown", dismissOnEscape);
+  });
 }
 
 // --- Sidebar toggle helpers (buttons cached) ---
