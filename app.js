@@ -85,7 +85,7 @@ const UN_COUNTRY_BOUNDARY_QUERY_URL = "https://geoservices.un.org/arcgis/rest/se
 const WORLD_COUNTRIES_REMOTE_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/dist/countries.json";
 const MIN_REFERENCE_COUNTRY_COUNT = 150;
 // Minimal global state (kept intentionally small)
-let overlayData = {};
+let overlayData = Object.create(null);
 let currentLayerName = null;
 let geojsonData = null;
 let geojsonLayer = null;
@@ -102,6 +102,7 @@ let selectedCountryValues = new Set();
 let worldBoundaryIndex = null;
 let worldBoundaryIndexPromise = null;
 let worldCountriesByContinent = null;
+let filterInferenceUnavailable = false;
 
 // Best-effort clickjacking mitigation for static hosting where CSP headers
 // may not be fully controllable at the web server layer.
@@ -149,19 +150,17 @@ function upsertDynamicRule(el, declarations) {
   if (!sheet || !declarations) return;
   const id = ensureDynamicRuleId(el);
   const selector = `[data-dyn-id="${id}"]`;
-  const cssText = `${selector}{${declarations}}`;
   try {
-    if (sheet.cssRules && sheet.cssRules.length) {
-      for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
-        const rule = sheet.cssRules[i];
-        if (rule && rule.selectorText === selector) {
-          sheet.deleteRule(i);
-          break;
-        }
-      }
+    let rule = Array.from(sheet.cssRules || []).find(item => item.selectorText === selector);
+    if (!rule) {
+      const idx = sheet.insertRule(`${selector}{}`, sheet.cssRules.length);
+      rule = sheet.cssRules[idx];
     }
-    const idx = sheet.cssRules ? sheet.cssRules.length : 0;
-    sheet.insertRule(cssText, idx);
+    Object.keys(declarations).forEach(key => {
+      const value = declarations[key];
+      if (value == null || value === "") rule.style.removeProperty(key);
+      else rule.style.setProperty(key, String(value));
+    });
   } catch (e) {
     console.warn("Failed to update dynamic CSS rule:", e);
   }
@@ -169,13 +168,7 @@ function upsertDynamicRule(el, declarations) {
 
 function setDynamicStyle(el, styleObj) {
   if (!el || !styleObj) return;
-  const parts = [];
-  Object.keys(styleObj).forEach(k => {
-    const v = styleObj[k];
-    if (v == null || v === "") return;
-    parts.push(`${k}:${v}`);
-  });
-  if (parts.length) upsertDynamicRule(el, parts.join(";"));
+  upsertDynamicRule(el, styleObj);
 }
 
 function sanitizeId(str) {
@@ -297,6 +290,17 @@ function sanitizeName(name) {
       .replace(/_/g, " ")
   );
   return safe || ("Layer " + Date.now());
+}
+
+function uniqueLayerName(name) {
+  const existingNames = Object.keys(overlayData);
+  const existingIds = new Set(existingNames.map(sanitizeId));
+  let candidate = name;
+  let suffix = 2;
+  while (Object.prototype.hasOwnProperty.call(overlayData, candidate) || existingIds.has(sanitizeId(candidate))) {
+    candidate = `${name} (${suffix++})`;
+  }
+  return candidate;
 }
 
 function countVerticesInCoordinates(coords) {
@@ -983,11 +987,10 @@ function isLikelyCsvPayload(text) {
   if (lines.length < 2) return false;
   const header = String(lines[0] || "").toLowerCase();
   const hasDelimiter = /,|;|\t/.test(header);
-  const hasLatField = /(latitude|lat)\b/.test(header);
-  const hasLonField = /(longitude|lon|lng|long)\b/.test(header);
   const headerCells = header.split(/[,;\t]/).map(value => value.trim());
+  const { latKeys, lonKeys } = getCsvCoordinateKeys(headerCells);
   const hasIso3Field = !!getCsvIsoKey(headerCells);
-  return hasDelimiter && ((hasLatField && hasLonField) || hasIso3Field);
+  return hasDelimiter && ((latKeys.length && lonKeys.length) || hasIso3Field);
 }
 
 function assertCsvPayloadLooksSafe(csvText, sourceLabel = "CSV") {
@@ -1028,10 +1031,12 @@ function assertCsvPayloadLooksSafe(csvText, sourceLabel = "CSV") {
     throw new Error(`${sourceLabel} has too many columns (${headerCells.length}; max ${MAX_CSV_COLUMNS}).`);
   }
 
-  const hasLatField = headerCells.some(v => /(latitude|lat)\b/i.test(v));
-  const hasLonField = headerCells.some(v => /(longitude|lon|lng|long)\b/i.test(v));
+  const { latKeys, lonKeys } = getCsvCoordinateKeys(headerCells);
   const hasIso3Field = !!getCsvIsoKey(headerCells);
-  if (!((hasLatField && hasLonField) || hasIso3Field)) {
+  if (latKeys.length > 1 || lonKeys.length > 1) {
+    throw new Error(`${sourceLabel} has ambiguous latitude or longitude columns. Keep one of each.`);
+  }
+  if (!((latKeys.length && lonKeys.length) || hasIso3Field)) {
     throw new Error(`${sourceLabel} must have latitude/longitude columns or an ISO3 code column.`);
   }
 }
@@ -1555,6 +1560,7 @@ async function loadWorldBoundaryIndex() {
         iso2: sanitizePlainText(metadata.iso2 || f?.properties?.ISO2CD || ""),
         iso3: sanitizePlainText(metadata.iso3 || boundaryIso3),
         m49: sanitizePlainText(metadata.m49 || ""),
+        aliases: [country, metadata.country, metadata.officialName, ...(metadata.aliases || [])].filter(Boolean),
         bbox: bboxFromCoordinates(f?.geometry?.coordinates),
         geometry: f?.geometry || null
       };
@@ -1588,6 +1594,25 @@ async function ensureSpatialCountryContinentFields(data) {
   const boundaryIndex = await loadWorldBoundaryIndex();
   if (!Array.isArray(boundaryIndex) || !boundaryIndex.length) return false;
 
+  const countryLookup = new Map();
+  boundaryIndex.forEach(entry => {
+    [entry.country, entry.iso2, entry.iso3, ...(entry.aliases || [])].forEach(value => {
+      const key = normalizeCountryName(value);
+      if (!key) return;
+      if (countryLookup.has(key) && countryLookup.get(key)?.country !== entry.country) {
+        countryLookup.set(key, null);
+      } else if (!countryLookup.has(key)) {
+        countryLookup.set(key, entry);
+      }
+    });
+  });
+  const countryKeys = new Set([
+    "country", "countryname", "countrynameen", "cntryname", "admin", "adm0name", "admin0name",
+    "countryiso3code", "iso3", "isoa3", "isoalpha3", "iso3cd", "iso2", "isoa2", "isoalpha2"
+  ]);
+  const continentKeys = new Set(["continent", "continentname", "cont", "contcd", "continentcode", "contname"]);
+  const continentTokens = new Set(["af", "afr", "africa", "as", "asi", "asia", "eu", "eur", "europe", "na", "namerica", "northamerica", "sa", "samerica", "southamerica", "oc", "oce", "oceania", "an", "antarctica"]);
+
   let tagged = 0;
   feats.forEach(f => {
     if (!f.properties) f.properties = {};
@@ -1606,11 +1631,26 @@ async function ensureSpatialCountryContinentFields(data) {
       hit = candidates.find(c => pointInGeometry([x, y], c.geometry));
       if (hit) break;
     }
-    if (!hit) return;
-
-    f.properties.__rma_country = hit.country;
-    if (hit.continent) f.properties.__rma_continent_spatial = hit.continent;
-    tagged++;
+    if (!hit) {
+      const sourceCountry = Object.keys(f.properties)
+        .filter(key => countryKeys.has(normKey(key)))
+        .map(key => countryLookup.get(normalizeCountryName(f.properties[key])))
+        .find(Boolean);
+      if (sourceCountry) hit = sourceCountry;
+    }
+    if (hit) {
+      f.properties.__rma_country = hit.country;
+      if (hit.continent) f.properties.__rma_continent_spatial = hit.continent;
+    } else {
+      const sourceContinentKey = Object.keys(f.properties).find(key =>
+        continentKeys.has(normKey(key)) && continentTokens.has(normKey(f.properties[key]))
+      );
+      if (sourceContinentKey) {
+        const sourceContinent = f.properties[sourceContinentKey];
+        f.properties.__rma_continent_spatial = continentLabel(sourceContinent);
+      }
+    }
+    if (f.properties.__rma_country || f.properties.__rma_continent_spatial) tagged++;
   });
 
   return tagged > 0;
@@ -1734,6 +1774,20 @@ function getFilteredFeatures(data) {
 }
 
 function getFilteredGeojson(data) {
+  const warning = document.getElementById("filter-warning");
+  if (warning) {
+    const filteringContinent = !!activeContinentField && selectedContinentValues.size > 0;
+    const filteringCountry = !!activeCountryField && selectedCountryValues.size > 0;
+    const features = Array.isArray(data?.features) ? data.features : [];
+    const unassigned = features.filter(feature =>
+      (filteringContinent && !sanitizePlainText(feature?.properties?.[activeContinentField])) ||
+      (filteringCountry && !sanitizePlainText(feature?.properties?.[activeCountryField]))
+    ).length;
+    const messages = [];
+    if (filterInferenceUnavailable) messages.push("Spatial country matching is unavailable; source attributes are used where available.");
+    if (unassigned) messages.push(`${unassigned} feature(s) without a required location are excluded by the current filter.`);
+    warning.textContent = messages.join(" ");
+  }
   return { ...(data || {}), features: getFilteredFeatures(data) };
 }
 // Add a Secure Popup Binding
@@ -3033,6 +3087,8 @@ function clearActiveLayerUi() {
   const tbody = document.getElementById('classification-table');
   if (thead) thead.textContent = "";
   if (tbody) tbody.textContent = "";
+  const warning = document.getElementById("filter-warning");
+  if (warning) warning.textContent = "";
 }
 
 map.on('overlayadd', (e) => {
@@ -3203,6 +3259,15 @@ function getCsvIsoKey(keys) {
     const normalized = normKey(key);
     return /^(?:iso3|iso3code|isoalpha3|isoalpha3code|iso3166alpha3|countryiso3code)$/.test(normalized);
   }) || null;
+}
+
+function getCsvCoordinateKeys(keys) {
+  const latNames = new Set(["lat", "latitude"]);
+  const lonNames = new Set(["lon", "lng", "long", "longitude"]);
+  return {
+    latKeys: (keys || []).filter(key => latNames.has(normKey(key))),
+    lonKeys: (keys || []).filter(key => lonNames.has(normKey(key)))
+  };
 }
 
 function getIsoCodeFamily(key) {
@@ -3417,8 +3482,12 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
       throw new Error(`CSV contains a blocked column name: ${String(key)}`);
     }
   });
-  const latKey = keys.find(k => /lat/i.test(String(k)));
-  const lonKey = keys.find(k => /lon|lng|long/i.test(String(k)));
+  const { latKeys, lonKeys } = getCsvCoordinateKeys(keys);
+  if (latKeys.length > 1 || lonKeys.length > 1) {
+    throw new Error("CSV has ambiguous latitude or longitude columns. Keep one of each.");
+  }
+  const latKey = latKeys[0];
+  const lonKey = lonKeys[0];
   const isoKey = getCsvIsoKey(keys);
   const hasCoordinates = !!(latKey && lonKey);
   if (!hasCoordinates && !isoKey) {
@@ -3496,7 +3565,7 @@ async function addImportedLayer(geojson, rawName, sourceLabel) {
     throw new Error("Import canceled by user.");
   }
 
-  const safeName = sanitizeName(rawName);
+  const safeName = uniqueLayerName(sanitizeName(rawName));
   const fg = L.featureGroup().addTo(map);
   geojsonLayer = L.geoJSON(geojson, {
     renderer: overlayRenderer,
@@ -3700,7 +3769,8 @@ function refreshLayerSelector() {
     sel.appendChild(o);
   });
 
-  if (orderedNames.length > 0) sel.value = orderedNames[0];
+  if (currentLayerName && orderedNames.includes(currentLayerName)) sel.value = currentLayerName;
+  else if (orderedNames.length > 0) sel.value = orderedNames[0];
   Object.keys(overlayData).length ? showRow(wrap) : hideRow(wrap);
 }
 
@@ -3824,10 +3894,13 @@ async function populateFilterControls(data) {
   if (!contSel) return;
 
   let fields = detectFilterFields(data);
-  activeContinentField = fields.continentKey || ensureSyntheticContinentField(data);
+  activeContinentField = fields.continentKey;
   activeCountryField = fields.countryKey;
+  let inferenceUnavailable = false;
   try {
     const hasSpatial = await ensureSpatialCountryContinentFields(data);
+    if (geojsonData !== data) return;
+    inferenceUnavailable = !worldBoundaryIndex || !worldBoundaryIndex.length;
     if (hasSpatial) {
       // Prefer schema-independent spatial fields when available so continent/country
       // options are consistent across CSV/GeoJSON/SHP and not limited by source schema.
@@ -3835,12 +3908,15 @@ async function populateFilterControls(data) {
       activeCountryField = "__rma_country";
     } else if (!activeContinentField || !activeCountryField) {
       fields = detectFilterFields(data);
-      activeContinentField = fields.continentKey || ensureSyntheticContinentField(data);
+      activeContinentField = fields.continentKey;
       activeCountryField = fields.countryKey;
     }
   } catch (e) {
     console.warn("Spatial country/continent inference unavailable:", e);
+    if (geojsonData !== data) return;
+    inferenceUnavailable = true;
   }
+  filterInferenceUnavailable = inferenceUnavailable;
   selectedContinentValues = new Set();
   selectedCountryValues = new Set();
 
@@ -4105,7 +4181,31 @@ function applyClassification() {
 
   if (!vals.length) {
     console.warn("No valid values found for classification");
-    refreshStyles();
+    if (layerGroup && typeof layerGroup.clearLayers === 'function') {
+      layerGroup.clearLayers();
+      if (filteredGeojson.features.length) {
+        geojsonLayer = L.geoJSON(filteredGeojson, {
+          renderer: overlayRenderer,
+          interactive: true,
+          bubblingMouseEvents: false,
+          style: defaultStyle,
+          pointToLayer: defaultPoint,
+          onEachFeature: bindFeaturePopup
+        }).addTo(layerGroup);
+        const state = overlayData[currentLayerName];
+        const savedLabels = state?.legendLabels;
+        if (state) state.legendLabels = ["No data"];
+        const geometry = filteredGeojson.features[0]?.geometry?.type || "";
+        const color = /^#[0-9A-Fa-f]{6}$/.test(state?.defaultSymbolColor || "")
+          ? state.defaultSymbolColor
+          : (/LineString/.test(geometry) ? "#007aff" : "#ccc");
+        updateLegend(currentLayerName, ["No data"], [color], false, filteredGeojson);
+        if (state) state.legendLabels = savedLabels;
+        const warning = document.getElementById("filter-warning");
+        if (warning) warning.textContent += (warning.textContent ? " " : "") +
+          "The selected attribute has no values in the filtered features; default symbols are shown.";
+      }
+    }
     return;
   }
 

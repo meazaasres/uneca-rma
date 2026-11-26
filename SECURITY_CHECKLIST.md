@@ -13,7 +13,7 @@ Last updated: 2026-11-10
 | 2 | Block URL credentials and non-443 port | Complete | URL validation rejects credentials and non-default HTTPS ports. |
 | 3 | Block private/local/intranet hosts | Complete | Host validation blocks localhost/private ranges and local-only hostnames. |
 | 4 | Remote import timeout and max size cap | Complete | Timeout and byte cap enforced in remote import pipeline. |
-| 5 | Local file max size cap | Complete | 1 GB local file cap enforced before processing. |
+| 5 | Local file max size cap | Complete | 100 MB local file cap enforced before processing; ZIP archives also have a 200 MB uncompressed-size cap. |
 | 6 | Local file extension allowlist (.geojson, .csv, .zip) | Complete | Extension checks run before import. |
 | 7 | Dataset complexity limits (max features/vertices) | Complete | Limits enforced before rendering/export processing. |
 | 8 | Safe popup rendering (no HTML sink) | Complete | Popups and dynamic UI text use text-safe paths. |
