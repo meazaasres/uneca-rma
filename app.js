@@ -118,6 +118,7 @@ if (IS_FRAMED_CONTEXT) {
 }
 // --- Helpers ---
 let dynamicSheet = null;
+let dynamicSheetAccessFailed = false;
 let dynamicStyleSeq = 0;
 
 function initDynamicSheet() {
@@ -147,7 +148,18 @@ function ensureDynamicRuleId(el) {
 
 function upsertDynamicRule(el, declarations) {
   const sheet = initDynamicSheet();
-  if (!sheet || !declarations) return;
+  if (!declarations) return;
+  const applyElementStyles = () => {
+    Object.keys(declarations).forEach(key => {
+      const value = declarations[key];
+      if (value == null || value === "") el.style.removeProperty(key);
+      else el.style.setProperty(key, String(value));
+    });
+  };
+  if (!sheet || dynamicSheetAccessFailed) {
+    applyElementStyles();
+    return;
+  }
   const id = ensureDynamicRuleId(el);
   const selector = `[data-dyn-id="${id}"]`;
   try {
@@ -162,7 +174,9 @@ function upsertDynamicRule(el, declarations) {
       else rule.style.setProperty(key, String(value));
     });
   } catch (e) {
-    console.warn("Failed to update dynamic CSS rule:", e);
+    console.warn("Failed to update dynamic CSS rule; applying element styles instead:", e);
+    if (e?.name === "SecurityError") dynamicSheetAccessFailed = true;
+    applyElementStyles();
   }
 }
 
@@ -1870,6 +1884,7 @@ const SIDEBAR_WIDTH_PX = 250;
 const MAP_OVERLAP_PX = 80;
 const MAP_SIDE_VISIBLE_INSET_PX = MAP_OVERLAP_PX;
 const DISCLAIMER_LEFT_VISIBLE_INSET_PX = 50;
+const NORTH_ARROW_MARGIN_PX = 50;
 const HOME_VERTICAL_PADDING_PX = 10;
 const EDGE_HOME_VERTICAL_PADDING_EXTRA_PX = 8;
 const IMPORT_EXTENT_MAX_ZOOM = 5;
@@ -2399,9 +2414,14 @@ makeControlDraggable(scaleControl, (el, mapEl) => {
 });
 placeScaleBarOnMapBottom(scaleControl);
 makeControlDraggable(northArrowControl, (el, mapEl) => {
-  const mapWidth = mapEl.clientWidth || 0;
-  const left = Math.max(0, mapWidth - MAP_SIDE_VISIBLE_INSET_PX - el.offsetWidth);
-  return { left, top: 42 };
+  const mapRect = mapEl.getBoundingClientRect();
+  const sidebar = document.getElementById("right-sidebar");
+  const sidebarRect = sidebar?.getBoundingClientRect();
+  const visibleRight = sidebarRect && sidebarRect.left < mapRect.right && sidebarRect.right > mapRect.left
+    ? Math.max(mapRect.left, sidebarRect.left)
+    : mapRect.right;
+  const left = Math.max(0, visibleRight - mapRect.left - NORTH_ARROW_MARGIN_PX - el.offsetWidth);
+  return { left, top: NORTH_ARROW_MARGIN_PX };
 });
 
 // Base layer
@@ -5549,8 +5569,8 @@ window.addEventListener('load', resetInitialScrollPositions);
     const northW = Math.max(34, Math.min(56, Math.round(exportMapW * 0.05)));
     const northH = Math.max(44, Math.min(72, Math.round(northW * 1.35)));
     const northPos = {
-      x: Math.min(56, Math.max(0, exportMapW - northW)),
-      y: 42
+      x: Math.max(0, exportMapW - northW - NORTH_ARROW_MARGIN_PX),
+      y: Math.min(NORTH_ARROW_MARGIN_PX, Math.max(0, exportMapH - northH))
     };
 
     const scaleFontSize = Math.max(10, Math.min(14, Math.round(exportMapW * 0.008) + 1));
@@ -6522,7 +6542,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
 
         octx.drawImage(normalizedMapCanvas, 0, titleH);
-        drawFixedExportOverlaysToCanvas(octx, 0, titleH, normalizedMapCanvas.width, normalizedMapCanvas.height);
+        drawFixedExportOverlaysToCanvas(octx, mapFit.x, titleH + mapFit.y, mapFit.width, mapFit.height);
 
         if (legendBlocks.length) {
           const legendWidth = legendBlocks.reduce((maxWidth, block) => {
@@ -7090,11 +7110,14 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = alignedContentOffsetX + Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX);
+        const discX = mapFit.x + Math.min(
+          Math.max(0, mapFit.width - 120),
+          Math.max(marginPx, Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX))
+        );
         const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
         let discWidth = Math.max(
           Math.round(120 * uiScale),
-          Math.min(desiredWidth, Math.max(120, usedCanvasWidth - discX - marginPx))
+          Math.min(desiredWidth, Math.max(120, mapFit.x + mapFit.width - discX - marginPx))
         );
         const fontSizeDisc = Math.max(9, Math.round(11 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
@@ -7137,15 +7160,15 @@ function exportSVG() {
         let discY = discRect && mapRect
           ? (() => {
               const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
-              const bottomPx = Math.max(0, Math.round(bottomCss * rawScaleY));
+              const bottomPx = Math.max(marginPx, Math.round(bottomCss * rawScaleY * mapFit.height / sourceCanvasHeight));
               return Math.max(
-                titleHeightPx,
-                titleHeightPx + usedCanvasHeight - discHeight - bottomPx
+                titleHeightPx + mapFit.y,
+                titleHeightPx + mapFit.y + mapFit.height - discHeight - bottomPx
               );
             })()
-          : (titleHeightPx + usedCanvasHeight - discHeight - marginPx);
-        const discYMin = titleHeightPx + 2;
-        const discYMax = Math.max(discYMin, (titleHeightPx + usedCanvasHeight - discHeight - 2));
+          : (titleHeightPx + mapFit.y + mapFit.height - discHeight - marginPx);
+        const discYMin = titleHeightPx + mapFit.y + marginPx;
+        const discYMax = Math.max(discYMin, titleHeightPx + mapFit.y + mapFit.height - discHeight - marginPx);
         discY = Math.max(discYMin, Math.min(discYMax, discY));
 
         const discBg = document.createElementNS(svgNS, "rect");
@@ -7188,11 +7211,22 @@ function exportSVG() {
         const mapRect = mapEl.getBoundingClientRect();
         const naW = Math.max(1, Math.round(naRect.width * rawScaleX * mapScaleX));
         const naH = Math.max(1, Math.round(naRect.height * rawScaleY * mapScaleY));
-        const naX = Math.max(0, Math.round((((naRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX) + alignedContentOffsetX);
-        let naY = titleHeightPx + Math.max(0, Math.round((((naRect.top - mapRect.top) * rawScaleY) - cropY) * mapScaleY));
-        const naYMin = titleHeightPx + 2;
-        const naYMax = Math.max(naYMin, (titleHeightPx + usedCanvasHeight - naH - 2));
-        naY = Math.max(naYMin, Math.min(naYMax, naY));
+        const userMoved = northArrowEl.dataset.userMoved === "1";
+        const naPos = userMoved
+          ? resolveExportPositionFromNorm(
+              Number(northArrowEl.dataset.normX),
+              Number(northArrowEl.dataset.normY),
+              naW,
+              naH,
+              mapFit.width,
+              mapFit.height
+            )
+          : {
+              x: Math.max(0, mapFit.width - naW - NORTH_ARROW_MARGIN_PX),
+              y: Math.min(NORTH_ARROW_MARGIN_PX, Math.max(0, mapFit.height - naH))
+            };
+        const naX = mapFit.x + naPos.x;
+        const naY = titleHeightPx + mapFit.y + naPos.y;
 
         const naBg = document.createElementNS(svgNS, "rect");
         naBg.setAttribute("x", String(naX));
