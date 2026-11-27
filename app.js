@@ -55,7 +55,6 @@ function hexToRgbaAlpha(hex, alpha) {
   const b = num & 255;
   return `rgba(${r},${g},${b},${alpha})`;
 }
-const OVERLAY_POINT_FILL_OPACITY = 1;
 const EXPORT_CAPTURE_PRESETS = {
   "a4-balanced": {
     label: "A4 Balanced (fast)",
@@ -3051,9 +3050,7 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
       } else {
         const fillOpacity = symbolKind === 'point' ? OVERLAY_POINT_FILL_OPACITY : OVERLAY_POLYGON_FILL_OPACITY;
         const swatchColor = /^#[0-9A-Fa-f]{6}$/.test(color) ? hexToRgbaAlpha(color, fillOpacity) : color;
-        setDynamicStyle(sym, { "background-color": swatchColor, "color": "inherit" });
-
-        symbolStyle["background-color"] = color;
+        symbolStyle["background-color"] = swatchColor;
         symbolStyle.color = "inherit";
       }
     } else {
@@ -3380,24 +3377,16 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
   query.searchParams.set("outSR", "4326");
   query.searchParams.set("f", "geojson");
   const boundaryPayload = await fetchJsonWithLimits(query.href, "UN country boundaries");
-<<<<<<< HEAD
-  const boundaryFeatures = Array.isArray(boundaryPayload?.features) ? boundaryPayload.features : [];
-  const boundaries = boundaryFeatures.map(feature => {
-    const boundaryProperties = feature?.properties || {};
-    const iso3 = getPropertyByNormalizedKey(boundaryProperties, "ISO3CD");
-    const country = getPropertyByNormalizedKey(boundaryProperties, "ROMNAM") || iso3;
-    return {
-      country: sanitizePlainText(country),
-
   if (!Array.isArray(boundaryPayload?.features)) {
     const detail = sanitizePlainText(boundaryPayload?.error?.message || "");
     throw new Error(`UN country boundaries response is invalid.${detail ? ` ${detail}` : ""}`);
   }
   const boundaries = boundaryPayload.features.map(feature => {
     const properties = feature?.properties || {};
-    const iso3 = firstNonEmptyValue(properties, ["ISO3CD", "iso3cd"]);
+    const iso3 = getPropertyByNormalizedKey(properties, "ISO3CD");
+    const country = getPropertyByNormalizedKey(properties, "ROMNAM") || iso3;
     return {
-      country: firstNonEmptyValue(properties, ["ROMNAM", "romnam"]) || iso3,
+      country: sanitizePlainText(country),
       iso3: normalizeIsoJoinValue(iso3),
       geometry: feature?.geometry || null
     };
@@ -3446,14 +3435,7 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     };
   }).filter(Boolean);
 
-  if (!features.length) return null;
-  const matchedCodes = new Set(features.map(f => normalizeCsvCountryCode(f?.properties?.iso3 || "", "iso3")));
   const boundaryUnmatchedCodes = requestedIso3.filter(code => !matchedCodes.has(code));
-  const combinedUnmatchedValues = Array.from(new Set([
-    ...(csvInfo.unmatchedIsoValues || []),
-    ...boundaryUnmatchedCodes
-  ]));
-
   requestedIso3.forEach(code => {
     if (!matchedCodes.has(code)) unmatchedValues.add(code);
   });
@@ -3463,7 +3445,7 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     __rmaCsvImport: {
 
       unmatchedRowCount: (csvInfo.unmatchedRowCount || 0) + boundaryUnmatchedCodes.length,
-      unmatchedIsoValues: combinedUnmatchedValues,
+      unmatchedIsoValues: Array.from(unmatchedValues),
 
       unmatchedIsoValues: Array.from(unmatchedValues),
 
@@ -3559,7 +3541,6 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
     throw new Error("CSV must have latitude/longitude columns or an ISO3 code column.");
   }
   const resolvedIsoFamily = isoKey ? "iso3" : "";
-<<<<<<< HEAD
   const validIsoRows = !hasCoordinates && isoKey
     ? rows.filter(row => {
         const value = normalizeIsoJoinValue(row?.[isoKey]);
@@ -3578,16 +3559,9 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   if (!hasCoordinates && isoKey && !validIsoRows.length) {
     throw new Error("No CSV rows contained valid three-letter ISO3 country codes.");
   }
-
   const unmatchedIsoValues = new Set();
-
-
   const features = validIsoRows.map((r, rowIdx) => {
     if (!hasCoordinates && isoKey) {
-
-      const iso = normalizeIsoJoinValue(r?.[isoKey]);
-      if (!/^[A-Z]{3}$/.test(iso)) return null;
-
       const rawIso = r?.[isoKey] ?? "";
       if (typeof rawIso === "string" && rawIso.length > MAX_CSV_CELL_LENGTH) {
         throw new Error(`CSV cell in column "${String(isoKey)}" is too long.`);
@@ -3626,7 +3600,7 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
       valueKeys: keys.filter(key => key !== isoKey),
       preferredAttribute: chooseCsvThematicKey(validIsoRows, keys, isoKey),
       unmatchedRowCount: Math.max(0, rows.length - validIsoRows.length),
-      unmatchedIsoValues
+      unmatchedIsoValues: Array.from(unmatchedIsoValues)
     };
   }
   return geojson;
@@ -5001,7 +4975,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (copyBtn && textarea) {
     copyBtn.addEventListener("click", async () => {
-=======
+
 function showUnmatchedCodesModal(codes, matchedCount) {
   const overlay = document.getElementById("unmatched-codes-overlay");
   const textarea = document.getElementById("unmatched-codes-textarea");
@@ -5055,7 +5029,7 @@ function showUnmatchedCodesModal(codes, matchedCount) {
     });
   }
 });
-=======
+
           if (!document.execCommand("copy")) throw new Error("Copy command failed.");
         }
         status.textContent = "Copied to clipboard.";
