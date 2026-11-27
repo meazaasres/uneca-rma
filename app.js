@@ -55,9 +55,7 @@ function hexToRgbaAlpha(hex, alpha) {
   const b = num & 255;
   return `rgba(${r},${g},${b},${alpha})`;
 }
-=======
 const OVERLAY_POINT_FILL_OPACITY = 1;
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
 const EXPORT_CAPTURE_PRESETS = {
   "a4-balanced": {
     label: "A4 Balanced (fast)",
@@ -3051,14 +3049,12 @@ function updateLegend(layerName, vals, cols, isNumeric, geojson) {
         symbolStyle.color = color;
         symbolStyle["background-color"] = "transparent";
       } else {
-<<<<<<< HEAD
         const fillOpacity = symbolKind === 'point' ? OVERLAY_POINT_FILL_OPACITY : OVERLAY_POLYGON_FILL_OPACITY;
         const swatchColor = /^#[0-9A-Fa-f]{6}$/.test(color) ? hexToRgbaAlpha(color, fillOpacity) : color;
         setDynamicStyle(sym, { "background-color": swatchColor, "color": "inherit" });
-=======
+
         symbolStyle["background-color"] = color;
         symbolStyle.color = "inherit";
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
       }
     } else {
       symbolStyle["background-color"] = "#ccc";
@@ -3392,7 +3388,7 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     const country = getPropertyByNormalizedKey(boundaryProperties, "ROMNAM") || iso3;
     return {
       country: sanitizePlainText(country),
-=======
+
   if (!Array.isArray(boundaryPayload?.features)) {
     const detail = sanitizePlainText(boundaryPayload?.error?.message || "");
     throw new Error(`UN country boundaries response is invalid.${detail ? ` ${detail}` : ""}`);
@@ -3402,7 +3398,6 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     const iso3 = firstNonEmptyValue(properties, ["ISO3CD", "iso3cd"]);
     return {
       country: firstNonEmptyValue(properties, ["ROMNAM", "romnam"]) || iso3,
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
       iso3: normalizeIsoJoinValue(iso3),
       geometry: feature?.geometry || null
     };
@@ -3451,7 +3446,6 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     };
   }).filter(Boolean);
 
-<<<<<<< HEAD
   if (!features.length) return null;
   const matchedCodes = new Set(features.map(f => normalizeCsvCountryCode(f?.properties?.iso3 || "", "iso3")));
   const boundaryUnmatchedCodes = requestedIso3.filter(code => !matchedCodes.has(code));
@@ -3459,21 +3453,20 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     ...(csvInfo.unmatchedIsoValues || []),
     ...boundaryUnmatchedCodes
   ]));
-=======
+
   requestedIso3.forEach(code => {
     if (!matchedCodes.has(code)) unmatchedValues.add(code);
   });
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
   return {
     type: "FeatureCollection",
     features,
     __rmaCsvImport: {
-<<<<<<< HEAD
+
       unmatchedRowCount: (csvInfo.unmatchedRowCount || 0) + boundaryUnmatchedCodes.length,
       unmatchedIsoValues: combinedUnmatchedValues,
-=======
+
       unmatchedIsoValues: Array.from(unmatchedValues),
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
       valueKeys: csvInfo.valueKeys,
       preferredAttribute: csvInfo.preferredAttribute || ""
     }
@@ -3585,16 +3578,16 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   if (!hasCoordinates && isoKey && !validIsoRows.length) {
     throw new Error("No CSV rows contained valid three-letter ISO3 country codes.");
   }
-=======
+
   const unmatchedIsoValues = new Set();
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
 
   const features = validIsoRows.map((r, rowIdx) => {
     if (!hasCoordinates && isoKey) {
-<<<<<<< HEAD
+
       const iso = normalizeIsoJoinValue(r?.[isoKey]);
       if (!/^[A-Z]{3}$/.test(iso)) return null;
-=======
+
       const rawIso = r?.[isoKey] ?? "";
       if (typeof rawIso === "string" && rawIso.length > MAX_CSV_CELL_LENGTH) {
         throw new Error(`CSV cell in column "${String(isoKey)}" is too long.`);
@@ -3604,7 +3597,6 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
         unmatchedIsoValues.add(String(rawIso).trim() || "(empty)");
         return null;
       }
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
       return {
         type: "Feature",
         geometry: null,
@@ -3744,19 +3736,19 @@ async function importFile(file) {
     }
 
     if (ext === ".csv" && geojson.__rmaCsvImport) {
-<<<<<<< HEAD
+
       const csvMeta = geojson.__rmaCsvImport;
       const countryGeojson = await buildCountryPolygonsFromCsv(geojson, csvMeta);
       if (!countryGeojson) {
         throw new Error("No CSV ISO codes matched the global country reference.");
-=======
+
       const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
       if (!countryGeojson.features.length) {
         const message = "No CSV ISO codes matched the global country boundaries.";
         if (fileNameEl) fileNameEl.textContent = "Error: " + message;
         showPopup(message, "error");
         return { codes: countryGeojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: 0 };
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
       }
       geojson = countryGeojson;
       const finalMeta = geojson.__rmaCsvImport || csvMeta;
@@ -3771,14 +3763,14 @@ async function importFile(file) {
 
     const safeName = await addImportedLayer(geojson, file.name, "Imported file");
     if (fileNameEl) fileNameEl.textContent = safeName;
-<<<<<<< HEAD
+
     if (!ext || ext !== ".csv") {
       showPopup(`File "${safeName}" uploaded successfully`, "success");
-=======
+
     showPopup(`File "${safeName}" uploaded successfully`, "success");
     if (geojson.__rmaCsvImport?.unmatchedIsoValues?.length) {
       return { codes: geojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: geojson.features.length };
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
     }
   } finally {
     hideLoading();
@@ -3808,19 +3800,19 @@ async function importUrl(rawUrl) {
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
     let geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     if (ext === ".csv" && geojson.__rmaCsvImport) {
-<<<<<<< HEAD
+
       const csvMeta = geojson.__rmaCsvImport;
       const countryGeojson = await buildCountryPolygonsFromCsv(geojson, csvMeta);
       if (!countryGeojson) {
         throw new Error("No CSV ISO codes matched the global country reference.");
-=======
+
       const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
       if (!countryGeojson.features.length) {
         const message = "No CSV ISO codes matched the global country boundaries.";
         if (fileNameEl) fileNameEl.textContent = "Error: " + message;
         showPopup(message, "error");
         return { codes: countryGeojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: 0 };
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
       }
       geojson = countryGeojson;
       const finalMeta = geojson.__rmaCsvImport || csvMeta;
@@ -3836,14 +3828,14 @@ async function importUrl(rawUrl) {
     const safeName = await addImportedLayer(geojson, fallbackName, "Imported URL data");
     if (urlInput) urlInput.value = "";
     if (fileNameEl) fileNameEl.textContent = safeName;
-<<<<<<< HEAD
+
     if (!ext || ext !== ".csv") {
       showPopup(`Layer "${safeName}" added successfully`, "success");
-=======
+
     showPopup(`Layer "${safeName}" added successfully`, "success");
     if (geojson.__rmaCsvImport?.unmatchedIsoValues?.length) {
       return { codes: geojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: geojson.features.length };
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
     }
   } finally {
     hideLoading();
@@ -5047,13 +5039,13 @@ function showUnmatchedCodesModal(codes, matchedCount) {
       if (event.key === "Escape") close();
     };
     const copy = async () => {
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
       try {
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(textarea.value);
         } else {
           textarea.select();
-<<<<<<< HEAD
+
           document.execCommand("copy");
         }
         showPopup("Unmatched codes copied to clipboard", "success");
@@ -5081,7 +5073,7 @@ function showUnmatchedCodesModal(codes, matchedCount) {
     document.addEventListener("keydown", dismissOnEscape);
   });
 }
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
 
 // --- Sidebar toggle helpers (buttons cached) ---
 const btnClassTable = document.getElementById('btnToggleClassTable');
@@ -5758,12 +5750,12 @@ window.addEventListener('load', resetInitialScrollPositions);
       exportMapW,
       exportMapH
     );
-=======
+
     const northPos = {
       x: Math.max(0, exportMapW - northW - NORTH_ARROW_MARGIN_PX),
       y: Math.min(NORTH_ARROW_MARGIN_PX, Math.max(0, exportMapH - northH))
     };
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
 
     const scaleFontSize = Math.max(10, Math.min(14, Math.round(exportMapW * 0.008) + 1));
     const scalePaddingX = Math.max(6, Math.round(scaleFontSize * 0.7));
@@ -6402,11 +6394,11 @@ window.addEventListener('load', resetInitialScrollPositions);
       styleEl.type = 'text/css';
       styleEl.textContent = `
         .export-title{font-size:20px !important;font-weight:600;margin:0 0 8px 0;line-height:1;text-align:center !important;display:block !important;width:100% !important}
-<<<<<<< HEAD
+
         .export-map-wrapper .export-disclaimer-clone{font-size:10px !important;background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
-=======
+
         .export-map-wrapper .export-disclaimer-clone{background:rgba(255,255,255,0.95) !important;padding:6px !important;word-break:break-word !important;display:inline-block !important;width:auto !important;text-align:left !important;max-height:calc(1.25em * 6) !important;overflow:hidden !important;white-space:normal !important;line-height:1.25 !important}
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
         .export-map-wrapper .export-north-arrow-clone{display:flex !important;align-items:center !important;justify-content:center !important;flex-direction:column !important}
         .export-map-wrapper .export-north-arrow-clone .north-arrow-symbol{display:block !important;width:100% !important;text-align:center !important;padding-top:0 !important;line-height:1 !important}
         .export-img{width:100%;height:auto;display:block}
@@ -6755,10 +6747,10 @@ window.addEventListener('load', resetInitialScrollPositions);
         octx.fillText(titleText, Math.round(outW / 2), Math.round(titleH / 2));
 
         octx.drawImage(normalizedMapCanvas, 0, titleH);
-<<<<<<< HEAD
+
         // Anchor overlays to the actual (possibly letterboxed) map content rect, not the full normalized slot.
-=======
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
+
         drawFixedExportOverlaysToCanvas(octx, mapFit.x, titleH + mapFit.y, mapFit.width, mapFit.height);
 
         if (legendBlocks.length) {
@@ -7343,7 +7335,7 @@ function exportSVG() {
         let discWidth = Math.max(
           Math.round(120 * uiScale),
           Math.min(desiredWidth, Math.max(120, mapContentX + mapContentW - discX - marginPx))
-=======
+
         const discX = mapFit.x + Math.min(
           Math.max(0, mapFit.width - 120),
           Math.max(marginPx, Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX))
@@ -7352,7 +7344,7 @@ function exportSVG() {
         let discWidth = Math.max(
           Math.round(120 * uiScale),
           Math.min(desiredWidth, Math.max(120, mapFit.x + mapFit.width - discX - marginPx))
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
         );
         const fontSizeDisc = Math.max(9, Math.round(11 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
@@ -7405,7 +7397,7 @@ function exportSVG() {
           : (mapContentY + mapContentH - discHeight - marginPx);
         const discYMin = mapContentY + 2;
         const discYMax = Math.max(discYMin, (mapContentY + mapContentH - discHeight - 2));
-=======
+
                 titleHeightPx + mapFit.y,
                 titleHeightPx + mapFit.y + mapFit.height - discHeight - bottomPx
               );
@@ -7413,7 +7405,7 @@ function exportSVG() {
           : (titleHeightPx + mapFit.y + mapFit.height - discHeight - marginPx);
         const discYMin = titleHeightPx + mapFit.y + marginPx;
         const discYMax = Math.max(discYMin, titleHeightPx + mapFit.y + mapFit.height - discHeight - marginPx);
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
+
         discY = Math.max(discYMin, Math.min(discYMax, discY));
 
         const discBg = document.createElementNS(svgNS, "rect");
