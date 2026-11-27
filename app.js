@@ -7122,15 +7122,32 @@ function exportSVG() {
           ? mapFit.x + Math.round((((scaleRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX)
           : mapFit.x + Math.round(mapFit.width * 0.42);
         const availableDiscWidth = Math.max(200, Math.min(700, scaleLeft - discX - marginPx));
-        const discLayout = buildWrappedExportTextLayout(safeDisclaimer, {
+        
+        // Ensure minimum 3 lines by reducing maxWidth if needed
+        let discLayout = buildWrappedExportTextLayout(safeDisclaimer, {
           fontSize: fontSizeDisc,
           fontStyle: "italic",
           fontFamily: "Segoe UI, sans-serif",
           maxWidth: Math.max(150, availableDiscWidth - (padding * 2)),
           padding,
           lineHeight: Math.round(fontSizeDisc * 1.25),
-          maxLines: 4
+          maxLines: 6
         });
+        
+        // If disclaimer has fewer than 3 lines, reduce maxWidth to force wrapping
+        if (discLayout.lines.length < 3) {
+          const targetWidth = Math.max(150, availableDiscWidth * 0.6);
+          discLayout = buildWrappedExportTextLayout(safeDisclaimer, {
+            fontSize: fontSizeDisc,
+            fontStyle: "italic",
+            fontFamily: "Segoe UI, sans-serif",
+            maxWidth: targetWidth - (padding * 2),
+            padding,
+            lineHeight: Math.round(fontSizeDisc * 1.25),
+            maxLines: 6
+          });
+        }
+        
         const discWidth = Math.min(availableDiscWidth, discLayout.width);
         const lines = discLayout.lines;
         const lineHeightDisc = discLayout.lineHeight;
