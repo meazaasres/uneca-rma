@@ -7148,7 +7148,7 @@ function exportSVG() {
           });
         }
         
-        const discWidth = Math.min(availableDiscWidth, discLayout.width);
+        const discWidth = Math.min(availableDiscWidth, discLayout.width + 2);
         const lines = discLayout.lines;
         const lineHeightDisc = discLayout.lineHeight;
         const discHeight = discLayout.height;
