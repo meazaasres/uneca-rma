@@ -2631,10 +2631,16 @@ function resetAllMapUiPositions() {
   resetDraggableControlsToInitial();
 }
 
+let disclaimerDragInitInProgress = false;
+
 function initDisclaimerDrag() {
   const disc = document.getElementById('disclaimer');
   const mapEl = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
   if (!disc || !mapEl || disc.dataset.dragInit === '1') return;
+  
+  // Prevent race condition: only allow one concurrent initialization
+  if (disclaimerDragInitInProgress) return;
+  disclaimerDragInitInProgress = true;
 
   const resolveDisclaimerWidthPx = () => {
     const mapRect = mapEl.getBoundingClientRect();
@@ -2650,6 +2656,7 @@ function initDisclaimerDrag() {
   };
 
   disc.dataset.dragInit = '1';
+  disclaimerDragInitInProgress = false;
   disc.setAttribute('contenteditable', 'false');
   disc.setAttribute('draggable', 'false');
   disc.style.pointerEvents = 'auto';
