@@ -3435,7 +3435,6 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     };
   }).filter(Boolean);
 
-  const boundaryUnmatchedCodes = requestedIso3.filter(code => !matchedCodes.has(code));
   requestedIso3.forEach(code => {
     if (!matchedCodes.has(code)) unmatchedValues.add(code);
   });
@@ -3443,12 +3442,8 @@ async function buildCountryPolygonsFromCsv(csvGeojson, csvInfo) {
     type: "FeatureCollection",
     features,
     __rmaCsvImport: {
-
-      unmatchedRowCount: (csvInfo.unmatchedRowCount || 0) + boundaryUnmatchedCodes.length,
-      unmatchedIsoValues: Array.from(unmatchedValues),
-
-      unmatchedIsoValues: Array.from(unmatchedValues),
-
+      unmatchedRowCount: (csvInfo.unmatchedRowCount || 0) + (requestedIso3.length - matchedCodes.size),
+      unmatchedIsoValues: Array.from(unmatchedValues).filter(Boolean),
       valueKeys: csvInfo.valueKeys,
       preferredAttribute: csvInfo.preferredAttribute || ""
     }
@@ -3587,11 +3582,10 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
     geojson.__rmaCsvImport = {
       isoKey,
       isoFamily: resolvedIsoFamily,
-      unmatchedIsoValues: Array.from(unmatchedIsoValues),
+      unmatchedIsoValues: Array.from(unmatchedIsoValues).filter(Boolean),
       valueKeys: keys.filter(key => key !== isoKey),
       preferredAttribute: chooseCsvThematicKey(validIsoRows, keys, isoKey),
-      unmatchedRowCount: Math.max(0, rows.length - validIsoRows.length),
-      unmatchedIsoValues: Array.from(unmatchedIsoValues)
+      unmatchedRowCount: Math.max(0, rows.length - validIsoRows.length)
     };
   }
   return geojson;
