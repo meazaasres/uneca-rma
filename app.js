@@ -7134,7 +7134,7 @@ function exportSVG() {
         const scaleLeft = scaleRect && mapRect
           ? mapFit.x + Math.round((((scaleRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX)
           : mapFit.x + Math.round(mapFit.width * 0.42);
-        const availableDiscWidth = Math.max(120, Math.min(520, scaleLeft - discX - marginPx));
+        const availableDiscWidth = Math.max(120, Math.min(525, scaleLeft - discX - marginPx));
         const discLayout = buildWrappedExportTextLayout(safeDisclaimer, {
           fontSize: fontSizeDisc,
           fontStyle: "italic",
