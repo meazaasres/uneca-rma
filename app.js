@@ -3536,6 +3536,19 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
     throw new Error("CSV must have latitude/longitude columns or an ISO3 code column.");
   }
   const resolvedIsoFamily = isoKey ? "iso3" : "";
+  const unmatchedIsoValues = new Set();
+  
+  // Capture all ISO3 values that don't match the expected format
+  if (!hasCoordinates && isoKey) {
+    rows.forEach(row => {
+      const rawIso = row?.[isoKey] ?? "";
+      const value = normalizeIsoJoinValue(rawIso);
+      if (!/^[A-Z]{3}$/.test(value)) {
+        unmatchedIsoValues.add(String(rawIso).trim() || "(empty)");
+      }
+    });
+  }
+  
   const validIsoRows = !hasCoordinates && isoKey
     ? rows.filter(row => {
         const value = normalizeIsoJoinValue(row?.[isoKey]);
@@ -3545,17 +3558,11 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
   if (!hasCoordinates && isoKey && !validIsoRows.length) {
     throw new Error("No CSV rows contained valid three-letter ISO3 country codes.");
   }
-  const unmatchedIsoValues = new Set();
   const features = validIsoRows.map((r, rowIdx) => {
     if (!hasCoordinates && isoKey) {
       const rawIso = r?.[isoKey] ?? "";
       if (typeof rawIso === "string" && rawIso.length > MAX_CSV_CELL_LENGTH) {
         throw new Error(`CSV cell in column "${String(isoKey)}" is too long.`);
-      }
-      const iso = normalizeIsoJoinValue(rawIso);
-      if (!/^[A-Z]{3}$/.test(iso)) {
-        unmatchedIsoValues.add(String(rawIso).trim() || "(empty)");
-        return null;
       }
       return {
         type: "Feature",
