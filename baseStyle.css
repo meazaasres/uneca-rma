@@ -321,6 +321,9 @@ footer {
   align-items: center;
   justify-content: center;
 }
+.unmatched-modal-overlay[hidden] {
+  display: none !important;
+}
 .unmatched-modal-overlay.open {
   display: flex;
 }

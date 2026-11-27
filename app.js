@@ -4868,9 +4868,10 @@ function showUnmatchedCodesModal(codes, matchedCount) {
   textarea.value = list.join("\n");
   description.textContent = `Mapped ${Number(matchedCount) || 0} country polygon(s). ${list.length} distinct value(s) could not be matched.`;
   status.textContent = "";
+  overlay.hidden = false;
   overlay.classList.add("open");
   textarea.focus();
-  const close = () => { overlay.classList.remove("open"); closeButton.removeEventListener("click", close); dismissButton.removeEventListener("click", close); copyButton.removeEventListener("click", copy); overlay.removeEventListener("click", dismissOnBackdrop); document.removeEventListener("keydown", dismissOnEscape); if (previousFocus?.focus) previousFocus.focus(); };
+  const close = () => { overlay.classList.remove("open"); overlay.hidden = true; closeButton.removeEventListener("click", close); dismissButton.removeEventListener("click", close); copyButton.removeEventListener("click", copy); overlay.removeEventListener("click", dismissOnBackdrop); document.removeEventListener("keydown", dismissOnEscape); if (previousFocus?.focus) previousFocus.focus(); };
   const dismissOnBackdrop = event => { if (event.target === overlay) close(); };
   const dismissOnEscape = event => { if (event.key === "Escape") close(); };
   const copy = async () => { try { if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(textarea.value); else { textarea.select(); if (!document.execCommand("copy")) throw new Error("Copy command failed."); } status.textContent = "Copied to clipboard."; } catch (error) { console.warn("Could not copy unmatched ISO3 values:", error); status.textContent = "Could not copy automatically. Select and copy the list manually."; textarea.focus(); textarea.select(); } };
