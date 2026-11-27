@@ -5356,7 +5356,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       ctx.font = font;
       lines = wrapCanvasText(ctx, content, maxWidth);
     } else {
-      const approxChars = Math.max(8, Math.floor((maxWidth * 0.90) / Math.max(5, Math.round(fontSize * 0.55))));
+      const approxChars = Math.max(8, Math.floor((maxWidth * 0.98) / Math.max(5, Math.round(fontSize * 0.55))));
       lines = [];
       let line = '';
       content.split(/\s+/).filter(Boolean).forEach((word) => {
