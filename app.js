@@ -3678,75 +3678,33 @@ function readFileAsArrayBuffer(file) {
 async function importFile(file) {
   const fileNameEl = document.getElementById("file-name");
   const ext = getDataExtension(file?.name || "");
-  const allowedExtensions = new Set([".zip", ".csv", ".geojson"]);
-  if (!allowedExtensions.has(ext)) {
-    throw new Error(`Unsupported file type: ${file?.name || "unknown file"}`);
-  }
-  if (file.size > MAX_SIZE) {
-    const maxMb = Math.round(MAX_SIZE / (1024 * 1024));
-    throw new Error(`File "${file.name}" too large (max ${maxMb} MB).`);
-  }
-
+  if (!(new Set([".zip", ".csv", ".geojson"])).has(ext)) throw new Error(`Unsupported file type: ${file?.name || "unknown file"}`);
+  if (file.size > MAX_SIZE) throw new Error(`File "${file.name}" too large (max ${Math.round(MAX_SIZE / (1024 * 1024))} MB).`);
   showLoading("Loading data from file...");
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
     let geojson;
-    if (ext === ".zip") {
-      const bytes = await readFileAsArrayBuffer(file);
-      inspectZipSafety(bytes, file.size);
-      geojson = await shp(bytes);
-    } else {
-      const text = await readFileAsText(file);
-      geojson = parseImportedData(ext, text, ext === ".geojson" ? "application/json" : "text/csv");
-    }
-
+    if (ext === ".zip") { const bytes = await readFileAsArrayBuffer(file); inspectZipSafety(bytes, file.size); geojson = await shp(bytes); }
+    else { const text = await readFileAsText(file); geojson = parseImportedData(ext, text, ext === ".geojson" ? "application/json" : "text/csv"); }
     if (ext === ".csv" && geojson.__rmaCsvImport) {
-
       const csvMeta = geojson.__rmaCsvImport;
-      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, csvMeta);
-      if (!countryGeojson) {
-        throw new Error("No CSV ISO codes matched the global country reference.");
-
-      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
-      if (!countryGeojson.features.length) {
-        const message = "No CSV ISO codes matched the global country boundaries.";
-        if (fileNameEl) fileNameEl.textContent = "Error: " + message;
-        showPopup(message, "error");
-        return { codes: countryGeojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: 0 };
-
-      }
-      geojson = countryGeojson;
+      geojson = await buildCountryPolygonsFromCsv(geojson, csvMeta);
+      if (!geojson.features.length) throw new Error("No CSV ISO codes matched the global country boundaries.");
       const finalMeta = geojson.__rmaCsvImport || csvMeta;
-      const unmatchedCount = Number(finalMeta.unmatchedRowCount || 0);
       const unmatchedValues = Array.isArray(finalMeta.unmatchedIsoValues) ? finalMeta.unmatchedIsoValues : [];
-      if (unmatchedCount > 0) {
-        showUnmatchedCodesModal(unmatchedValues, geojson.features.length);
-      } else {
-        showPopup("Mapped valid ISO3 rows successfully.", "success");
-      }
+      if (Number(finalMeta.unmatchedRowCount || 0) > 0) showUnmatchedCodesModal(unmatchedValues, geojson.features.length);
+      else showPopup("Mapped valid ISO3 rows successfully.", "success");
     }
-
     const safeName = await addImportedLayer(geojson, file.name, "Imported file");
     if (fileNameEl) fileNameEl.textContent = safeName;
-
-    if (!ext || ext !== ".csv") {
-      showPopup(`File "${safeName}" uploaded successfully`, "success");
-
-    showPopup(`File "${safeName}" uploaded successfully`, "success");
-    if (geojson.__rmaCsvImport?.unmatchedIsoValues?.length) {
-      return { codes: geojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: geojson.features.length };
-
-    }
-  } finally {
-    hideLoading();
-  }
+    if (ext !== ".csv") showPopup(`File "${safeName}" uploaded successfully`, "success");
+  } finally { hideLoading(); }
 }
 
 async function importUrl(rawUrl) {
   const fileNameEl = document.getElementById("file-name");
   const urlInput = document.getElementById("geojson-url");
   if (!rawUrl) throw new Error("Enter a valid URL");
-
   showLoading("Loading data from URL...");
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   try {
@@ -3754,59 +3712,25 @@ async function importUrl(rawUrl) {
     const fetched = await fetchWithLimits(parsed.href, true);
     const finalParsed = assertFinalImportUrlAllowed(fetched.finalUrl);
     const ext = resolveRemoteImportExtension(requestedExt, finalParsed?.pathname || fetched.finalUrl || "", fetched.contentType);
-    if (!ext) {
-      throw new Error("Could not determine URL import type. Use a .csv/.geojson URL or a correct JSON/CSV content type.");
-    }
-    const hasAllowedContentType = isAllowedRemoteContentType(ext, fetched.contentType);
-    const csvPayloadFallbackAllowed = ext === ".csv" && isLikelyCsvPayload(fetched.text || "");
-    if (!hasAllowedContentType && !csvPayloadFallbackAllowed) {
-      throw new Error(`Remote content type is not allowed for ${ext} import.`);
-    }
+    if (!ext) throw new Error("Could not determine URL import type. Use a .csv/.geojson URL or a correct JSON/CSV content type.");
+    if (!isAllowedRemoteContentType(ext, fetched.contentType) && !(ext === ".csv" && isLikelyCsvPayload(fetched.text || ""))) throw new Error(`Remote content type is not allowed for ${ext} import.`);
     const fallbackName = parsed.pathname.split("/").pop() || ("Layer_" + Date.now());
     let geojson = parseImportedData(ext, fetched.text || "", fetched.contentType || "");
     if (ext === ".csv" && geojson.__rmaCsvImport) {
-
       const csvMeta = geojson.__rmaCsvImport;
-      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, csvMeta);
-      if (!countryGeojson) {
-        throw new Error("No CSV ISO codes matched the global country reference.");
-
-      const countryGeojson = await buildCountryPolygonsFromCsv(geojson, geojson.__rmaCsvImport);
-      if (!countryGeojson.features.length) {
-        const message = "No CSV ISO codes matched the global country boundaries.";
-        if (fileNameEl) fileNameEl.textContent = "Error: " + message;
-        showPopup(message, "error");
-        return { codes: countryGeojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: 0 };
-
-      }
-      geojson = countryGeojson;
+      geojson = await buildCountryPolygonsFromCsv(geojson, csvMeta);
+      if (!geojson.features.length) throw new Error("No CSV ISO codes matched the global country boundaries.");
       const finalMeta = geojson.__rmaCsvImport || csvMeta;
-      const unmatchedCount = Number(finalMeta.unmatchedRowCount || 0);
       const unmatchedValues = Array.isArray(finalMeta.unmatchedIsoValues) ? finalMeta.unmatchedIsoValues : [];
-      if (unmatchedCount > 0) {
-        showUnmatchedCodesModal(unmatchedValues, geojson.features.length);
-      } else {
-        showPopup("Mapped valid ISO3 rows successfully.", "success");
-      }
+      if (Number(finalMeta.unmatchedRowCount || 0) > 0) showUnmatchedCodesModal(unmatchedValues, geojson.features.length);
+      else showPopup("Mapped valid ISO3 rows successfully.", "success");
     }
-
     const safeName = await addImportedLayer(geojson, fallbackName, "Imported URL data");
     if (urlInput) urlInput.value = "";
     if (fileNameEl) fileNameEl.textContent = safeName;
-
-    if (!ext || ext !== ".csv") {
-      showPopup(`Layer "${safeName}" added successfully`, "success");
-
-    showPopup(`Layer "${safeName}" added successfully`, "success");
-    if (geojson.__rmaCsvImport?.unmatchedIsoValues?.length) {
-      return { codes: geojson.__rmaCsvImport.unmatchedIsoValues, matchedCount: geojson.features.length };
-
-    }
-  } finally {
-    hideLoading();
-  }
+    if (ext !== ".csv") showPopup(`Layer "${safeName}" added successfully`, "success");
+  } finally { hideLoading(); }
 }
-
 // --- File Upload Handler (secure) ---
 const fileUploadEl = document.getElementById("file-upload");
 if (fileUploadEl) {
@@ -4929,44 +4853,7 @@ function showPopup(msg, type = "error") {
   setTimeout(() => { setDynamicStyle(popup, { display: "none" }); }, 6000);
 }
 
-<<<<<<< HEAD
 // --- Unmatched ISO3 codes modal (copyable list) ---
-function showUnmatchedCodesModal(codes, matchedCount) {
-  const overlay = document.getElementById("unmatched-codes-overlay");
-  const textarea = document.getElementById("unmatched-codes-textarea");
-  const desc = document.getElementById("unmatched-codes-desc");
-  if (!overlay || !textarea) return;
-  const list = Array.isArray(codes) ? codes.filter(Boolean) : [];
-  textarea.value = list.join("\n");
-  if (desc) {
-    desc.textContent = `Mapped ${Number(matchedCount) || 0} rows. ${list.length} code(s) could not be matched. Copy the list below to review or correct them.`;
-  }
-  overlay.classList.add("open");
-}
-
-function hideUnmatchedCodesModal() {
-  const overlay = document.getElementById("unmatched-codes-overlay");
-  if (overlay) overlay.classList.remove("open");
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const overlay = document.getElementById("unmatched-codes-overlay");
-  const closeBtn = document.getElementById("unmatched-codes-close");
-  const dismissBtn = document.getElementById("unmatched-codes-dismiss");
-  const copyBtn = document.getElementById("unmatched-codes-copy");
-  const textarea = document.getElementById("unmatched-codes-textarea");
-
-  [closeBtn, dismissBtn].forEach(btn => {
-    if (btn) btn.addEventListener("click", hideUnmatchedCodesModal);
-  });
-  if (overlay) {
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) hideUnmatchedCodesModal();
-    });
-  }
-  if (copyBtn && textarea) {
-    copyBtn.addEventListener("click", async () => {
-
 function showUnmatchedCodesModal(codes, matchedCount) {
   const overlay = document.getElementById("unmatched-codes-overlay");
   const textarea = document.getElementById("unmatched-codes-textarea");
@@ -4975,71 +4862,20 @@ function showUnmatchedCodesModal(codes, matchedCount) {
   const copyButton = document.getElementById("unmatched-codes-copy");
   const closeButton = document.getElementById("unmatched-codes-close");
   const dismissButton = document.getElementById("unmatched-codes-dismiss");
-  if (!overlay || !textarea || !description || !status || !copyButton || !closeButton || !dismissButton) {
-    throw new Error("Unmatched ISO3 codes dialog is unavailable.");
-  }
-
+  if (!overlay || !textarea || !description || !status || !copyButton || !closeButton || !dismissButton) throw new Error("Unmatched ISO3 codes dialog is unavailable.");
+  const list = Array.isArray(codes) ? codes.filter(Boolean) : [];
   const previousFocus = document.activeElement;
-  textarea.value = codes.join("\n");
-  description.textContent = `Mapped ${matchedCount} country polygon(s). ${codes.length} distinct value(s) could not be matched. Correct or review the list below.`;
+  textarea.value = list.join("\n");
+  description.textContent = `Mapped ${Number(matchedCount) || 0} country polygon(s). ${list.length} distinct value(s) could not be matched.`;
   status.textContent = "";
   overlay.classList.add("open");
   textarea.focus();
-
-  return new Promise(resolve => {
-    const close = () => {
-      overlay.classList.remove("open");
-      closeButton.removeEventListener("click", close);
-      dismissButton.removeEventListener("click", close);
-      copyButton.removeEventListener("click", copy);
-      overlay.removeEventListener("click", dismissOnBackdrop);
-      document.removeEventListener("keydown", dismissOnEscape);
-      if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
-      resolve();
-    };
-    const dismissOnBackdrop = event => {
-      if (event.target === overlay) close();
-    };
-    const dismissOnEscape = event => {
-      if (event.key === "Escape") close();
-    };
-    const copy = async () => {
-
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(textarea.value);
-        } else {
-          textarea.select();
-
-          document.execCommand("copy");
-        }
-        showPopup("Unmatched codes copied to clipboard", "success");
-      } catch (e) {
-        showPopup("Could not copy to clipboard. Select the text manually.", "error");
-      }
-    });
-  }
-});
-
-          if (!document.execCommand("copy")) throw new Error("Copy command failed.");
-        }
-        status.textContent = "Copied to clipboard.";
-      } catch (error) {
-        console.warn("Could not copy unmatched ISO3 values:", error);
-        status.textContent = "Could not copy automatically. Select and copy the list manually.";
-        textarea.focus();
-        textarea.select();
-      }
-    };
-    closeButton.addEventListener("click", close);
-    dismissButton.addEventListener("click", close);
-    copyButton.addEventListener("click", copy);
-    overlay.addEventListener("click", dismissOnBackdrop);
-    document.addEventListener("keydown", dismissOnEscape);
-  });
+  const close = () => { overlay.classList.remove("open"); closeButton.removeEventListener("click", close); dismissButton.removeEventListener("click", close); copyButton.removeEventListener("click", copy); overlay.removeEventListener("click", dismissOnBackdrop); document.removeEventListener("keydown", dismissOnEscape); if (previousFocus?.focus) previousFocus.focus(); };
+  const dismissOnBackdrop = event => { if (event.target === overlay) close(); };
+  const dismissOnEscape = event => { if (event.key === "Escape") close(); };
+  const copy = async () => { try { if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(textarea.value); else { textarea.select(); if (!document.execCommand("copy")) throw new Error("Copy command failed."); } status.textContent = "Copied to clipboard."; } catch (error) { console.warn("Could not copy unmatched ISO3 values:", error); status.textContent = "Could not copy automatically. Select and copy the list manually."; textarea.focus(); textarea.select(); } };
+  closeButton.addEventListener("click", close); dismissButton.addEventListener("click", close); copyButton.addEventListener("click", copy); overlay.addEventListener("click", dismissOnBackdrop); document.addEventListener("keydown", dismissOnEscape);
 }
-
-
 // --- Sidebar toggle helpers (buttons cached) ---
 const btnClassTable = document.getElementById('btnToggleClassTable');
 function toggleClassTable() {
@@ -5698,7 +5534,6 @@ window.addEventListener('load', resetInitialScrollPositions);
 
     const northW = Math.max(34, Math.min(56, Math.round(exportMapW * 0.05)));
     const northH = Math.max(44, Math.min(72, Math.round(northW * 1.35)));
-<<<<<<< HEAD
     const northArrowPosition = getElementExportNormalizedPosition(
       northArrowEl,
       mapEl,
@@ -5715,12 +5550,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       exportMapW,
       exportMapH
     );
-
-    const northPos = {
-      x: Math.max(0, exportMapW - northW - NORTH_ARROW_MARGIN_PX),
-      y: Math.min(NORTH_ARROW_MARGIN_PX, Math.max(0, exportMapH - northH))
-    };
-
 
     const scaleFontSize = Math.max(10, Math.min(14, Math.round(exportMapW * 0.008) + 1));
     const scalePaddingX = Math.max(6, Math.round(scaleFontSize * 0.7));
@@ -7284,129 +7113,27 @@ function exportSVG() {
       if (safeDisclaimer) {
         const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-<<<<<<< HEAD
-        // Bound the disclaimer to the actual rendered map content, not the (possibly letterboxed) canvas slot.
-        const mapContentX = alignedContentOffsetX + mapFit.x;
-        const mapContentY = titleHeightPx + mapFit.y;
-        const mapContentW = mapFit.width;
-        const mapContentH = mapFit.height;
-        // Use the disclaimer's real on-screen offset (like the north arrow below), not a fixed constant.
-        const rawDiscX = discRect && mapRect
-          ? mapContentX + Math.round((((discRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX)
-          : mapContentX + Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX);
-        // Clamp so a large negative raster shift or letterboxing can't push the box outside the visible map.
-        const discX = Math.max(mapContentX, Math.min(rawDiscX, mapContentX + mapContentW - 120 - marginPx));
-        const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
-        let discWidth = Math.max(
-          Math.round(120 * uiScale),
-          Math.min(desiredWidth, Math.max(120, mapContentX + mapContentW - discX - marginPx))
-
-        const discX = mapFit.x + Math.min(
-          Math.max(0, mapFit.width - 120),
-          Math.max(marginPx, Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX))
-        );
-        const desiredWidth = discRect ? Math.round(discRect.width * rawScaleX * 1.18) : Math.round(230 * uiScale);
-        let discWidth = Math.max(
-          Math.round(120 * uiScale),
-          Math.min(desiredWidth, Math.max(120, mapFit.x + mapFit.width - discX - marginPx))
-
-        );
+        const discX = mapFit.x + Math.max(marginPx, Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX));
         const fontSizeDisc = Math.max(9, Math.round(11 * uiScale));
         const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
         const padding = Math.max(4, Math.round(5 * uiScale));
-        const maxLines = 5;
-        const avgCharWidth = Math.max(5, Math.round(fontSizeDisc * 0.5));
-        const maxCharsPerLine = Math.max(16, Math.floor((discWidth - (padding * 2)) / avgCharWidth));
-
+        const discWidth = Math.max(120, mapFit.width - (discX - mapFit.x) - marginPx);
+        const maxCharsPerLine = Math.max(16, Math.floor((discWidth - padding * 2) / Math.max(5, Math.round(fontSizeDisc * 0.5))));
         const words = safeDisclaimer.split(/\s+/).filter(Boolean);
         const lines = [];
         let line = "";
-        for (let i = 0; i < words.length; i++) {
-          const candidate = line ? (line + " " + words[i]) : words[i];
-          if (candidate.length > maxCharsPerLine && line) {
-            lines.push(line);
-            line = words[i];
-            if (lines.length >= maxLines) break;
-          } else {
-            line = candidate;
-          }
-        }
-        if (lines.length < maxLines && line) lines.push(line);
-        const truncated = lines.length >= maxLines && words.join(" ").length > lines.join(" ").length;
-        if (truncated && lines.length) {
-          lines[lines.length - 1] = lines[lines.length - 1].replace(/[.,;:!? ]+$/, "") + "...";
-        }
-
-        // Tighten SVG disclaimer box width using measured rendered text width.
-        const mCanvas = document.createElement('canvas');
-        const mCtx = mCanvas.getContext('2d');
-        if (mCtx) mCtx.font = `${fontSizeDisc}px Segoe UI, sans-serif`;
-        const measuredTextWidth = lines.reduce((m, ln) => {
-          const w = mCtx ? Math.ceil(mCtx.measureText(ln).width) : Math.round(ln.length * avgCharWidth);
-          return Math.max(m, w);
-        }, 0);
-        const tightWidth = Math.max(Math.round(120 * uiScale), measuredTextWidth + (padding * 2));
-        discWidth = Math.min(discWidth, tightWidth);
-
-        const discHeight = (padding * 2) + (lines.length * lineHeightDisc);
-        let discY = discRect && mapRect
-          ? (() => {
-              const bottomCss = Math.max(0, mapRect.bottom - discRect.bottom);
-              const bottomPx = Math.max(marginPx, Math.round(bottomCss * rawScaleY * mapFit.height / sourceCanvasHeight));
-              return Math.max(
-<<<<<<< HEAD
-                mapContentY,
-                mapContentY + mapContentH - discHeight - bottomPx
-              );
-            })()
-          : (mapContentY + mapContentH - discHeight - marginPx);
-        const discYMin = mapContentY + 2;
-        const discYMax = Math.max(discYMin, (mapContentY + mapContentH - discHeight - 2));
-
-                titleHeightPx + mapFit.y,
-                titleHeightPx + mapFit.y + mapFit.height - discHeight - bottomPx
-              );
-            })()
-          : (titleHeightPx + mapFit.y + mapFit.height - discHeight - marginPx);
-        const discYMin = titleHeightPx + mapFit.y + marginPx;
-        const discYMax = Math.max(discYMin, titleHeightPx + mapFit.y + mapFit.height - discHeight - marginPx);
-
-        discY = Math.max(discYMin, Math.min(discYMax, discY));
-
+        for (const word of words) { const candidate = line ? `${line} ${word}` : word; if (candidate.length > maxCharsPerLine && line) { lines.push(line); line = word; if (lines.length >= 5) break; } else line = candidate; }
+        if (lines.length < 5 && line) lines.push(line);
+        if (lines.length === 5 && words.join(" ").length > lines.join(" ").length) lines[4] = lines[4].replace(/[.,;:!? ]+$/, "") + "...";
+        const discHeight = padding * 2 + lines.length * lineHeightDisc;
+        const discY = Math.max(mapFit.y + marginPx, mapFit.y + mapFit.height - discHeight - marginPx);
         const discBg = document.createElementNS(svgNS, "rect");
-        discBg.setAttribute("x", String(discX));
-        discBg.setAttribute("y", String(discY));
-        discBg.setAttribute("width", String(discWidth));
-        discBg.setAttribute("height", String(discHeight));
-        discBg.setAttribute("fill", "#ffffff");
-        discBg.setAttribute("fill-opacity", "0.95");
-        svg.appendChild(discBg);
-
+        discBg.setAttribute("x", String(discX)); discBg.setAttribute("y", String(discY)); discBg.setAttribute("width", String(discWidth)); discBg.setAttribute("height", String(discHeight)); discBg.setAttribute("fill", "#ffffff"); discBg.setAttribute("fill-opacity", "0.95"); svg.appendChild(discBg);
         const discText = document.createElementNS(svgNS, "text");
-        discText.setAttribute("x", String(discX + padding));
-        discText.setAttribute("y", String(discY + padding + fontSizeDisc));
-        discText.setAttribute("font-size", String(fontSizeDisc));
-        discText.setAttribute("font-family", "Segoe UI, sans-serif");
-        discText.setAttribute("fill", "#000");
-        discText.setAttribute("text-anchor", "start");
-
-        lines.forEach((ln, idx) => {
-          const tspan = document.createElementNS(svgNS, "tspan");
-          tspan.setAttribute("x", String(discX + padding));
-          tspan.setAttribute("dy", idx === 0 ? "0" : String(lineHeightDisc));
-          const isLastLine = idx === lines.length - 1;
-          const shouldJustify = !isLastLine && !/\.\.\.$/.test(ln) && /\s/.test(ln);
-          if (shouldJustify) {
-            tspan.setAttribute("textLength", String(Math.max(1, discWidth - (padding * 2))));
-            tspan.setAttribute("lengthAdjust", "spacing");
-          }
-          tspan.textContent = ln;
-          discText.appendChild(tspan);
-        });
-
+        discText.setAttribute("x", String(discX + padding)); discText.setAttribute("y", String(discY + padding + fontSizeDisc)); discText.setAttribute("font-size", String(fontSizeDisc)); discText.setAttribute("font-family", "Segoe UI, sans-serif"); discText.setAttribute("fill", "#000");
+        lines.forEach((ln, idx) => { const tspan = document.createElementNS(svgNS, "tspan"); tspan.setAttribute("x", String(discX + padding)); tspan.setAttribute("dy", idx === 0 ? "0" : String(lineHeightDisc)); tspan.textContent = ln; discText.appendChild(tspan); });
         svg.appendChild(discText);
       }
-
       // north arrow (render from live control position)
       if (northArrowEl && mapEl) {
         const naRect = northArrowEl.getBoundingClientRect();
