@@ -5356,7 +5356,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       ctx.font = font;
       lines = wrapCanvasText(ctx, content, maxWidth);
     } else {
-      const approxChars = Math.max(8, Math.floor(maxWidth / Math.max(5, Math.round(fontSize * 0.55))));
+      const approxChars = Math.max(8, Math.floor((maxWidth * 0.95) / Math.max(5, Math.round(fontSize * 0.55))));
       lines = [];
       let line = '';
       content.split(/\s+/).filter(Boolean).forEach((word) => {
@@ -6379,9 +6379,10 @@ window.addEventListener('load', resetInitialScrollPositions);
       const words = String(text || "").split(/\s+/).filter(Boolean);
       const lines = [];
       let line = "";
+      const safeMaxWidth = Math.max(1, maxWidth - 2);
       for (let i = 0; i < words.length; i++) {
         const candidate = line ? (line + " " + words[i]) : words[i];
-        if (ctx.measureText(candidate).width <= maxWidth || !line) {
+        if (ctx.measureText(candidate).width <= safeMaxWidth || !line) {
           line = candidate;
         } else {
           lines.push(line);
