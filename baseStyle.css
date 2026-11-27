@@ -311,10 +311,7 @@ footer {
 .popup-error { background: rgba(200,0,0,0.85); }
 .popup-success { background: rgba(0,128,0,0.85); }
 
-<<<<<<< HEAD
 /* Unmatched ISO3 codes modal */
-=======
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
 .unmatched-modal-overlay {
   display: none;
   position: fixed;
@@ -324,13 +321,9 @@ footer {
   align-items: center;
   justify-content: center;
 }
-<<<<<<< HEAD
 .unmatched-modal-overlay.open {
   display: flex;
 }
-=======
-.unmatched-modal-overlay.open { display: flex; }
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
 .unmatched-modal {
   background: #fff;
   border-radius: 8px;
@@ -343,16 +336,11 @@ footer {
   gap: 8px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.3);
 }
-<<<<<<< HEAD
-.unmatched-modal-header {
-=======
 .unmatched-modal-header, .unmatched-modal-actions {
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-<<<<<<< HEAD
 .unmatched-modal-desc {
   font-size: 13px;
   color: #444;
@@ -360,24 +348,16 @@ footer {
 }
 .unmatched-modal-textarea {
   flex: 1;
-=======
-.unmatched-modal-actions { justify-content: flex-end; gap: 8px; }
-.unmatched-modal p { margin: 0; }
-.unmatched-modal-textarea {
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
   min-height: 160px;
   resize: vertical;
   font-family: monospace;
   font-size: 13px;
 }
-<<<<<<< HEAD
 .unmatched-modal-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
 }
-=======
->>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
 
 /* Legend styling used when building legend DOM in JS */
 .legend-header {
