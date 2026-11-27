@@ -7112,21 +7112,28 @@ function exportSVG() {
       // disclaimer rendered as pure SVG to avoid foreignObject inconsistencies
       const safeDisclaimer = safeText(disclaimerEl);
       if (safeDisclaimer) {
-        const discRect = disclaimerEl ? disclaimerEl.getBoundingClientRect() : null;
         const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
-        const discX = mapFit.x + Math.max(marginPx, Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX));
         const fontSizeDisc = Math.max(9, Math.round(11 * uiScale));
-        const lineHeightDisc = Math.round(fontSizeDisc * 1.25);
         const padding = Math.max(4, Math.round(5 * uiScale));
-        const discWidth = Math.max(120, mapFit.width - (discX - mapFit.x) - marginPx);
-        const maxCharsPerLine = Math.max(16, Math.floor((discWidth - padding * 2) / Math.max(5, Math.round(fontSizeDisc * 0.5))));
-        const words = safeDisclaimer.split(/\s+/).filter(Boolean);
-        const lines = [];
-        let line = "";
-        for (const word of words) { const candidate = line ? `${line} ${word}` : word; if (candidate.length > maxCharsPerLine && line) { lines.push(line); line = word; if (lines.length >= 5) break; } else line = candidate; }
-        if (lines.length < 5 && line) lines.push(line);
-        if (lines.length === 5 && words.join(" ").length > lines.join(" ").length) lines[4] = lines[4].replace(/[.,;:!? ]+$/, "") + "...";
-        const discHeight = padding * 2 + lines.length * lineHeightDisc;
+        const discX = mapFit.x + Math.max(marginPx, Math.round((Math.max(6, Math.round(8 * rawScaleX)) + rasterShiftX) * mapScaleX));
+        const scaleRect = scaleBarEl?.getBoundingClientRect ? scaleBarEl.getBoundingClientRect() : null;
+        const scaleLeft = scaleRect && mapRect
+          ? mapFit.x + Math.round((((scaleRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX)
+          : mapFit.x + Math.round(mapFit.width * 0.42);
+        const availableDiscWidth = Math.max(120, Math.min(520, scaleLeft - discX - marginPx));
+        const discLayout = buildWrappedExportTextLayout(safeDisclaimer, {
+          fontSize: fontSizeDisc,
+          fontStyle: "italic",
+          fontFamily: "Segoe UI, sans-serif",
+          maxWidth: Math.max(80, availableDiscWidth - (padding * 2)),
+          padding,
+          lineHeight: Math.round(fontSizeDisc * 1.25),
+          maxLines: 3
+        });
+        const discWidth = Math.min(availableDiscWidth, discLayout.width);
+        const lines = discLayout.lines;
+        const lineHeightDisc = discLayout.lineHeight;
+        const discHeight = discLayout.height;
         const discY = Math.max(mapFit.y + marginPx, mapFit.y + mapFit.height - discHeight - marginPx);
         const discBg = document.createElementNS(svgNS, "rect");
         discBg.setAttribute("x", String(discX)); discBg.setAttribute("y", String(discY)); discBg.setAttribute("width", String(discWidth)); discBg.setAttribute("height", String(discHeight)); discBg.setAttribute("fill", "#ffffff"); discBg.setAttribute("fill-opacity", "0.95"); svg.appendChild(discBg);
