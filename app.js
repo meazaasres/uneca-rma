@@ -5580,12 +5580,12 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (disclaimerText) {
       const discFontSize = Math.max(11, Math.min(15, Math.round(exportMapW * 0.0085) + 1));
       const discPadding = Math.max(6, Math.round(discFontSize * 0.55));
-      const discMaxWidth = Math.max(180, Math.min(Math.round(exportMapW * 0.50), Math.round(exportMapW * 0.62)));
+      const discMaxWidth = Math.max(250, Math.min(Math.round(exportMapW * 0.65), Math.round(exportMapW * 0.75)));
       const discLayout = buildWrappedExportTextLayout(disclaimerText, {
         fontSize: discFontSize,
         fontStyle: 'italic',
         fontFamily: 'Segoe UI, sans-serif',
-        maxWidth: Math.max(130, discMaxWidth - (discPadding * 2)),
+        maxWidth: Math.max(200, discMaxWidth - (discPadding * 2)),
         padding: discPadding,
         lineHeight: Math.round(discFontSize * 1.25),
         maxLines: 4
@@ -5795,18 +5795,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       const discX = mapOffsetX + layout.disclaimer.x;
       const discY = mapOffsetY + layout.disclaimer.y;
       
-      const discClipId = 'clip-disclaimer-' + Math.random().toString(36).substr(2, 9);
-      const discClipPath = document.createElementNS(svgNS, 'clipPath');
-      discClipPath.setAttribute('id', discClipId);
-      const discClipRect = document.createElementNS(svgNS, 'rect');
-      const clipPadding = 3;
-      discClipRect.setAttribute('x', String(Math.max(0, discX - clipPadding)));
-      discClipRect.setAttribute('y', String(Math.max(0, discY - clipPadding)));
-      discClipRect.setAttribute('width', String(layout.disclaimer.width + (clipPadding * 2)));
-      discClipRect.setAttribute('height', String(layout.disclaimer.height + (clipPadding * 2)));
-      discClipPath.appendChild(discClipRect);
-      svg.appendChild(discClipPath);
-      
       const discBg = document.createElementNS(svgNS, 'rect');
       discBg.setAttribute('x', String(discX));
       discBg.setAttribute('y', String(discY));
@@ -5824,7 +5812,6 @@ window.addEventListener('load', resetInitialScrollPositions);
       discText.setAttribute('font-style', layout.disclaimer.fontStyle);
       discText.setAttribute('fill', '#333333');
       discText.setAttribute('text-anchor', 'start');
-      discText.setAttribute('clip-path', 'url(#' + discClipId + ')');
       layout.disclaimer.lines.forEach((line, idx) => {
         const tspan = document.createElementNS(svgNS, 'tspan');
         tspan.setAttribute('x', String(discX + layout.disclaimer.padding));
@@ -6393,10 +6380,9 @@ window.addEventListener('load', resetInitialScrollPositions);
       const words = String(text || "").split(/\s+/).filter(Boolean);
       const lines = [];
       let line = "";
-      const safeMaxWidth = Math.max(1, maxWidth - 2);
       for (let i = 0; i < words.length; i++) {
         const candidate = line ? (line + " " + words[i]) : words[i];
-        if (ctx.measureText(candidate).width <= safeMaxWidth || !line) {
+        if (ctx.measureText(candidate).width <= maxWidth || !line) {
           line = candidate;
         } else {
           lines.push(line);
@@ -7135,12 +7121,12 @@ function exportSVG() {
         const scaleLeft = scaleRect && mapRect
           ? mapFit.x + Math.round((((scaleRect.left - mapRect.left) * rawScaleX) - cropX - extraTrimX + rasterShiftX) * mapScaleX)
           : mapFit.x + Math.round(mapFit.width * 0.42);
-        const availableDiscWidth = Math.max(140, Math.min(600, scaleLeft - discX - marginPx));
+        const availableDiscWidth = Math.max(200, Math.min(700, scaleLeft - discX - marginPx));
         const discLayout = buildWrappedExportTextLayout(safeDisclaimer, {
           fontSize: fontSizeDisc,
           fontStyle: "italic",
           fontFamily: "Segoe UI, sans-serif",
-          maxWidth: Math.max(90, availableDiscWidth - (padding * 2)),
+          maxWidth: Math.max(150, availableDiscWidth - (padding * 2)),
           padding,
           lineHeight: Math.round(fontSizeDisc * 1.25),
           maxLines: 4
@@ -7150,21 +7136,10 @@ function exportSVG() {
         const lineHeightDisc = discLayout.lineHeight;
         const discHeight = discLayout.height;
         const discY = Math.max(mapFit.y + marginPx, mapFit.y + mapFit.height - discHeight - marginPx);
-        const discClipId2 = 'clip-disclaimer-' + Math.random().toString(36).substr(2, 9);
-        const discClipPath2 = document.createElementNS(svgNS, "clipPath");
-        discClipPath2.setAttribute("id", discClipId2);
-        const discClipRect2 = document.createElementNS(svgNS, "rect");
-        const clipPaddingDisc = 3;
-        discClipRect2.setAttribute("x", String(Math.max(0, discX - clipPaddingDisc))); 
-        discClipRect2.setAttribute("y", String(Math.max(0, discY - clipPaddingDisc))); 
-        discClipRect2.setAttribute("width", String(discWidth + (clipPaddingDisc * 2))); 
-        discClipRect2.setAttribute("height", String(discHeight + (clipPaddingDisc * 2)));
-        discClipPath2.appendChild(discClipRect2);
-        svg.appendChild(discClipPath2);
         const discBg = document.createElementNS(svgNS, "rect");
         discBg.setAttribute("x", String(discX)); discBg.setAttribute("y", String(discY)); discBg.setAttribute("width", String(discWidth)); discBg.setAttribute("height", String(discHeight)); discBg.setAttribute("fill", "#ffffff"); discBg.setAttribute("fill-opacity", "0.95"); svg.appendChild(discBg);
         const discText = document.createElementNS(svgNS, "text");
-        discText.setAttribute("x", String(discX + padding)); discText.setAttribute("y", String(discY + padding + fontSizeDisc)); discText.setAttribute("font-size", String(fontSizeDisc)); discText.setAttribute("font-family", "Segoe UI, sans-serif"); discText.setAttribute("fill", "#000"); discText.setAttribute("clip-path", "url(#" + discClipId2 + ")");
+        discText.setAttribute("x", String(discX + padding)); discText.setAttribute("y", String(discY + padding + fontSizeDisc)); discText.setAttribute("font-size", String(fontSizeDisc)); discText.setAttribute("font-family", "Segoe UI, sans-serif"); discText.setAttribute("fill", "#000");
         lines.forEach((ln, idx) => { const tspan = document.createElementNS(svgNS, "tspan"); tspan.setAttribute("x", String(discX + padding)); tspan.setAttribute("dy", idx === 0 ? "0" : String(lineHeightDisc)); tspan.textContent = ln; discText.appendChild(tspan); });
         svg.appendChild(discText);
       }
