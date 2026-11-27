@@ -5356,7 +5356,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       ctx.font = font;
       lines = wrapCanvasText(ctx, content, maxWidth);
     } else {
-      const approxChars = Math.max(8, Math.floor((maxWidth * 0.95) / Math.max(5, Math.round(fontSize * 0.55))));
+      const approxChars = Math.max(8, Math.floor((maxWidth * 0.90) / Math.max(5, Math.round(fontSize * 0.55))));
       lines = [];
       let line = '';
       content.split(/\s+/).filter(Boolean).forEach((word) => {
@@ -5794,6 +5794,18 @@ window.addEventListener('load', resetInitialScrollPositions);
     if (layout.disclaimer && layout.disclaimer.lines.length) {
       const discX = mapOffsetX + layout.disclaimer.x;
       const discY = mapOffsetY + layout.disclaimer.y;
+      
+      const discClipId = 'clip-disclaimer-' + Math.random().toString(36).substr(2, 9);
+      const discClipPath = document.createElementNS(svgNS, 'clipPath');
+      discClipPath.setAttribute('id', discClipId);
+      const discClipRect = document.createElementNS(svgNS, 'rect');
+      discClipRect.setAttribute('x', String(discX));
+      discClipRect.setAttribute('y', String(discY));
+      discClipRect.setAttribute('width', String(layout.disclaimer.width));
+      discClipRect.setAttribute('height', String(layout.disclaimer.height));
+      discClipPath.appendChild(discClipRect);
+      svg.appendChild(discClipPath);
+      
       const discBg = document.createElementNS(svgNS, 'rect');
       discBg.setAttribute('x', String(discX));
       discBg.setAttribute('y', String(discY));
@@ -5811,6 +5823,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       discText.setAttribute('font-style', layout.disclaimer.fontStyle);
       discText.setAttribute('fill', '#333333');
       discText.setAttribute('text-anchor', 'start');
+      discText.setAttribute('clip-path', 'url(#' + discClipId + ')');
       layout.disclaimer.lines.forEach((line, idx) => {
         const tspan = document.createElementNS(svgNS, 'tspan');
         tspan.setAttribute('x', String(discX + layout.disclaimer.padding));
@@ -6379,7 +6392,7 @@ window.addEventListener('load', resetInitialScrollPositions);
       const words = String(text || "").split(/\s+/).filter(Boolean);
       const lines = [];
       let line = "";
-      const safeMaxWidth = Math.max(1, maxWidth - 2);
+      const safeMaxWidth = Math.max(1, maxWidth - 4);
       for (let i = 0; i < words.length; i++) {
         const candidate = line ? (line + " " + words[i]) : words[i];
         if (ctx.measureText(candidate).width <= safeMaxWidth || !line) {
@@ -7136,10 +7149,17 @@ function exportSVG() {
         const lineHeightDisc = discLayout.lineHeight;
         const discHeight = discLayout.height;
         const discY = Math.max(mapFit.y + marginPx, mapFit.y + mapFit.height - discHeight - marginPx);
+        const discClipId2 = 'clip-disclaimer-' + Math.random().toString(36).substr(2, 9);
+        const discClipPath2 = document.createElementNS(svgNS, "clipPath");
+        discClipPath2.setAttribute("id", discClipId2);
+        const discClipRect2 = document.createElementNS(svgNS, "rect");
+        discClipRect2.setAttribute("x", String(discX)); discClipRect2.setAttribute("y", String(discY)); discClipRect2.setAttribute("width", String(discWidth)); discClipRect2.setAttribute("height", String(discHeight));
+        discClipPath2.appendChild(discClipRect2);
+        svg.appendChild(discClipPath2);
         const discBg = document.createElementNS(svgNS, "rect");
         discBg.setAttribute("x", String(discX)); discBg.setAttribute("y", String(discY)); discBg.setAttribute("width", String(discWidth)); discBg.setAttribute("height", String(discHeight)); discBg.setAttribute("fill", "#ffffff"); discBg.setAttribute("fill-opacity", "0.95"); svg.appendChild(discBg);
         const discText = document.createElementNS(svgNS, "text");
-        discText.setAttribute("x", String(discX + padding)); discText.setAttribute("y", String(discY + padding + fontSizeDisc)); discText.setAttribute("font-size", String(fontSizeDisc)); discText.setAttribute("font-family", "Segoe UI, sans-serif"); discText.setAttribute("fill", "#000");
+        discText.setAttribute("x", String(discX + padding)); discText.setAttribute("y", String(discY + padding + fontSizeDisc)); discText.setAttribute("font-size", String(fontSizeDisc)); discText.setAttribute("font-family", "Segoe UI, sans-serif"); discText.setAttribute("fill", "#000"); discText.setAttribute("clip-path", "url(#" + discClipId2 + ")");
         lines.forEach((ln, idx) => { const tspan = document.createElementNS(svgNS, "tspan"); tspan.setAttribute("x", String(discX + padding)); tspan.setAttribute("dy", idx === 0 ? "0" : String(lineHeightDisc)); tspan.textContent = ln; discText.appendChild(tspan); });
         svg.appendChild(discText);
       }
