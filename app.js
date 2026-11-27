@@ -5581,15 +5581,31 @@ window.addEventListener('load', resetInitialScrollPositions);
       const discFontSize = Math.max(11, Math.min(15, Math.round(exportMapW * 0.0085) + 1));
       const discPadding = Math.max(6, Math.round(discFontSize * 0.55));
       const discMaxWidth = Math.max(250, Math.min(Math.round(exportMapW * 0.65), Math.round(exportMapW * 0.75)));
-      const discLayout = buildWrappedExportTextLayout(disclaimerText, {
+      
+      let discLayout = buildWrappedExportTextLayout(disclaimerText, {
         fontSize: discFontSize,
         fontStyle: 'italic',
         fontFamily: 'Segoe UI, sans-serif',
         maxWidth: Math.max(200, discMaxWidth - (discPadding * 2)),
         padding: discPadding,
         lineHeight: Math.round(discFontSize * 1.25),
-        maxLines: 4
+        maxLines: 6
       });
+      
+      // Ensure minimum 3 lines by reducing maxWidth if needed
+      if (discLayout.lines.length < 3) {
+        const targetWidth = Math.max(200, (discMaxWidth - (discPadding * 2)) * 0.6);
+        discLayout = buildWrappedExportTextLayout(disclaimerText, {
+          fontSize: discFontSize,
+          fontStyle: 'italic',
+          fontFamily: 'Segoe UI, sans-serif',
+          maxWidth: targetWidth,
+          padding: discPadding,
+          lineHeight: Math.round(discFontSize * 1.25),
+          maxLines: 6
+        });
+      }
+      
       const disclaimerPosition = getDisclaimerExportNormalizedPosition(mapEl, disclaimerEl);
       const discPos = resolveExportPositionFromNorm(
         disclaimerPosition.normX,
@@ -5604,7 +5620,7 @@ window.addEventListener('load', resetInitialScrollPositions);
         lines: discLayout.lines,
         x: discPos.x,
         y: discPos.y,
-        width: discLayout.width,
+        width: discLayout.width + 2,
         height: discLayout.height,
         padding: discLayout.padding,
         fontSize: discLayout.fontSize,
