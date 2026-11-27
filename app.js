@@ -43,7 +43,6 @@ const EXPORT_CAPTURE_MAX_WIDTH_PX = 4096;
 const EXPORT_CAPTURE_MIN_HEIGHT_PX = 480;
 const EXPORT_CAPTURE_MAX_HEIGHT_PX = 4096;
 const OVERLAY_POLYGON_FILL_OPACITY = 0.35;
-<<<<<<< HEAD
 const OVERLAY_POINT_FILL_OPACITY = 0.55;
 
 // Renders a legend swatch at the same opacity as the on-map fill so it matches what's drawn over the basemap.
