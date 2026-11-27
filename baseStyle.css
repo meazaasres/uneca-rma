@@ -6,6 +6,25 @@
       margin: 0;
       padding: 0;
     }
+    .javascript-required {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+      background: #f8f9fa;
+      color: #1f2937;
+      font: 600 1rem/1.5 Segoe UI, sans-serif;
+      text-align: center;
+    }
+    .javascript-required > div {
+      max-width: 46rem;
+    }
+    .javascript-required ul {
+      padding-left: 1.5rem;
+      text-align: left;
+    }
     html[data-ui-hidden="1"] {
       display: none !important;
     }
@@ -89,7 +108,7 @@
       box-sizing: border-box;
       background: rgba(255,255,255,0.90);
       padding: 5px 7px;
-      font-size: 0.72em;
+      font-size: 0.8em;
       text-align: justify;
       text-justify: inter-word;
       max-height: 15vh; /* cap height so it doesn't cover map */
@@ -292,7 +311,10 @@ footer {
 .popup-error { background: rgba(200,0,0,0.85); }
 .popup-success { background: rgba(0,128,0,0.85); }
 
+<<<<<<< HEAD
 /* Unmatched ISO3 codes modal */
+=======
+>>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
 .unmatched-modal-overlay {
   display: none;
   position: fixed;
@@ -302,9 +324,13 @@ footer {
   align-items: center;
   justify-content: center;
 }
+<<<<<<< HEAD
 .unmatched-modal-overlay.open {
   display: flex;
 }
+=======
+.unmatched-modal-overlay.open { display: flex; }
+>>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
 .unmatched-modal {
   background: #fff;
   border-radius: 8px;
@@ -317,11 +343,16 @@ footer {
   gap: 8px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.3);
 }
+<<<<<<< HEAD
 .unmatched-modal-header {
+=======
+.unmatched-modal-header, .unmatched-modal-actions {
+>>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+<<<<<<< HEAD
 .unmatched-modal-desc {
   font-size: 13px;
   color: #444;
@@ -329,16 +360,24 @@ footer {
 }
 .unmatched-modal-textarea {
   flex: 1;
+=======
+.unmatched-modal-actions { justify-content: flex-end; gap: 8px; }
+.unmatched-modal p { margin: 0; }
+.unmatched-modal-textarea {
+>>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
   min-height: 160px;
   resize: vertical;
   font-family: monospace;
   font-size: 13px;
 }
+<<<<<<< HEAD
 .unmatched-modal-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
 }
+=======
+>>>>>>> 883ec2e467f6685d283563f72164545d74feeed6
 
 /* Legend styling used when building legend DOM in JS */
 .legend-header {
@@ -520,7 +559,7 @@ footer {
 .leaflet-control-exact-scale .exact-scale-label {
   margin-top: 0;
   text-align: center;
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.2;
   color: #102a43;
   font-weight: 400;
