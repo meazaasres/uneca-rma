@@ -3547,15 +3547,6 @@ function parseCsvToGeojson(csvText, sourceLabel = "CSV") {
         return /^[A-Z]{3}$/.test(value);
       })
     : rows;
-  const unmatchedIsoValues = !hasCoordinates && isoKey
-    ? Array.from(new Set(
-        rows
-          .filter(row => !/^[A-Z]{3}$/.test(normalizeIsoJoinValue(row?.[isoKey])))
-          .map(row => String(row?.[isoKey] ?? "").trim())
-          .filter(Boolean)
-      ))
-    : [];
-
   if (!hasCoordinates && isoKey && !validIsoRows.length) {
     throw new Error("No CSV rows contained valid three-letter ISO3 country codes.");
   }
